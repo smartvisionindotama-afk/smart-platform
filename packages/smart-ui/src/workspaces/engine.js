@@ -1,13 +1,29 @@
+import defaultConfig from "./default/workspace.json";
+import corporateConfig from "./corporate/workspace.json";
+import warehouseConfig from "./warehouse/workspace.json";
+
+import { validateWorkspaceConfig } from "./schema.js";
+
+
 const workspaces = {
 
-    default: () =>
-        import("./default/variables.css"),
+    default: {
+        config: defaultConfig,
+        css: () =>
+            import("./default/variables.css")
+    },
 
-    corporate: () =>
-        import("./corporate/variables.css"),
+    corporate: {
+        config: corporateConfig,
+        css: () =>
+            import("./corporate/variables.css")
+    },
 
-    warehouse: () =>
-        import("./warehouse/variables.css")
+    warehouse: {
+        config: warehouseConfig,
+        css: () =>
+            import("./warehouse/variables.css")
+    }
 
 };
 
@@ -15,14 +31,36 @@ const workspaces = {
 export async function loadWorkspace(workspaceName) {
 
     const workspace =
-        workspaces[workspaceName] || workspaces.default;
+        workspaces[workspaceName] ||
+        workspaces.default;
 
 
-    await workspace();
+    // Validate workspace config before loading CSS
+    const valid =
+        validateWorkspaceConfig(
+            workspace.config
+        );
+
+
+    if (!valid) {
+
+        console.warn(
+            `Workspace config validation failed for "${workspaceName}", falling back to default`
+        );
+
+    }
+
+
+    // Load workspace CSS
+    await workspace.css();
 
 
     console.log(
-        `Workspace loaded : ${workspaceName}`
+        `Workspace loaded: ${workspaceName}`
     );
+
+
+    // Return workspace config for app consumption
+    return workspace.config;
 
 }

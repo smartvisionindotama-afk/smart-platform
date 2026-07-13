@@ -2,11 +2,11 @@
 // Mendefinisikan properti yang dapat diatur oleh setiap workspace
 
 export const WorkspaceSchema = {
-    name: "string",        // Identifier unik (default, warehouse, corporate)
-    label: "string",       // Nama tampilan (Gudang, Perusahaan, dll)
-    appTitle: "string",    // Judul aplikasi di sidebar
-    topbarTitle: "string", // Judul di topbar
-    variables: "string",   // Path ke file CSS variables
+    name: "string",
+    label: "string",
+    appTitle: "string",
+    topbarTitle: "string",
+    variables: "string",
     layout: {
         type: "object",
         properties: {
@@ -25,13 +25,25 @@ export const WorkspaceSchema = {
 
 
 export function validateWorkspaceConfig(config) {
+
     const required = ["name", "label"];
-    const missing = required.filter(field => !config[field]);
+
+    const missing = required.filter(
+        field => !config[field]
+    );
+
+
     if (missing.length > 0) {
+
         console.warn(
             `Workspace missing required fields: ${missing.join(", ")}`
         );
+
         return false;
+
     }
+
+
     return true;
+
 }
