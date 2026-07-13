@@ -1,0 +1,15 @@
+{
+    "name": "corporate",
+    "label": "Perusahaan",
+    "appTitle": "Corporate",
+    "topbarTitle": "PT Smart Vision Indotama",
+    "variables": "corporate/variables.css",
+    "layout": {
+        "sidebarPosition": "left",
+        "topbarFixed": true
+    },
+    "branding": {
+        "primaryColor": "--blue-900",
+        "logo": null
+    }
+}

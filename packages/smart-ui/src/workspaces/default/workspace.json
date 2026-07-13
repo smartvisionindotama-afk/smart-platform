@@ -1,0 +1,15 @@
+{
+    "name": "default",
+    "label": "Default",
+    "appTitle": "SMART",
+    "topbarTitle": "SMART Platform",
+    "variables": "default/variables.css",
+    "layout": {
+        "sidebarPosition": "left",
+        "topbarFixed": true
+    },
+    "branding": {
+        "primaryColor": "--blue-500",
+        "logo": null
+    }
+}

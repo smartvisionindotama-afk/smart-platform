@@ -1,0 +1,15 @@
+{
+    "name": "warehouse",
+    "label": "Gudang",
+    "appTitle": "Warehouse",
+    "topbarTitle": "SMART Warehouse",
+    "variables": "warehouse/variables.css",
+    "layout": {
+        "sidebarPosition": "left",
+        "topbarFixed": true
+    },
+    "branding": {
+        "primaryColor": "--orange-600",
+        "logo": null
+    }
+}
