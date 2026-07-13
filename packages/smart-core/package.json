@@ -3,5 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "main": "src/index.js"
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./auth": "./src/auth/auth.js",
+    "./permission": "./src/permission/permission.js",
+    "./institution": "./src/institution/institution.js",
+    "./app": "./src/app/app.js"
+  },
+  "scripts": {
+    "dev": "echo '@smart/core: No dev server needed'",
+    "build": "echo '@smart/core: No build step required — consumers import ESM directly'",
+    "lint": "echo '@smart/core: Lint not configured yet'"
+  },
+  "description": "SMART Core — Business engine for SMART Platform applications",
+  "author": "PT SMART VISION INDOTAMA"
 }
