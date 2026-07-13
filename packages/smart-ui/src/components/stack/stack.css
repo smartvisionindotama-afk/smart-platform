@@ -1,0 +1,43 @@
+.smart-stack {
+
+    display: flex;
+
+
+    font-family:
+        var(--font-sans);
+
+}
+
+
+/* Direction */
+
+.smart-stack-vertical {
+
+    flex-direction: column;
+
+}
+
+
+.smart-stack-horizontal {
+
+    flex-direction: row;
+
+}
+
+
+/* Wrap */
+
+.smart-stack-wrap {
+
+    flex-wrap: wrap;
+
+}
+
+
+/* Children fill width when vertical */
+
+.smart-stack-vertical > * {
+
+    width: 100%;
+
+}

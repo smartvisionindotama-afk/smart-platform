@@ -1,0 +1,63 @@
+.smart-container {
+
+    width: 100%;
+
+    margin-left: auto;
+
+    margin-right: auto;
+
+
+    font-family:
+        var(--font-sans);
+
+}
+
+
+/* Padding */
+
+.smart-container {
+
+    padding-left:
+        var(--space-md);
+
+
+    padding-right:
+        var(--space-md);
+
+}
+
+
+.smart-container-no-padding {
+
+    padding-left: 0;
+
+    padding-right: 0;
+
+}
+
+
+/* Size variants (max-width) */
+
+.smart-container-xs {
+    max-width: 480px;
+}
+
+.smart-container-sm {
+    max-width: 640px;
+}
+
+.smart-container-md {
+    max-width: 768px;
+}
+
+.smart-container-lg {
+    max-width: 1024px;
+}
+
+.smart-container-xl {
+    max-width: 1280px;
+}
+
+.smart-container-full {
+    max-width: 100%;
+}
