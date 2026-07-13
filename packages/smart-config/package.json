@@ -1,0 +1,12 @@
+{
+  "name": "@smart/config",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint/index.js",
+    "./vite": "./vite/index.js"
+  },
+  "description": "SMART Config — Shared ESLint, Prettier, and Vite configurations for SMART Platform monorepo",
+  "author": "PT SMART VISION INDOTAMA"
+}
