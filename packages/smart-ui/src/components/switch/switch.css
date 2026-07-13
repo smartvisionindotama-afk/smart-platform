@@ -1,0 +1,140 @@
+.smart-switch-wrapper {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: var(--space-sm);
+
+
+    cursor: pointer;
+
+    font-family:
+        var(--font-sans);
+
+
+    font-size: var(--text-md);
+
+    user-select: none;
+
+}
+
+
+.smart-switch-input {
+
+    position: absolute;
+
+    opacity: 0;
+
+    width: 0;
+
+    height: 0;
+
+}
+
+
+.smart-switch-slider {
+
+    position: relative;
+
+    width: 44px;
+
+    height: 24px;
+
+
+    background:
+        var(--border);
+
+
+    border-radius:
+        var(--radius-full);
+
+
+    transition:
+        all var(--duration-fast) var(--ease-default);
+
+}
+
+
+.smart-switch-slider::after {
+
+    content: "";
+
+    position: absolute;
+
+    top: 3px;
+
+    left: 3px;
+
+    width: 18px;
+
+    height: 18px;
+
+
+    background: white;
+
+    border-radius: 50%;
+
+    transition:
+        transform var(--duration-fast) var(--ease-default);
+
+}
+
+
+.smart-switch-input:checked
+    ~ .smart-switch-slider {
+
+    background:
+        var(--primary);
+
+}
+
+
+.smart-switch-input:checked
+    ~ .smart-switch-slider::after {
+
+    transform:
+        translateX(20px);
+
+}
+
+
+.smart-switch-input:focus-visible
+    ~ .smart-switch-slider {
+
+    box-shadow:
+        var(--focus-ring);
+
+}
+
+
+.smart-switch-input:disabled
+    ~ .smart-switch-slider {
+
+    opacity: 0.5;
+
+}
+
+
+.smart-switch-input:disabled
+    ~ .smart-switch-text {
+
+    color: var(--text-secondary);
+
+}
+
+
+.smart-switch-wrapper:has(
+    .smart-switch-input:disabled
+) {
+
+    cursor: not-allowed;
+
+}
+
+
+.smart-switch-text {
+
+    color: var(--text-primary);
+
+}

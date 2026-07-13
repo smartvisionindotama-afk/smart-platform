@@ -1,0 +1,136 @@
+.smart-checkbox-wrapper {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: var(--space-sm);
+
+
+    cursor: pointer;
+
+    font-family:
+        var(--font-sans);
+
+
+    font-size: var(--text-md);
+
+    user-select: none;
+
+}
+
+
+.smart-checkbox-input {
+
+    position: absolute;
+
+    opacity: 0;
+
+    width: 0;
+
+    height: 0;
+
+}
+
+
+.smart-checkbox-checkmark {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+
+    width: 20px;
+
+    height: 20px;
+
+
+    border: 2px solid var(--border);
+
+    border-radius:
+        var(--radius-sm);
+
+
+    background: var(--surface);
+
+    transition:
+        all var(--duration-fast) var(--ease-default);
+
+}
+
+
+.smart-checkbox-input:checked
+    ~ .smart-checkbox-checkmark {
+
+    background:
+        var(--primary);
+
+
+    border-color:
+        var(--primary);
+
+}
+
+
+.smart-checkbox-input:checked
+    ~ .smart-checkbox-checkmark::after {
+
+    content: "✓";
+
+    color: white;
+
+    font-size:
+        var(--text-sm);
+
+
+    font-weight:
+        var(--font-bold);
+
+}
+
+
+.smart-checkbox-input:focus-visible
+    ~ .smart-checkbox-checkmark {
+
+    box-shadow:
+        0 0 0 3px rgba(37, 99, 235, 0.15);
+
+}
+
+
+.smart-checkbox-input:disabled
+    ~ .smart-checkbox-checkmark {
+
+    background:
+        var(--surface-muted);
+
+
+    opacity: 0.5;
+
+}
+
+
+.smart-checkbox-input:disabled
+    ~ .smart-checkbox-text {
+
+    color: var(--text-secondary);
+
+}
+
+
+.smart-checkbox-wrapper:has(
+    .smart-checkbox-input:disabled
+) {
+
+    cursor: not-allowed;
+
+}
+
+
+.smart-checkbox-text {
+
+    color: var(--text-primary);
+
+}
