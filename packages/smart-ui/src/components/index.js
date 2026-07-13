@@ -15,3 +15,6 @@ export { Table } from "./table/table.js";
 export { Pagination } from "./pagination/pagination.js";
 export { EmptyState } from "./empty-state/empty-state.js";
 export { Skeleton } from "./skeleton/skeleton.js";
+export { Tabs } from "./tabs/tabs.js";
+export { Dropdown } from "./dropdown/dropdown.js";
+export { Breadcrumb } from "./breadcrumb/breadcrumb.js";
