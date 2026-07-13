@@ -1,0 +1,44 @@
+# SMART Platform — Continuous Integration
+#
+# Triggers:
+#   - push to main branch
+#   - pull requests targeting main
+#
+# Steps:
+#   1. Checkout code
+#   2. Setup Node.js
+#   3. Install dependencies (npm ci)
+#   4. Run verification (lint → test → build)
+
+
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+jobs:
+    verify:
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                node-version: [18, 20, 22]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js ${{ matrix.node-version }}
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ matrix.node-version }}
+                  cache: "npm"
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run verification
+              run: npm run verify
