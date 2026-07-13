@@ -16,7 +16,8 @@
     "build": "echo '@smart/core: No build step required — consumers import ESM directly'",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "echo '@smart/core: Lint not configured yet'"
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
   },
   "description": "SMART Core — Business engine for SMART Platform applications",
   "author": "PT SMART VISION INDOTAMA"

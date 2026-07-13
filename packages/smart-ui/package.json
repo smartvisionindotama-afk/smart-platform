@@ -21,7 +21,8 @@
     "build": "echo '@smart/ui: No build step required — consumers import ESM directly'",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "echo '@smart/ui: Lint not configured yet'"
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
   },
   "description": "SMART UI — Design tokens, components, layouts, and workspace engine for SMART Platform",
   "author": "PT SMART VISION INDOTAMA"
