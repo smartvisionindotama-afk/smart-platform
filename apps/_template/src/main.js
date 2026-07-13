@@ -3,9 +3,6 @@ import { loadUI, loadWorkspace } from "@smart/ui";
 import { AppShell } from "@smart/ui/layouts";
 
 import menus from "./config/menu.js";
-import { AppShell } from "@smart/ui/layouts";
-
-import menus from "./config/menu";
 import { navigate } from "./router";
 
 

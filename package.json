@@ -13,7 +13,9 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "verify": "npm run lint && npm test && npm run build:inventory",
+    "build:inventory": "npm run build --workspace=inventory"
   },
   "devDependencies": {
     "eslint": "^10.7.0",

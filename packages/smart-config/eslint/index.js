@@ -7,13 +7,17 @@
 const config = [
     {
         rules: {
+
             // Possible Problems
-            "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+            "no-unused-vars": [
+                "warn",
+                { argsIgnorePattern: "^_" }
+            ],
             "no-undef": "error",
             "no-duplicate-imports": "warn",
 
             // Suggestions
-            "no-console": "off", // Allow console for now
+            "no-console": "off",
             "prefer-const": "warn",
             "no-var": "error",
             "eqeqeq": ["warn", "always"],
@@ -23,18 +27,14 @@ const config = [
             // ES6+
             "arrow-body-style": ["warn", "as-needed"],
             "prefer-arrow-callback": "warn",
-            "template-curly-spacing": ["warn", "never"],
+            "template-curly-spacing": ["warn", "never"]
 
-            // Import
-            "import/no-unresolved": "warn",
-            "import/no-duplicates": "warn",
         },
 
         languageOptions: {
             ecmaVersion: "latest",
             sourceType: "module",
             globals: {
-                // Browser globals
                 window: "readonly",
                 document: "readonly",
                 console: "readonly",
@@ -47,9 +47,10 @@ const config = [
                 sessionStorage: "readonly",
                 URL: "readonly",
                 IntersectionObserver: "readonly",
-            },
-        },
-    },
+                global: "readonly"
+            }
+        }
+    }
 ];
 
 export default config;

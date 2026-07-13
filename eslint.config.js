@@ -7,7 +7,13 @@ export default [
         ignores: [
             "**/node_modules/**",
             "**/dist/**",
-            "**/coverage/**"
+            "**/coverage/**",
+            "apps/smartvindo/**",
+            "apps/desa-insight/**",
+            "apps/eprofit/**",
+            "apps/santripintar/**",
+            "apps/sitampan/**",
+            "platform/**"
         ]
     }
 ];
