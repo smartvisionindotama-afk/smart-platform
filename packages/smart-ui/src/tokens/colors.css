@@ -1,0 +1,73 @@
+:root {
+
+
+    /* Brand Scale */
+
+    --blue-500: #2563eb;
+
+    --blue-600: #1d4ed8;
+
+
+
+    /* Gray Scale */
+
+    --gray-50: #f8fafc;
+
+    --gray-100: #f1f5f9;
+
+    --gray-500: #64748b;
+
+    --gray-800: #1e293b;
+
+
+
+    /* Semantic */
+
+    --primary:
+        var(--blue-500);
+
+
+    --secondary:
+        var(--gray-500);
+
+
+    --success: #16a34a;
+
+    --warning: #f59e0b;
+
+    --danger: #dc2626;
+
+    --info: #0ea5e9;
+
+
+
+    /* Surface */
+
+    --surface: #ffffff;
+
+    --surface-dark:
+        var(--gray-800);
+
+    --surface-muted:
+        var(--gray-100);
+
+
+    --background:
+        var(--gray-50);
+
+
+    /* Text */
+
+    --text-primary:
+        var(--gray-800);
+
+
+    --text-secondary:
+        var(--gray-500);
+
+
+
+    --border:
+        #e2e8f0;
+
+}
