@@ -13,6 +13,7 @@
     "./layouts": "./src/layouts/index.js",
     "./layouts/*": "./src/layouts/*/index.js",
     "./workspaces": "./src/workspaces/index.js",
+    "./workspaces/engine": "./src/workspaces/engine.js",
     "./workspaces/*": "./src/workspaces/*/index.js"
   },
   "scripts": {
