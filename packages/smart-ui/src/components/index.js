@@ -9,3 +9,5 @@ export { Switch } from "./switch/switch.js";
 export { Alert } from "./alert/alert.js";
 export { Toast } from "./toast/toast.js";
 export { Modal } from "./modal/modal.js";
+export { Badge } from "./badge/badge.js";
+export { Avatar } from "./avatar/avatar.js";

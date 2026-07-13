@@ -1,0 +1,128 @@
+.smart-badge {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: var(--space-xs);
+
+
+    padding:
+        var(--space-xs) var(--space-sm);
+
+
+    border-radius:
+        var(--radius-full);
+
+
+    font-family:
+        var(--font-sans);
+
+
+    font-size:
+        var(--text-xs);
+
+
+    font-weight:
+        var(--font-medium);
+
+
+    line-height: 1;
+
+    white-space: nowrap;
+
+    user-select: none;
+
+}
+
+
+/* Variants */
+
+.smart-badge-default {
+    background: var(--surface-muted);
+    color: var(--text-secondary);
+}
+
+.smart-badge-primary {
+    background: var(--primary);
+    color: var(--text-on-primary);
+}
+
+.smart-badge-success {
+    background:
+        color-mix(in srgb, var(--success) 15%, transparent);
+    color: var(--success);
+}
+
+.smart-badge-warning {
+    background:
+        color-mix(in srgb, var(--warning) 15%, transparent);
+    color: var(--warning);
+}
+
+.smart-badge-danger {
+    background:
+        color-mix(in srgb, var(--danger) 15%, transparent);
+    color: var(--danger);
+}
+
+
+/* Sizes */
+
+.smart-badge-sm {
+    font-size: var(--text-xs);
+    padding: 2px var(--space-sm);
+}
+
+.smart-badge-lg {
+    font-size: var(--text-sm);
+    padding: var(--space-sm) var(--space-md);
+}
+
+
+/* Text label */
+
+.smart-badge-text {
+
+    display: inline;
+
+}
+
+
+/* Count badge (circular) */
+
+.smart-badge-count {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+
+    min-width: 18px;
+
+    height: 18px;
+
+
+    padding: 0 5px;
+
+
+    border-radius:
+        var(--radius-full);
+
+
+    background: var(--danger);
+
+    color: white;
+
+
+    font-size:
+        var(--text-xs);
+
+
+    font-weight:
+        var(--font-bold);
+
+
+}

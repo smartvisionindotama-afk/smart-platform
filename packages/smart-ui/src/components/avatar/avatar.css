@@ -1,0 +1,92 @@
+.smart-avatar {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+
+    overflow: hidden;
+
+    flex-shrink: 0;
+
+
+    font-family:
+        var(--font-sans);
+
+
+    font-weight:
+        var(--font-semibold);
+
+
+    background:
+        var(--surface-muted);
+
+
+    color: var(--text-secondary);
+
+    user-select: none;
+
+}
+
+
+/* Variant shapes */
+
+.smart-avatar-circle {
+    border-radius: var(--radius-full);
+}
+
+.smart-avatar-square {
+    border-radius: var(--radius-md);
+}
+
+
+/* Sizes */
+
+.smart-avatar-sm {
+    width: 32px;
+    height: 32px;
+    font-size: var(--text-sm);
+}
+
+.smart-avatar-md {
+    width: 40px;
+    height: 40px;
+    font-size: var(--text-md);
+}
+
+.smart-avatar-lg {
+    width: 56px;
+    height: 56px;
+    font-size: var(--text-xl);
+}
+
+.smart-avatar-xl {
+    width: 72px;
+    height: 72px;
+    font-size: var(--text-2xl);
+}
+
+
+/* Image */
+
+.smart-avatar-img {
+
+    width: 100%;
+
+    height: 100%;
+
+
+    object-fit: cover;
+
+}
+
+
+/* Initials */
+
+.smart-avatar-initials {
+
+    line-height: 1;
+
+}
