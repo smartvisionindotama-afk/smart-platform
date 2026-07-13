@@ -19,6 +19,8 @@
   "scripts": {
     "dev": "echo '@smart/ui: No dev server needed'",
     "build": "echo '@smart/ui: No build step required — consumers import ESM directly'",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "echo '@smart/ui: Lint not configured yet'"
   },
   "description": "SMART UI — Design tokens, components, layouts, and workspace engine for SMART Platform",
