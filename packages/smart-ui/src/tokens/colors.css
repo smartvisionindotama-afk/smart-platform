@@ -27,6 +27,10 @@
         var(--blue-500);
 
 
+    --primary-hover:
+        var(--blue-600);
+
+
     --secondary:
         var(--gray-500);
 
@@ -68,6 +72,10 @@
     --text-secondary:
         var(--gray-500);
 
+
+
+    --text-on-primary:
+        #ffffff;
 
 
     --border:

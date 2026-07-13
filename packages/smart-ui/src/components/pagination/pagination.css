@@ -1,0 +1,163 @@
+.smart-pagination {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: var(--space-xs);
+
+
+    font-family:
+        var(--font-sans);
+
+
+    font-size: var(--text-sm);
+
+}
+
+
+.smart-pagination-btn {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+
+    min-width: 36px;
+
+    height: 36px;
+
+
+    padding: 0 var(--space-sm);
+
+
+    border: 1px solid var(--border);
+
+    border-radius:
+        var(--radius-sm);
+
+
+    background: var(--surface);
+
+    color: var(--text-primary);
+
+
+    font-family:
+        var(--font-sans);
+
+
+    font-size: var(--text-sm);
+
+    line-height: 1;
+
+
+    cursor: pointer;
+
+    user-select: none;
+
+
+    transition:
+        all var(--duration-fast) var(--ease-default);
+
+}
+
+
+.smart-pagination-btn:hover:not(:disabled) {
+
+    background:
+        var(--surface-hover);
+
+
+    border-color:
+        var(--primary);
+
+}
+
+
+.smart-pagination-btn:focus-visible {
+
+    outline: none;
+
+    box-shadow:
+        var(--focus-ring);
+
+}
+
+
+.smart-pagination-btn:disabled,
+.smart-pagination-disabled {
+
+    opacity: 0.4;
+
+    cursor: not-allowed;
+
+}
+
+
+.smart-pagination-active {
+
+    background:
+        var(--primary);
+
+
+    border-color:
+        var(--primary);
+
+
+    color:
+        var(--text-on-primary);
+
+
+}
+
+
+.smart-pagination-active:hover:not(:disabled) {
+
+    background:
+        var(--primary-hover);
+
+
+    border-color:
+        var(--primary-hover);
+
+}
+
+
+.smart-pagination-ellipsis {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+
+    min-width: 36px;
+
+    height: 36px;
+
+
+    color: var(--text-secondary);
+
+    user-select: none;
+
+}
+
+
+.smart-pagination-info {
+
+    margin-left:
+        var(--space-sm);
+
+
+    color: var(--text-secondary);
+
+    font-size:
+        var(--text-xs);
+
+
+    white-space: nowrap;
+
+}

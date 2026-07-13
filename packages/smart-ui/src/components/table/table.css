@@ -1,0 +1,164 @@
+.smart-table-wrapper {
+
+    width: 100%;
+
+    overflow-x: auto;
+
+}
+
+
+.smart-table {
+
+    width: 100%;
+
+    border-collapse: collapse;
+
+
+    font-family:
+        var(--font-sans);
+
+
+    font-size: var(--text-sm);
+
+    line-height:
+        var(--leading-normal);
+
+
+    color: var(--text-primary);
+
+}
+
+
+/* Header */
+
+.smart-table thead {
+
+    border-bottom:
+        2px solid var(--border);
+
+}
+
+
+.smart-table-th {
+
+    padding:
+        var(--space-sm) var(--space-md);
+
+
+    text-align: left;
+
+    font-weight:
+        var(--font-semibold);
+
+
+    color: var(--text-secondary);
+
+    white-space: nowrap;
+
+    user-select: none;
+
+}
+
+
+/* Body */
+
+.smart-table-tr {
+
+    transition:
+        background var(--duration-fast) var(--ease-default);
+
+}
+
+
+.smart-table-td {
+
+    padding:
+        var(--space-sm) var(--space-md);
+
+
+    border-bottom:
+        1px solid var(--border);
+
+
+    vertical-align: middle;
+
+}
+
+
+/* Variants */
+
+.smart-table-compact {
+
+    font-size:
+        var(--text-xs);
+
+}
+
+
+.smart-table-compact .smart-table-th,
+.smart-table-compact .smart-table-td {
+
+    padding:
+        var(--space-xs) var(--space-sm);
+
+}
+
+
+/* Striped */
+
+.smart-table-striped tbody
+    .smart-table-tr:nth-child(even) {
+
+    background:
+        var(--surface-hover);
+
+}
+
+
+/* Bordered */
+
+.smart-table-bordered .smart-table-th,
+.smart-table-bordered .smart-table-td {
+
+    border: 1px solid var(--border);
+
+}
+
+
+.smart-table-bordered thead {
+
+    border-bottom: none;
+
+}
+
+
+/* Hoverable */
+
+.smart-table-hoverable tbody
+    .smart-table-tr:hover {
+
+    background:
+        color-mix(
+            in srgb,
+            var(--primary) 5%,
+            transparent
+        );
+
+}
+
+
+/* Empty state */
+
+.smart-table-empty {
+
+    padding:
+        var(--space-xl) var(--space-md);
+
+
+    text-align: center;
+
+    color: var(--text-secondary);
+
+    font-size: var(--text-md);
+
+}
