@@ -6,3 +6,6 @@ export { Select } from "./select/select.js";
 export { Textarea } from "./textarea/textarea.js";
 export { Checkbox } from "./checkbox/checkbox.js";
 export { Switch } from "./switch/switch.js";
+export { Alert } from "./alert/alert.js";
+export { Toast } from "./toast/toast.js";
+export { Modal } from "./modal/modal.js";

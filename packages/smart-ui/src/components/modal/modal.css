@@ -1,0 +1,209 @@
+.smart-modal-overlay {
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 1000;
+
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+
+    background:
+        rgba(0, 0, 0, 0.5);
+
+
+    opacity: 0;
+
+    visibility: hidden;
+
+    transition:
+        opacity var(--duration-normal) var(--ease-default),
+        visibility var(--duration-normal) var(--ease-default);
+
+}
+
+
+.smart-modal-open {
+
+    opacity: 1;
+
+    visibility: visible;
+
+}
+
+
+.smart-modal-dialog {
+
+    width: 100%;
+
+    max-width: 520px;
+
+    max-height: 85vh;
+
+    overflow-y: auto;
+
+
+    background: var(--surface);
+
+    border-radius:
+        var(--radius-lg);
+
+
+    box-shadow:
+        var(--shadow-xl);
+
+
+    transform: scale(0.95);
+
+    transition:
+        transform var(--duration-normal) var(--ease-default);
+
+}
+
+
+.smart-modal-open .smart-modal-dialog {
+
+    transform: scale(1);
+
+}
+
+
+/* Header */
+
+.smart-modal-header {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+
+    padding:
+        var(--space-lg) var(--space-xl);
+
+
+    border-bottom:
+        1px solid var(--border);
+
+}
+
+
+.smart-modal-title {
+
+    margin: 0;
+
+    font-family:
+        var(--font-sans);
+
+
+    font-size:
+        var(--text-xl);
+
+
+    font-weight:
+        var(--font-semibold);
+
+
+    color: var(--text-primary);
+
+}
+
+
+/* Close button */
+
+.smart-modal-close {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+
+    width: 32px;
+
+    height: 32px;
+
+
+    border: none;
+
+    border-radius:
+        var(--radius-sm);
+
+
+    background: transparent;
+
+    color: var(--text-secondary);
+
+    font-size:
+        var(--text-xl);
+
+
+    cursor: pointer;
+
+    transition:
+        background var(--duration-fast) var(--ease-default);
+
+}
+
+
+.smart-modal-close:hover {
+
+    background:
+        var(--surface-hover);
+
+
+}
+
+
+/* Body */
+
+.smart-modal-body {
+
+    padding:
+        var(--space-lg) var(--space-xl);
+
+
+    font-family:
+        var(--font-sans);
+
+
+    font-size: var(--text-md);
+
+    line-height:
+        var(--leading-normal);
+
+
+    color: var(--text-primary);
+
+}
+
+
+/* Footer */
+
+.smart-modal-footer {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: flex-end;
+
+    gap: var(--space-sm);
+
+
+    padding:
+        var(--space-lg) var(--space-xl);
+
+
+    border-top:
+        1px solid var(--border);
+
+}
