@@ -47,6 +47,8 @@ const config = [
                 sessionStorage: "readonly",
                 URL: "readonly",
                 IntersectionObserver: "readonly",
+                AbortController: "readonly",
+                URLSearchParams: "readonly",
                 global: "readonly"
             }
         }
