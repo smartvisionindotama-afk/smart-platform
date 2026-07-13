@@ -1,0 +1,21 @@
+:root {
+
+    --primary-color: #ea580c;
+    --secondary-color: #78716c;
+
+    --sidebar-bg: #292524;
+    --sidebar-text: #fafaf9;
+
+    --topbar-bg: #ffffff;
+    --topbar-text: #292524;
+
+    --card-bg: #ffffff;
+
+    --border-radius: 6px;
+
+    --font-family:
+        "Inter",
+        Arial,
+        sans-serif;
+
+}

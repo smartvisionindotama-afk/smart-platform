@@ -1,0 +1,112 @@
+.smart-btn {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+
+    gap: var(--space-sm);
+
+
+    padding:
+        var(--space-sm) var(--space-lg);
+
+
+    border: none;
+
+
+    border-radius:
+        var(--radius-md);
+
+
+    font-family:
+        var(--font-sans);
+
+
+    font-size:
+        var(--text-md);
+
+
+    font-weight:
+        var(--font-medium);
+
+
+    cursor: pointer;
+
+
+    transition:
+        all var(--duration-fast) var(--ease-default);
+
+}
+
+
+
+/* Primary */
+
+.smart-btn-primary {
+
+    background:
+        var(--primary);
+
+
+    color: white;
+
+}
+
+
+
+/* Secondary */
+
+.smart-btn-secondary {
+
+    background:
+        var(--secondary);
+
+
+    color: white;
+
+}
+
+
+
+/* Danger */
+
+.smart-btn-danger {
+
+    background:
+        var(--danger);
+
+
+    color: white;
+
+}
+
+
+
+/* Size */
+
+.smart-btn-sm {
+
+    padding:
+        var(--space-xs) var(--space-md);
+
+
+    font-size:
+        var(--text-sm);
+
+}
+
+
+
+.smart-btn-lg {
+
+    padding:
+        var(--space-md) var(--space-xl);
+
+
+    font-size:
+        var(--text-lg);
+
+}

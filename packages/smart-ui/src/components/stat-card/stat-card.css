@@ -1,0 +1,56 @@
+.smart-stat-card {
+
+    background:
+        var(--card-bg);
+
+
+    border-radius:
+        var(--radius);
+
+
+    box-shadow:
+        var(--shadow-md);
+
+
+    padding:
+        var(--space-lg);
+
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap:
+        var(--space-sm);
+
+}
+
+
+
+.smart-stat-title {
+
+    font-size:
+        var(--text-sm);
+
+
+    color:
+        var(--text-secondary);
+
+}
+
+
+
+.smart-stat-value {
+
+    font-size:
+        var(--text-xl);
+
+
+    font-weight:
+        var(--font-bold);
+
+
+    color:
+        var(--text-primary);
+
+}

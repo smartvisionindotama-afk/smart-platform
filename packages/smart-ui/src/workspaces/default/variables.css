@@ -1,0 +1,24 @@
+:root {
+
+    --primary:
+        var(--blue-500);
+
+    --sidebar-bg:
+        var(--surface-dark);
+
+    --sidebar-text:
+        #ffffff;
+
+
+    --topbar-bg:
+        var(--surface);
+
+
+    --card-bg:
+        var(--surface);
+
+
+    --radius:
+        var(--radius-lg);
+
+}
