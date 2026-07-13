@@ -1,21 +1,25 @@
 :root {
 
-    --primary-color: #0f172a;
-    --secondary-color: #334155;
+    /* Brand override */
+    --primary:
+        #0f172a;
 
-    --sidebar-bg: #020617;
-    --sidebar-text: #f8fafc;
+    --secondary:
+        #334155;
 
-    --topbar-bg: #ffffff;
-    --topbar-text: #0f172a;
 
-    --card-bg: #ffffff;
+    /* Layout */
+    --sidebar-bg:
+        #020617;
 
-    --border-radius: 8px;
+    --sidebar-text:
+        #f8fafc;
 
-    --font-family:
-        "Inter",
-        Arial,
-        sans-serif;
+
+    --topbar-bg:
+        var(--surface);
+
+    --topbar-text:
+        #0f172a;
 
 }

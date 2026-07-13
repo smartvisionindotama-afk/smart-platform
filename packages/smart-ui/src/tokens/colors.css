@@ -45,6 +45,9 @@
 
     --surface: #ffffff;
 
+    --surface-hover:
+        var(--gray-100);
+
     --surface-dark:
         var(--gray-800);
 

@@ -1,11 +1,11 @@
 .smart-card {
 
     background:
-        var(--card-bg);
+        var(--surface);
 
 
     border-radius:
-        var(--radius);
+        var(--radius-lg);
 
 
     box-shadow:
