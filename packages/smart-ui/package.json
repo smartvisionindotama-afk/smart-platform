@@ -14,7 +14,8 @@
     "./layouts/*": "./src/layouts/*/index.js",
     "./workspaces": "./src/workspaces/index.js",
     "./workspaces/engine": "./src/workspaces/engine.js",
-    "./workspaces/*": "./src/workspaces/*/index.js"
+    "./workspaces/*": "./src/workspaces/*/index.js",
+    "./modules/settings": "./src/modules/settings/index.js"
   },
   "scripts": {
     "dev": "echo '@smart/ui: No dev server needed'",
@@ -24,6 +25,6 @@
     "lint": "eslint src/",
     "format": "prettier --write src/"
   },
-  "description": "SMART UI — Design tokens, components, layouts, and workspace engine for SMART Platform",
+  "description": "SMART UI — Design tokens, components, layouts, workspace engine, page container, and settings modules for SMART Platform",
   "author": "PT SMART VISION INDOTAMA"
 }

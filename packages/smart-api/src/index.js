@@ -17,3 +17,15 @@ export {
     contextRequestInterceptor
 } from "./interceptors/index.js";
 export { BaseResource } from "./resources/base.js";
+export {
+    buildQuery,
+    normalizeItem,
+    normalizeList,
+    apiFetch,
+    withFallback,
+    apiListFallback,
+    apiCreateFallback,
+    apiUpdateFallback,
+    apiDeleteFallback,
+    apiGetFallback
+} from "./fallback.js";

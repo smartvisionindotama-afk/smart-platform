@@ -8,7 +8,8 @@
     ".": "./src/index.js",
     "./client": "./src/client.js",
     "./error": "./src/error.js",
-    "./interceptors": "./src/interceptors/index.js"
+    "./interceptors": "./src/interceptors/index.js",
+    "./fallback": "./src/fallback.js"
   },
   "scripts": {
     "dev": "echo '@smart/api: No dev server needed'",
@@ -21,6 +22,6 @@
   "dependencies": {
     "@smart/core": "*"
   },
-  "description": "SMART API — HTTP client abstraction, error handling, auth integration for SMART Platform",
+  "description": "SMART API — HTTP client abstraction, error handling, auth integration, and API fallback utilities for SMART Platform",
   "author": "PT SMART VISION INDOTAMA"
 }

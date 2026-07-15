@@ -9,7 +9,10 @@
     "./state": "./src/state.js",
     "./cache": "./src/cache.js",
     "./pagination": "./src/pagination.js",
-    "./repository": "./src/repository.js"
+    "./repository": "./src/repository.js",
+    "./base-repository": "./src/base-repository.js",
+    "./persistence": "./src/persistence.js",
+    "./mongodb": "./src/mongodb.js"
   },
   "scripts": {
     "dev": "echo '@smart/data: No dev server needed'",
@@ -22,6 +25,6 @@
   "dependencies": {
     "@smart/api": "*"
   },
-  "description": "SMART Data — Data access layer with state management, caching, pagination, and repository pattern for SMART Platform",
+  "description": "SMART Data — Data access layer with state management, caching, pagination, repository pattern, persistence, and MongoDB abstraction for SMART Platform",
   "author": "PT SMART VISION INDOTAMA"
 }

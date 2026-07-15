@@ -6,6 +6,9 @@ export * from "./components/index.js";
 // Workspace engine
 export { loadWorkspace } from "./workspaces/engine.js";
 
+// Settings modules
+export { SettingsCompanyModule } from "./modules/settings/company.js";
+
 
 /**
  * Load the SMART UI framework.

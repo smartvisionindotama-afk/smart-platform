@@ -9,7 +9,8 @@
     "./auth": "./src/auth/auth.js",
     "./permission": "./src/permission/permission.js",
     "./institution": "./src/institution/institution.js",
-    "./app": "./src/app/app.js"
+    "./app": "./src/app/app.js",
+    "./company": "./src/company/index.js"
   },
   "scripts": {
     "dev": "echo '@smart/core: No dev server needed'",
