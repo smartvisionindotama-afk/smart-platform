@@ -158,8 +158,11 @@ export function filterByCompany(items) {
 }
 
 // ═══════════════════════════════════════════════
-//  ULTIMATE FALLBACK — hanya jika SMART belum siap
+//  ULTIMATE FALLBACK — only used when SMART namespace is not available
 // ═══════════════════════════════════════════════
+// These are exported for internal SDK use ONLY (CompanyManager calls them
+// directly to avoid the circular call chain:
+//   CompanyManager → setCompanyContext() → smart.Company.set() → CompanyManager)
 
 /** @type {string|null} */
 let _fallbackCompanyCode = null;
@@ -186,4 +189,21 @@ function _legacyClear() {
 
 function _legacyHasContext() {
     return _fallbackCompanyCode !== null;
+}
+
+// ── Internal SDK exports (for company-manager.js to break circular call) ──
+
+/**
+ * @internal Directly update legacy fallback variables.
+ * Used by CompanyManager to avoid circular delegation.
+ */
+export function _updateLegacyFallback(code, name) {
+    _legacySetContext(code, name);
+}
+
+/**
+ * @internal Directly clear legacy fallback variables.
+ */
+export function _clearLegacyFallback() {
+    _legacyClear();
 }

@@ -17,7 +17,7 @@
 
 import { companySession } from "./company-session.js";
 import { branding } from "./branding.js";
-import { setCompanyContext, clearCompanyContext } from "./company-context.js";
+import { _updateLegacyFallback, _clearLegacyFallback } from "./company-context.js";
 import { COMPANY_TYPES, getCompanyTypeOptions } from "./company-types.js";
 import {
     validateCompanyCode,
@@ -41,8 +41,9 @@ class CompanyManager {
      * @returns {object} Current session
      */
     setCompany(companyCode, companyName, data = null) {
-        // Update legacy context (backward compatibility)
-        setCompanyContext(companyCode, companyName);
+        // Update legacy context directly (NOT via setCompanyContext wrapper,
+        // which would cause circular delegation back to this method)
+        _updateLegacyFallback(companyCode, companyName);
 
         // Update session
         companySession.update({
@@ -82,7 +83,7 @@ class CompanyManager {
      * Clear company context and session.
      */
     clear() {
-        clearCompanyContext();
+        _clearLegacyFallback();
         companySession.destroy();
         branding.clear();
         this._notify();
