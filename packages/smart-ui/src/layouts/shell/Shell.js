@@ -8,19 +8,25 @@ export function AppShell({
     menuItems = [],
     onNavigate = null,
     contentId = "content",
-    logo = null
+    logo = null,
+    branding = null,
+    impersonation = null,
+    onExitImpersonation = null
 }) {
 
     const topbar = Topbar({
         title: topbarTitle,
-        userName: userName
+        userName: userName,
+        impersonation: impersonation,
+        onExitImpersonation: onExitImpersonation
     });
 
     const sidebar = Sidebar({
         appTitle: appTitle,
         menuItems: menuItems,
         onNavigate: onNavigate,
-        logo: logo
+        logo: logo,
+        branding: branding
     });
 
     return `

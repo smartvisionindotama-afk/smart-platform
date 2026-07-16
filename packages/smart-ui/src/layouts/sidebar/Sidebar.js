@@ -74,8 +74,16 @@ export function Sidebar({
     appTitle = "SMART",
     menuItems = [],
     onNavigate = null,
-    logo = null
+    logo = null,
+    branding = null
 }) {
+
+    // Auto-read from BrandingContext if available and no explicit logo/appTitle
+    if (branding && typeof branding.getBranding === "function") {
+        const brand = branding.getBranding();
+        if (!logo && brand.logo) logo = brand.logo;
+        if (brand.companyName && appTitle === "SMART") appTitle = brand.companyName;
+    }
 
     // Update the active navigation handler with the latest callback
     if (typeof onNavigate === "function") {

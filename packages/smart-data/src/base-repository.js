@@ -5,6 +5,10 @@
  * Provides a consistent interface for data access.
  * Each application repository extends BaseRepository with entity-specific logic.
  *
+ * Repository Layer WAJIB membaca Company Session.
+ * Programmer aplikasi tidak perlu lagi mengirim companyId.
+ * Repository otomatis menambahkan companyCode dari Session.
+ *
  * Designed to be swappable between in-memory, MongoDB, or REST API backends.
  *
  * @module @smart/data/base-repository
@@ -30,6 +34,9 @@
 /**
  * Base Repository class.
  *
+ * Repository otomatis membaca companyCode dari SMART.Session
+ * untuk multi-tenant data isolation.
+ *
  * @template T
  */
 export class BaseRepository {
@@ -38,11 +45,54 @@ export class BaseRepository {
      * @param {string} entityName Name for logging/error messages
      * @param {object} [options]
      * @param {boolean} [options.useCache=true] Enable in-memory cache
+     * @param {boolean} [options.autoCompanyScope=true] Auto-scope by company
      */
     constructor(entityName, options = {}) {
         this.entityName = entityName;
         this.useCache = options.useCache !== false;
+        this.autoCompanyScope = options.autoCompanyScope !== false;
         this._cache = new Map();
+    }
+
+    /**
+     * Get current company code from SMART.Session.
+     * Programmer aplikasi tidak perlu memanggil getCompanyCode().
+     * Repository otomatis membaca dari Session.
+     * @returns {string|null}
+     */
+    _getCompanyCode() {
+        try {
+            if (typeof globalThis !== 'undefined' && globalThis.SMART && globalThis.SMART.Session) {
+                return globalThis.SMART.Session.get("company.code");
+            }
+        } catch {
+            // Silently fail
+        }
+        return null;
+    }
+
+    /**
+     * Auto-tag data with current company code.
+     * @param {object} data
+     * @returns {object}
+     */
+    _tagWithCompany(data) {
+        if (!this.autoCompanyScope) return data;
+        const code = this._getCompanyCode();
+        if (!code) return { ...data };
+        return { ...data, companyCode: code };
+    }
+
+    /**
+     * Auto-filter items by current company.
+     * @param {object[]} items
+     * @returns {object[]}
+     */
+    _filterByCompany(items) {
+        if (!this.autoCompanyScope) return items;
+        const code = this._getCompanyCode();
+        if (!code) return items;
+        return items.filter(item => item.companyCode === code);
     }
 
     /**
@@ -116,6 +166,27 @@ export class BaseRepository {
      */
     invalidateCache() {
         this._cache.clear();
+    }
+
+    /**
+     * Get current user ID from SMART.Session.
+     * @returns {string|null}
+     */
+    _getCurrentUserId() {
+        try {
+            if (typeof globalThis !== 'undefined' && globalThis.SMART && globalThis.SMART.Session) {
+                return globalThis.SMART.Session.get("user.id");
+            }
+        } catch {}
+        return null;
+    }
+
+    /**
+     * Get current company code (convenience for subclasses).
+     * @returns {string|null}
+     */
+    getCompanyCode() {
+        return this._getCompanyCode();
     }
 
     /**
@@ -236,10 +307,13 @@ export class InMemoryRepository extends BaseRepository {
         const now = Date.now();
         const newItem = {
             [this._idField]: this._generateId(),
-            ...data,
+            ...this._tagWithCompany(data),
             active: data.active !== false,
+            companyCode: data.companyCode || this._getCompanyCode() || null,
             createdAt: now,
-            updatedAt: now
+            updatedAt: now,
+            createdBy: this._getCurrentUserId(),
+            updatedBy: this._getCurrentUserId()
         };
         this._items.push(newItem);
         this.invalidateCache();
@@ -258,7 +332,8 @@ export class InMemoryRepository extends BaseRepository {
             ...this._items[index],
             ...data,
             [this._idField]: id, // prevent ID override
-            updatedAt: Date.now()
+            updatedAt: Date.now(),
+            updatedBy: this._getCurrentUserId()
         };
         this._items[index] = updated;
         this.invalidateCache();

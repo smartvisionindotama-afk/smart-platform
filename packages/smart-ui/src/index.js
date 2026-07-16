@@ -1,24 +1,40 @@
+/**
+ * @smart/ui — SMART UI SDK.
+ *
+ * ████████████████████████████████████████████████████████████
+ * PUBLIC SDK — FACADE ARCHITECTURE
+ * ████████████████████████████████████████████████████████████
+ *
+ * ✅ BENAR:
+ *   import { UI } from "@smart/ui";
+ *   UI.Modal({ open: true, title: "Hello" })
+ *   UI.Table({ columns: [...], rows: [...] })
+ *   UI.PageContainer({ title: "Dashboard", content: "..." })
+ *
+ * ⚠️ @deprecated (masih berfungsi, tapi akan dihapus):
+ *   import { Modal, Table, Toast } from "@smart/ui";
+ *
+ * @module @smart/ui
+ */
+
 import "./tokens/index.css";
 
-// All 22 SMART UI components — accessible directly from @smart/ui
+// ═══════════════════════════════════════════════════════════════
+//  PRIMARY API: UI Facade
+// ═══════════════════════════════════════════════════════════════
+
+export { UI, loadUI } from "./ui-facade.js";
+
+// ═══════════════════════════════════════════════════════════════
+//  @deprecated — Backward Compatible Exports
+//  Aplikasi baru HARUS menggunakan UI.* atau SMART.UI.*
+// ═══════════════════════════════════════════════════════════════
+
+/** @deprecated Gunakan UI.PageContainer() */
 export * from "./components/index.js";
 
-// Workspace engine
+/** @deprecated Gunakan UI */
 export { loadWorkspace } from "./workspaces/engine.js";
 
-// Settings modules
-export { SettingsCompanyModule } from "./modules/settings/company.js";
-
-
-/**
- * Load the SMART UI framework.
- *
- * Initializes global UI tokens and logs confirmation.
- */
-export function loadUI() {
-
-    console.log(
-        "SMART UI Loaded"
-    );
-
-}
+/** @deprecated Gunakan Settings modules via DI */
+export * from "./modules/settings/index.js";

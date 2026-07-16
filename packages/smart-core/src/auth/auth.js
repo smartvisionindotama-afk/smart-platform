@@ -51,7 +51,8 @@ const users = {
 
         password: "operator123"
 
-    }
+    },
+
 
 };
 
@@ -289,6 +290,9 @@ class Auth {
 
 
 
+
+
+
     // ── Subscriptions ──
 
 
@@ -318,6 +322,8 @@ class Auth {
         };
 
     }
+
+
 
 
 

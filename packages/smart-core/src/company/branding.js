@@ -20,8 +20,6 @@
  * @module @smart/core/company/branding
  */
 
-import { companyManager } from "./company-context.js";
-
 /**
  * @typedef {object} BrandingConfig
  * @property {string|null} logo Company logo URL or data-URI
@@ -33,6 +31,8 @@ import { companyManager } from "./company-context.js";
  * @property {string} timezone Company timezone
  * @property {string} currency Default currency
  * @property {string} language Default language
+ * @property {string|null} sidebarLogo Sidebar-specific logo
+ * @property {string|null} topbarLogo Topbar-specific logo
  */
 
 /**
@@ -48,17 +48,43 @@ const DEFAULT_BRANDING = {
     theme: "light",
     timezone: "Asia/Jakarta",
     currency: "IDR",
-    language: "id"
+    language: "id",
+    sidebarLogo: null,
+    topbarLogo: null
 };
 
 /**
  * BrandingManager — centralized branding provider.
- * Reads from company context and provides UI-ready branding.
+ * Reads from company data and provides UI-ready branding.
  */
 class BrandingManager {
     constructor() {
         this._listeners = [];
         this._overrides = {};
+        this._fromCompany = {};
+    }
+
+    /**
+     * Load branding from a company data object.
+     * Called by CompanyManager.setCompany().
+     *
+     * @param {object} companyData
+     */
+    loadFromCompany(companyData) {
+        if (!companyData) return;
+        this._fromCompany = {
+            logo: companyData.logo || null,
+            favicon: companyData.favicon || null,
+            companyName: companyData.name || companyData.companyName || null,
+            workspace: companyData.workspace || "default",
+            theme: companyData.theme || "light",
+            timezone: companyData.timezone || "Asia/Jakarta",
+            currency: companyData.currency || "IDR",
+            language: companyData.language || "id",
+            sidebarLogo: companyData.sidebarLogo || companyData.logo || null,
+            topbarLogo: companyData.topbarLogo || companyData.logo || null
+        };
+        this._notify();
     }
 
     /**
@@ -67,18 +93,14 @@ class BrandingManager {
      * @returns {BrandingConfig}
      */
     getBranding() {
-        const companyData = companyManager.getData() || {};
         return {
             ...DEFAULT_BRANDING,
-            logo: companyData.logo || this._overrides.logo || null,
-            favicon: companyData.favicon || this._overrides.favicon || null,
-            companyName: companyManager.getName() || companyData.name || DEFAULT_BRANDING.companyName,
-            appName: this._overrides.appName || DEFAULT_BRANDING.appName,
-            workspace: companyData.workspace || DEFAULT_BRANDING.workspace,
-            theme: this._overrides.theme || DEFAULT_BRANDING.theme,
-            timezone: companyData.timezone || DEFAULT_BRANDING.timezone,
-            currency: companyData.currency || DEFAULT_BRANDING.currency,
-            language: companyData.language || DEFAULT_BRANDING.language
+            ...this._fromCompany,
+            ...this._overrides,
+            // companyName priority: override > company > default
+            companyName: this._overrides.companyName || this._fromCompany.companyName || DEFAULT_BRANDING.companyName,
+            // appName only from override or default
+            appName: this._overrides.appName || DEFAULT_BRANDING.appName
         };
     }
 
@@ -87,8 +109,7 @@ class BrandingManager {
      * @returns {string|null}
      */
     getLogo() {
-        const branding = this.getBranding();
-        return branding.logo;
+        return this.getBranding().logo;
     }
 
     /**
@@ -105,6 +126,15 @@ class BrandingManager {
      */
     setOverrides(overrides = {}) {
         this._overrides = { ...this._overrides, ...overrides };
+        this._notify();
+    }
+
+    /**
+     * Clear branding data (on logout).
+     */
+    clear() {
+        this._fromCompany = {};
+        this._overrides = {};
         this._notify();
     }
 
@@ -138,9 +168,9 @@ class BrandingManager {
 
     /** @private */
     _notify() {
-        const branding = this.getBranding();
+        const b = this.getBranding();
         this._listeners.forEach(fn => {
-            try { fn(branding); } catch (e) {
+            try { fn(b); } catch (e) {
                 console.warn("[BrandingManager] Subscriber error:", e);
             }
         });

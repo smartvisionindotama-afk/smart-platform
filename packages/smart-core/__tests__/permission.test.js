@@ -136,36 +136,36 @@ describe("Roles", () => {
 
         it("should return viewer permissions for viewer role", () => {
             const perms = getEffectivePermissions("viewer");
-            expect(perms).toContain("dashboard.view");
-            expect(perms).toContain("barang.view");
-            expect(perms).not.toContain("barang.create");
+            expect(perms).toContain("inventory.dashboard.view");
+            expect(perms).toContain("inventory.barang.read");
+            expect(perms).not.toContain("inventory.barang.create");
         });
 
         it("should include inherited permissions for operator", () => {
             const perms = getEffectivePermissions("operator");
-            expect(perms).toContain("dashboard.view");
-            expect(perms).toContain("barang.view");
-            expect(perms).toContain("barang.create");
-            expect(perms).not.toContain("barang.delete");
+            expect(perms).toContain("inventory.dashboard.view");
+            expect(perms).toContain("inventory.barang.read");
+            expect(perms).toContain("inventory.barang.create");
+            expect(perms).not.toContain("inventory.barang.delete");
         });
 
         it("should include inherited permissions for manager", () => {
             const perms = getEffectivePermissions("manager");
-            expect(perms).toContain("dashboard.view");
-            expect(perms).toContain("barang.view");
-            expect(perms).toContain("barang.create");
-            expect(perms).toContain("barang.update");
-            expect(perms).toContain("supplier.create");
+            expect(perms).toContain("inventory.dashboard.view");
+            expect(perms).toContain("inventory.barang.read");
+            expect(perms).toContain("inventory.barang.create");
+            expect(perms).toContain("inventory.barang.update");
+            expect(perms).toContain("inventory.supplier.create");
         });
 
         it("should include all permissions for owner", () => {
             const perms = getEffectivePermissions("owner");
-            expect(perms).toContain("dashboard.view");
-            expect(perms).toContain("barang.view");
-            expect(perms).toContain("barang.create");
-            expect(perms).toContain("barang.update");
-            expect(perms).toContain("barang.delete");
-            expect(perms).toContain("setting.manage");
+            expect(perms).toContain("inventory.dashboard.view");
+            expect(perms).toContain("inventory.barang.read");
+            expect(perms).toContain("inventory.barang.create");
+            expect(perms).toContain("inventory.barang.update");
+            expect(perms).toContain("inventory.barang.delete");
+            expect(perms).toContain("settings.company.edit");
             expect(perms).toContain("*");
         });
 
@@ -218,13 +218,11 @@ describe("Roles", () => {
     });
 
 
-    describe("grantPermission()", () => {
-
-        it("should add permission to a role", () => {
-            const result = grantPermission("viewer", "report.export");
+    describe("grantPermission()", () => {            it("should add permission to a role", () => {
+            const result = grantPermission("viewer", "inventory.report.export");
             expect(result).toBe(true);
             const perms = getEffectivePermissions("viewer");
-            expect(perms).toContain("report.export");
+            expect(perms).toContain("inventory.report.export");
         });
 
         it("should not duplicate permissions", () => {
@@ -244,10 +242,10 @@ describe("Roles", () => {
     describe("revokePermission()", () => {
 
         it("should remove permission from a role", () => {
-            const result = revokePermission("viewer", "dashboard.view");
+            const result = revokePermission("viewer", "inventory.dashboard.view");
             expect(result).toBe(true);
             const perms = getEffectivePermissions("viewer");
-            expect(perms).not.toContain("dashboard.view");
+            expect(perms).not.toContain("inventory.dashboard.view");
         });
 
         it("should return false for non-existent permission", () => {
@@ -284,18 +282,18 @@ describe("Permission Module", () => {
 
         it("should check permission for logged-in user", () => {
             Auth.login("admin");
-            expect(Permission.can("dashboard.view")).toBe(true);
-            expect(Permission.can("barang.view")).toBe(true);
-            expect(Permission.can("barang.create")).toBe(true);
+            expect(Permission.can("inventory.dashboard.view")).toBe(true);
+            expect(Permission.can("inventory.barang.read")).toBe(true);
+            expect(Permission.can("inventory.barang.create")).toBe(true);
         });
 
         it("should check operator permissions", () => {
             Auth.login("operator");
-            expect(Permission.can("dashboard.view")).toBe(true);
-            expect(Permission.can("barang.view")).toBe(true);
-            expect(Permission.can("barang.create")).toBe(true);
-            expect(Permission.can("barang.delete")).toBe(false);
-            expect(Permission.can("supplier.create")).toBe(false);
+            expect(Permission.can("inventory.dashboard.view")).toBe(true);
+            expect(Permission.can("inventory.barang.read")).toBe(true);
+            expect(Permission.can("inventory.barang.create")).toBe(true);
+            expect(Permission.can("inventory.barang.delete")).toBe(false);
+            expect(Permission.can("inventory.supplier.create")).toBe(false);
         });
 
     });
@@ -305,12 +303,12 @@ describe("Permission Module", () => {
 
         it("should return true if any permission matches", () => {
             Auth.login("operator");
-            expect(Permission.canAny(["barang.delete", "barang.view"])).toBe(true);
+            expect(Permission.canAny(["inventory.barang.delete", "inventory.barang.read"])).toBe(true);
         });
 
         it("should return false if none match", () => {
             Auth.login("operator");
-            expect(Permission.canAny(["barang.delete", "supplier.create"])).toBe(false);
+            expect(Permission.canAny(["inventory.barang.delete", "inventory.supplier.create"])).toBe(false);
         });
 
     });
@@ -320,12 +318,12 @@ describe("Permission Module", () => {
 
         it("should return true if all match", () => {
             Auth.login("admin");
-            expect(Permission.canAll(["dashboard.view", "barang.view"])).toBe(true);
+            expect(Permission.canAll(["inventory.dashboard.view", "inventory.barang.read"])).toBe(true);
         });
 
         it("should return false if not all match", () => {
             Auth.login("operator");
-            expect(Permission.canAll(["barang.view", "barang.delete"])).toBe(false);
+            expect(Permission.canAll(["inventory.barang.read", "inventory.barang.delete"])).toBe(false);
         });
 
     });
@@ -362,7 +360,7 @@ describe("Permission Module", () => {
 
         it("should return all roles", () => {
             const roles = Permission.roles();
-            expect(Object.keys(roles).length).toBe(4);
+            expect(Object.keys(roles).length).toBe(5);
         });
 
     });
@@ -377,10 +375,10 @@ describe("Permission Module", () => {
         it("should return effective permissions for logged-in user", () => {
             Auth.login("operator");
             const menu = Permission.menu();
-            expect(menu).toContain("dashboard.view");
-            expect(menu).toContain("barang.view");
-            expect(menu).toContain("barang.create");
-            expect(menu).toContain("pembelian.view");
+            expect(menu).toContain("inventory.dashboard.view");
+            expect(menu).toContain("inventory.barang.read");
+            expect(menu).toContain("inventory.barang.create");
+            expect(menu).toContain("inventory.pembelian.read");
         });
 
     });
@@ -390,9 +388,9 @@ describe("Permission Module", () => {
 
         it("should dynamically add permission to a role", () => {
             Auth.login("operator");
-            expect(Permission.can("supplier.create")).toBe(false);
-            Permission.grant("operator", "supplier.create");
-            expect(Permission.can("supplier.create")).toBe(true);
+            expect(Permission.can("inventory.supplier.create")).toBe(false);
+            Permission.grant("operator", "inventory.supplier.create");
+            expect(Permission.can("inventory.supplier.create")).toBe(true);
         });
 
     });
@@ -402,9 +400,9 @@ describe("Permission Module", () => {
 
         it("should dynamically remove permission from a role", () => {
             Auth.login("operator");
-            expect(Permission.can("barang.view")).toBe(true);
-            Permission.revoke("viewer", "barang.view");
-            expect(Permission.can("barang.view")).toBe(false);
+            expect(Permission.can("inventory.barang.read")).toBe(true);
+            Permission.revoke("viewer", "inventory.barang.read");
+            expect(Permission.can("inventory.barang.read")).toBe(false);
         });
 
     });
@@ -426,7 +424,7 @@ describe("Permission Module", () => {
             // Admin (owner) has "*" wildcard, so "admin.access" IS accessible
             expect(Permission.can("admin.access")).toBe(true);
             // Normal role-based permissions should work
-            expect(Permission.can("dashboard.view")).toBe(true);
+            expect(Permission.can("inventory.dashboard.view")).toBe(true);
         });
 
     });
@@ -445,7 +443,7 @@ describe("Permission Module", () => {
         it("should notify subscribers on revoke", () => {
             let called = false;
             const unsub = Permission.onChange(() => { called = true; });
-            Permission.revoke("viewer", "dashboard.view");
+            Permission.revoke("viewer", "inventory.dashboard.view");
             expect(called).toBe(true);
             unsub();
         });

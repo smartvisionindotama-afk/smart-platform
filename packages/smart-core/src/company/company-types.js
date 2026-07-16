@@ -1,10 +1,10 @@
 /**
  * Company Types — Standard company jenis options.
  *
- * As defined in the master prompt:
- * PT, CV, Perorangan, Firma, Yayasan, BUMDes, BUMDes Bersama,
- * Koperasi, Pesantren, Sekolah, Pemerintah Desa, Kecamatan,
- * OPD, Puskesmas, Rumah Sakit, Lainnya
+ * Simplified list for all SMART Platform applications.
+ * PT, CV, Perorangan, BUMDes, Koperasi, Pesantren, Pemerintah, Lainnya
+ *
+ * Semua aplikasi menggunakan daftar yang sama.
  *
  * @module @smart/core/company/company-types
  */
@@ -17,18 +17,10 @@ export const COMPANY_TYPES = [
     "PT",
     "CV",
     "Perorangan",
-    "Firma",
-    "Yayasan",
     "BUMDes",
-    "BUMDes Bersama",
     "Koperasi",
     "Pesantren",
-    "Sekolah",
-    "Pemerintah Desa",
-    "Kecamatan",
-    "OPD",
-    "Puskesmas",
-    "Rumah Sakit",
+    "Pemerintah",
     "Lainnya"
 ];
 

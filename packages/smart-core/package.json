@@ -10,7 +10,11 @@
     "./permission": "./src/permission/permission.js",
     "./institution": "./src/institution/institution.js",
     "./app": "./src/app/app.js",
-    "./company": "./src/company/index.js"
+    "./company": "./src/company/index.js",
+    "./impersonation": "./src/impersonation/index.js",
+    "./audit": "./src/audit/index.js",
+    "./platform": "./src/platform/index.js",
+    "./context": "./src/context/index.js"
   },
   "scripts": {
     "dev": "echo '@smart/core: No dev server needed'",

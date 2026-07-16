@@ -10,6 +10,27 @@
  * from roles at lower levels.
  */
 
+/**
+ * Namespace-based permission definitions.
+ *
+ * Format: {application}.{resource}.{action}
+ *
+ * Contoh:
+ *   inventory.dashboard.view
+ *   inventory.barang.read
+ *   inventory.barang.create
+ *   inventory.barang.update
+ *   inventory.barang.delete
+ *   inventory.stock.adjust
+ *   inventory.stock.opname
+ *   settings.company.edit
+ *   settings.user.manage
+ *   settings.permission.manage
+ *   settings.role.manage
+ *
+ * Permission lintas aplikasi harus konsisten.
+ */
+
 const roleDefinitions = {
 
     viewer: {
@@ -20,15 +41,15 @@ const roleDefinitions = {
 
         permissions: [
 
-            "dashboard.view",
+            "inventory.dashboard.view",
 
-            "barang.view",
+            "inventory.barang.read",
 
-            "supplier.view",
+            "inventory.supplier.read",
 
-            "pembelian.view",
+            "inventory.pembelian.read",
 
-            "report.view"
+            "inventory.report.view"
 
         ]
 
@@ -43,9 +64,11 @@ const roleDefinitions = {
 
         permissions: [
 
-            "barang.create",
+            "inventory.barang.create",
 
-            "pembelian.create"
+            "inventory.pembelian.create",
+
+            "inventory.stock.adjust"
 
         ]
 
@@ -60,11 +83,13 @@ const roleDefinitions = {
 
         permissions: [
 
-            "barang.update",
+            "inventory.barang.update",
 
-            "supplier.create",
+            "inventory.supplier.create",
 
-            "pembelian.approve"
+            "inventory.pembelian.approve",
+
+            "inventory.stock.opname"
 
         ]
 
@@ -79,19 +104,34 @@ const roleDefinitions = {
 
         permissions: [
 
-            "barang.delete",
+            "inventory.barang.delete",
 
-            "supplier.delete",
+            "inventory.supplier.delete",
 
-            "setting.manage",
+            "settings.company.edit",
 
-            "user.manage",
+            "settings.user.manage",
 
-            "report.export",
+            "settings.permission.manage",
+
+            "settings.role.manage",
+
+            "inventory.report.export",
 
             "*"
 
         ]
+
+    },
+
+
+    superadmin: {
+
+        name: "Super Admin",
+
+        level: 200,
+
+        permissions: ["*"]
 
     }
 

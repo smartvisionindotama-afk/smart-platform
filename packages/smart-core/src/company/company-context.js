@@ -1,233 +1,189 @@
 /**
- * Company Context — Multi-tenant data isolation.
+ * ═══════════════════════════════════════════════════════════════
+ *  LEGACY COMPATIBILITY LAYER
+ * ═══════════════════════════════════════════════════════════════
  *
- * Provides framework-level company context management.
- * Every user/data entity is scoped to a company.
- * This module provides the current company context
- * and helper functions to tag/filter data by company.
+ * File ini dipertahankan agar aplikasi lama tetap berjalan.
  *
- * All SMART applications use the same class.
- * 
- * @module @smart/core/company
+ * Semua function di sini adalah WRAPPER yang meneruskan
+ * request ke SDK baru (SMART.Company / SMART.Session).
+ *
+ * Development baru wajib menggunakan:
+ *
+ *   SMART.Company   — Company.get(), Company.set(), Company.switch()
+ *   SMART.Session   — Session.get("company.code"), Session.company()
+ *
+ * Jangan menambah logic baru pada file ini.
+ *
+ * @module @smart/core/company/company-context
+ * @deprecated Gunakan SMART.Company atau SMART.Session
+ * ═══════════════════════════════════════════════════════════════
  */
-
-/** @type {string|null} Current company code (e.g. "CMP-001") */
-let _currentCompanyCode = null;
-
-/** @type {string|null} Current company name for display */
-let _currentCompanyName = null;
-
-/** @type {object|null} Current company full data object */
-let _currentCompanyData = null;
 
 /**
- * CompanyManager — Enhanced company context management.
- * Provides storage, resolution, and settings access.
+ * Get the SMART namespace, handling both module and global access.
+ * @returns {object|null}
  */
-class CompanyManager {
-    /**
-     * @param {object} [options]
-     * @param {object} [options.storage] Optional storage backend (e.g., localStorage)
-     */
-    constructor(options = {}) {
-        this._storage = options.storage || null;
-        this._listeners = [];
-    }
-
-    /**
-     * Get current company code.
-     * @returns {string|null}
-     */
-    getCode() {
-        return _currentCompanyCode;
-    }
-
-    /**
-     * Get current company name.
-     * @returns {string|null}
-     */
-    getName() {
-        return _currentCompanyName;
-    }
-
-    /**
-     * Get current company full data.
-     * @returns {object|null}
-     */
-    getData() {
-        return _currentCompanyData ? { ..._currentCompanyData } : null;
-    }
-
-    /**
-     * Set current company context.
-     * @param {string} code Company code
-     * @param {string} [name] Display name
-     * @param {object} [data] Full company data
-     */
-    setContext(code, name, data = null) {
-        _currentCompanyCode = code;
-        _currentCompanyName = name || code;
-        _currentCompanyData = data ? { ...data } : null;
-        this._notify();
-    }
-
-    /**
-     * Clear company context (e.g., on logout).
-     */
-    clear() {
-        _currentCompanyCode = null;
-        _currentCompanyName = null;
-        _currentCompanyData = null;
-        this._notify();
-    }
-
-    /**
-     * Check if a company context is active.
-     * @returns {boolean}
-     */
-    hasContext() {
-        return _currentCompanyCode !== null;
-    }
-
-    /**
-     * Tag data object with current company code.
-     * @param {object} data
-     * @returns {object}
-     */
-    tagData(data) {
-        if (!_currentCompanyCode) return { ...data };
-        return { ...data, companyCode: _currentCompanyCode };
-    }
-
-    /**
-     * Filter items array by current company.
-     * @param {object[]} items
-     * @returns {object[]}
-     */
-    filterItems(items) {
-        if (!_currentCompanyCode) return items;
-        return items.filter(item => item.companyCode === _currentCompanyCode);
-    }
-
-    /**
-     * Subscribe to context changes.
-     * @param {function} callback
-     * @returns {function} Unsubscribe function
-     */
-    onChange(callback) {
-        this._listeners.push(callback);
-        return () => {
-            const idx = this._listeners.indexOf(callback);
-            if (idx !== -1) this._listeners.splice(idx, 1);
-        };
-    }
-
-    /**
-     * Resolve company data from a provider function.
-     * @param {function} provider Async function that returns company data
-     * @returns {Promise<object|null>}
-     */
-    async resolve(provider) {
-        if (typeof provider !== "function") return null;
-        try {
-            const data = await provider(_currentCompanyCode);
-            if (data) {
-                _currentCompanyData = { ...data };
-                this._notify();
-                return data;
-            }
-        } catch (e) {
-            console.warn("[CompanyManager] Resolve error:", e);
+function _getSMART() {
+    try {
+        if (typeof globalThis !== 'undefined' && globalThis.SMART) {
+            return globalThis.SMART;
         }
-        return null;
-    }
-
-    /** @private */
-    _notify() {
-        const snapshot = {
-            code: _currentCompanyCode,
-            name: _currentCompanyName,
-            data: _currentCompanyData ? { ..._currentCompanyData } : null
-        };
-        this._listeners.forEach(fn => {
-            try { fn(snapshot); } catch (e) {
-                console.warn("[CompanyManager] Subscriber error:", e);
-            }
-        });
-    }
+    } catch {}
+    // Fallback — dynamic import would be needed, but this is a legacy layer
+    return null;
 }
-
-// ── Singleton instance ──
-export const companyManager = new CompanyManager();
-export default companyManager;
-
-// ── Backward-compatible function API ──
 
 /**
  * Set the current company context.
- * Called after login with the resolved company for the user.
  *
- * @param {string} companyCode e.g. "CMP-001"
- * @param {string} [companyName] Display name
+ * @deprecated Gunakan `SMART.Company.set()` atau `SMART.Session`.
+ *
+ * @param {string} companyCode
+ * @param {string} [companyName]
  */
 export function setCompanyContext(companyCode, companyName) {
-    _currentCompanyCode = companyCode;
-    _currentCompanyName = companyName || companyCode;
+    const smart = _getSMART();
+    if (smart && smart.Company && smart.Company.set) {
+        smart.Company.set(companyCode, companyName);
+        return;
+    }
+    // Last-resort fallback: use old module-level variables
+    _legacySetContext(companyCode, companyName);
 }
 
 /**
  * Get the current company code.
+ *
+ * @deprecated Gunakan `SMART.Session.get("company.code")` atau `SMART.Company.getCode()`.
+ *
  * @returns {string|null}
  */
 export function getCompanyCode() {
-    return _currentCompanyCode;
+    const smart = _getSMART();
+    if (smart && smart.Session && smart.Session.get) {
+        return smart.Session.get("company.code");
+    }
+    if (smart && smart.Company && smart.Company.getCode) {
+        return smart.Company.getCode();
+    }
+    return _legacyGetCode();
 }
 
 /**
  * Get the current company name.
+ *
+ * @deprecated Gunakan `SMART.Session.get("company.name")` atau `SMART.Company.getName()`.
+ *
  * @returns {string|null}
  */
 export function getCompanyName() {
-    return _currentCompanyName;
+    const smart = _getSMART();
+    if (smart && smart.Session && smart.Session.get) {
+        return smart.Session.get("company.name");
+    }
+    if (smart && smart.Company && smart.Company.getName) {
+        return smart.Company.getName();
+    }
+    return _legacyGetName();
 }
 
 /**
  * Clear company context (e.g. on logout).
+ *
+ * @deprecated Gunakan `SMART.Company.clear()` atau `SMART.Session.destroy()`.
  */
 export function clearCompanyContext() {
-    _currentCompanyCode = null;
-    _currentCompanyName = null;
-    _currentCompanyData = null;
+    const smart = _getSMART();
+    if (smart && smart.Company && smart.Company.clear) {
+        smart.Company.clear();
+        return;
+    }
+    _legacyClear();
 }
 
 /**
  * Check if a company context is active.
+ *
+ * @deprecated Gunakan `SMART.Session.isAuthenticated()`.
+ *
  * @returns {boolean}
  */
 export function hasCompanyContext() {
-    return _currentCompanyCode !== null;
+    const smart = _getSMART();
+    if (smart && smart.Session && smart.Session.get) {
+        return !!smart.Session.get("company.code");
+    }
+    if (smart && smart.Company && smart.Company.getCode) {
+        return !!smart.Company.getCode();
+    }
+    return _legacyHasContext();
 }
 
 /**
  * Tag data with the current company code.
- * Returns data with companyCode added/overridden.
+ *
+ * @deprecated Gunakan `BaseRepository._tagWithCompany()` atau `SMART.Company.tag()`.
  *
  * @param {object} data
  * @returns {object}
  */
 export function tagWithCompany(data) {
-    if (!_currentCompanyCode) return { ...data };
-    return { ...data, companyCode: _currentCompanyCode };
+    const smart = _getSMART();
+    if (smart && smart.Company && smart.Company.tag) {
+        return smart.Company.tag(data);
+    }
+    const code = getCompanyCode();
+    if (!code) return { ...data };
+    return { ...data, companyCode: code };
 }
 
 /**
  * Filter an array of items to only include those
  * belonging to the current company.
  *
+ * @deprecated Gunakan `BaseRepository._filterByCompany()` atau `SMART.Company.filter()`.
+ *
  * @param {object[]} items
  * @returns {object[]}
  */
 export function filterByCompany(items) {
-    if (!_currentCompanyCode) return items;
-    return items.filter(item => item.companyCode === _currentCompanyCode);
+    const smart = _getSMART();
+    if (smart && smart.Company && smart.Company.filter) {
+        return smart.Company.filter(items);
+    }
+    const code = getCompanyCode();
+    if (!code) return items;
+    return items.filter(item => item.companyCode === code);
+}
+
+// ═══════════════════════════════════════════════
+//  ULTIMATE FALLBACK — hanya jika SMART belum siap
+// ═══════════════════════════════════════════════
+
+/** @type {string|null} */
+let _fallbackCompanyCode = null;
+/** @type {string|null} */
+let _fallbackCompanyName = null;
+
+function _legacySetContext(code, name) {
+    _fallbackCompanyCode = code;
+    _fallbackCompanyName = name || code;
+}
+
+function _legacyGetCode() {
+    return _fallbackCompanyCode;
+}
+
+function _legacyGetName() {
+    return _fallbackCompanyName;
+}
+
+function _legacyClear() {
+    _fallbackCompanyCode = null;
+    _fallbackCompanyName = null;
+}
+
+function _legacyHasContext() {
+    return _fallbackCompanyCode !== null;
 }
