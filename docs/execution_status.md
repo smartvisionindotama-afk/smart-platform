@@ -45,7 +45,16 @@
 | **Framework** | **Branding Decoupled**              | ✅     | 2026-07-16 | BrandingManager tidak lagi bergantung pada company-context. Menerima data via loadFromCompany(). |
 | **Framework** | **Inventory Data Layer Cleanup**    | ✅     | 2026-07-16 | Hapus dependency langsung ke filterByCompany/tagWithCompany dari data services. Gunakan BaseRepository auto-scoping. |
 | **Framework** | **Architecture Refinement (13 Phases)** | ✅ | 2026-07-16 | SMART Framework jadi Enterprise SDK: SMART.Session (nested), SMART.Company (15 methods), SMART.DB, SMART.API, SMART.UI, SMART.Permission (namespace), SMART.Platform (enhanced), SMART.Audit, SMART.Impersonation. |
-| Inventory | Pembelian CRUD                        | ⬜     | —          | Placeholder only.                                                     |
+| **EPIC-005** | **Architecture Design Document**      | ✅ | 2026-07-16 | `docs/epic-005-architecture-design.md` — Event Bus, DI, Plugin, Lifecycle, Config, CLI, Generators. 5 conflicts identified, solutions designed. |
+| **EPIC-005** | **Event Bus**                          | ⬜ | Sprint 5   | Wrapping existing onChange, backward compat. No breaking changes. |
+| **EPIC-005** | **Configuration Provider**             | ⬜ | Sprint 5   | Priority chain: ENV → localStorage → workspace.json → defaults. |
+| **EPIC-005** | **Lifecycle Hooks**                    | ⬜ | Sprint 5   | State machine: bootstrap → init → ready → running → destroy. |
+| **EPIC-005** | **DI Container**                       | ⬜ | Sprint 6   | Optional — facade tetap langsung import. Register/resolve pattern. |
+| **EPIC-005** | **Plugin System**                      | ⬜ | Sprint 6   | SMART.use(plugin), SMART.extend(name, module). Plugin lifecycle. |
+| **EPIC-005** | **CLI Architecture**                   | ⬜ | Sprint 7   | New package: smart-cli. Commands: init, generate, build, dev. |
+| **EPIC-005** | **Module Generator**                   | ⬜ | Sprint 7   | New package: smart-generator. CRUD module from template. |
+| **EPIC-005** | **Application Generator**              | ⬜ | Sprint 7   | Full app from template. Depends on Module Generator. |
+| Inventory | Pembelian CRUD                        | ⬜ | —          | Placeholder only.                                                     |
 | Inventory | Customer CRUD                         | ⬜     | —          | Placeholder only.                                                     |
 
 ## ═══════════════════════════════════════════════
