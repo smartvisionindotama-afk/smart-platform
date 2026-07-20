@@ -31,109 +31,21 @@
  * Permission lintas aplikasi harus konsisten.
  */
 
+/**
+ * Role definitions with hierarchy.
+ *
+ * ⚠️ PERMISSIONS are now loaded dynamically from the server.
+ * This file only defines the role hierarchy (level) and display names.
+ * Actual permission data comes from MongoDB via Permission.syncFromServer().
+ */
+
 const roleDefinitions = {
 
-    viewer: {
-
-        name: "Viewer",
-
-        level: 10,
-
-        permissions: [
-
-            "inventory.dashboard.view",
-
-            "inventory.barang.read",
-
-            "inventory.supplier.read",
-
-            "inventory.pembelian.read",
-
-            "inventory.report.view"
-
-        ]
-
-    },
-
-
-    operator: {
-
-        name: "Operator Gudang",
-
-        level: 30,
-
-        permissions: [
-
-            "inventory.barang.create",
-
-            "inventory.pembelian.create",
-
-            "inventory.stock.adjust"
-
-        ]
-
-    },
-
-
-    manager: {
-
-        name: "Manager",
-
-        level: 70,
-
-        permissions: [
-
-            "inventory.barang.update",
-
-            "inventory.supplier.create",
-
-            "inventory.pembelian.approve",
-
-            "inventory.stock.opname"
-
-        ]
-
-    },
-
-
-    owner: {
-
-        name: "Owner",
-
-        level: 100,
-
-        permissions: [
-
-            "inventory.barang.delete",
-
-            "inventory.supplier.delete",
-
-            "settings.company.edit",
-
-            "settings.user.manage",
-
-            "settings.permission.manage",
-
-            "settings.role.manage",
-
-            "inventory.report.export",
-
-            "*"
-
-        ]
-
-    },
-
-
-    superadmin: {
-
-        name: "Super Admin",
-
-        level: 200,
-
-        permissions: ["*"]
-
-    }
+    supervisor: { name: "Supervisor", level: 10, permissions: [] },
+    operator:   { name: "Operator Gudang", level: 30, permissions: [] },
+    admin:      { name: "Admin", level: 70, permissions: [] },
+    owner:      { name: "Owner", level: 100, permissions: ["*"] },
+    superadmin: { name: "Super Admin", level: 200, permissions: ["*"] }
 
 };
 

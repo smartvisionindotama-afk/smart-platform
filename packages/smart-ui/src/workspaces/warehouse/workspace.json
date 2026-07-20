@@ -2,7 +2,7 @@
     "name": "warehouse",
     "label": "Gudang",
     "appTitle": "Warehouse",
-    "topbarTitle": "SMART Warehouse",
+    "topbarTitle": "SMART Inventory",
     "variables": "warehouse/variables.css",
     "layout": {
         "sidebarPosition": "left",

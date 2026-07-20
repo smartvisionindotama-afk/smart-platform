@@ -13,20 +13,24 @@ import { Modal, Toast, Table, Pagination, EmptyState, Alert, Skeleton } from "..
  * User Settings Page component.
  *
  * @param {object} options
- * @param {function} options.listUsers      Async (params) => { data, pagination }
- * @param {function} options.getUser        Async (id, bypassGuard) => object
- * @param {function} options.createUser     Async (data) => object
- * @param {function} options.updateUser     Async (id, data, bypassGuard) => object
- * @param {function} options.deleteUser     Async (id, bypassGuard) => boolean
- * @param {function} options.getRoleOptions Sync () => string[]
- * @param {function} options.listCompanies  Async (params) => { data, pagination }
+ * @param {function} options.listUsers          Async (params) => { data, pagination }
+ * @param {function} options.getUser            Async (id, bypassGuard) => object
+ * @param {function} options.createUser         Async (data) => object
+ * @param {function} options.updateUser         Async (id, data, bypassGuard) => object
+ * @param {function} options.deleteUser         Async (id, bypassGuard) => boolean
+ * @param {function} options.getRoleOptions     Sync () => string[]
+ * @param {function} [options.listCompanies]    Async (params) => { data, pagination } — needed if currentCompanyCode not provided
+ * @param {string}   [options.currentCompanyCode]  Company code untuk auto-fill (disable dropdown)
+ * @param {string}   [options.currentCompanyName]  Company name untuk display
  * @returns {{ render: function, init: function }}
  */
-export function SettingsUserModule({ listUsers, getUser, createUser, updateUser, deleteUser, getRoleOptions, listCompanies }) {
+export function SettingsUserModule({ listUsers, getUser, createUser, updateUser, deleteUser, getRoleOptions, listCompanies, currentCompanyCode, currentCompanyName }) {
     const state = { items: [], page: 1, limit: 10, total: 0, totalPages: 1, search: "", loading: false, formMode: null, editingId: null };
+    const singleCompanyMode = !!currentCompanyCode;
     let cachedCompanies = [];
 
     async function loadCompanies() {
+        if (singleCompanyMode) return; // No need to fetch all companies
         try {
             const result = await listCompanies({ page: 1, limit: 999 });
             cachedCompanies = result.data;
@@ -35,6 +39,10 @@ export function SettingsUserModule({ listUsers, getUser, createUser, updateUser,
 
     function getCompanyName(code) {
         if (!code) return "-";
+        // Single-company mode: use provided name
+        if (singleCompanyMode && code === currentCompanyCode) {
+            return currentCompanyName || code;
+        }
         const c = cachedCompanies.find(c => c.code === code);
         return c ? c.name : code;
     }
@@ -149,13 +157,20 @@ export function SettingsUserModule({ listUsers, getUser, createUser, updateUser,
         ).join("");
     }
 
+    function getCompanyLabel() {
+        if (currentCompanyName && currentCompanyCode) {
+            return `${esc(currentCompanyName)} (${esc(currentCompanyCode)})`;
+        }
+        return esc(currentCompanyCode || "");
+    }
+
     async function openForm(mode, id = null) {
         state.formMode = mode;
         state.editingId = id;
         const isEdit = mode === "edit";
         const title = isEdit ? "Edit User" : "Tambah User Baru";
         const roles = getRoleOptions();
-        let formData = { username: "", name: "", email: "", role: "viewer", companyCode: "", password: "" };
+        let formData = { username: "", name: "", email: "", role: "supervisor", companyCode: "", password: "" };
 
         if (isEdit && id) {
             try {
@@ -164,15 +179,23 @@ export function SettingsUserModule({ listUsers, getUser, createUser, updateUser,
             } catch { showToast("danger", "Gagal memuat data"); return; }
         }
 
+        // Build company field: disabled input if single-company mode, else select dropdown
+        const companyField = singleCompanyMode
+            ? `<div class="form-group">
+                <label for="f-company">Perusahaan</label>
+                <input type="text" id="f-company" value="${getCompanyLabel()}" disabled style="background:#f3f4f6;cursor:not-allowed;" />
+               </div>`
+            : `<div class="form-group">
+                <label for="f-company">Company <span class="required">*</span></label>
+                <select id="f-company" required>
+                    <option value="">— Pilih Company —</option>
+                    ${buildCompanyOptions(formData.companyCode)}
+                </select>
+               </div>`;
+
         renderModal(title, `
             <div class="form-grid">
-                <div class="form-group">
-                    <label for="f-company">Company <span class="required">*</span></label>
-                    <select id="f-company" required>
-                        <option value="">— Pilih Company —</option>
-                        ${buildCompanyOptions(formData.companyCode)}
-                    </select>
-                </div>
+                ${companyField}
                 <div class="form-group">
                     <label for="f-username">Username <span class="required">*</span></label>
                     <input type="text" id="f-username" value="${esc(formData.username)}" placeholder="Username" required ${isEdit ? "readonly style='background:#f1f5f9'" : ""} />
@@ -202,7 +225,7 @@ export function SettingsUserModule({ listUsers, getUser, createUser, updateUser,
             <button class="smart-btn smart-btn-primary" id="f-submit">${isEdit ? "Simpan Perubahan" : "Tambah User"}</button>`;
         const overlay = Modal({ open: true, title, content: contentHTML, footer, closable: true, onClose: removeModal });
         document.body.appendChild(overlay);
-        setTimeout(() => document.getElementById("f-company")?.focus(), 100);
+        setTimeout(() => document.getElementById(singleCompanyMode ? "f-username" : "f-company")?.focus(), 100);
         document.getElementById("f-cancel")?.addEventListener("click", removeModal);
         document.getElementById("f-submit")?.addEventListener("click", () => handleSubmit(isEdit, editId));
         overlay.querySelector(".smart-modal-close")?.addEventListener("click", removeModal);
@@ -210,18 +233,24 @@ export function SettingsUserModule({ listUsers, getUser, createUser, updateUser,
     }
 
     async function handleSubmit(isEdit, editId) {
-        const companyCode = document.getElementById("f-company")?.value;
         const name = document.getElementById("f-name")?.value?.trim();
         const username = document.getElementById("f-username")?.value?.trim();
-        if (!companyCode) { showToast("warning", "Company wajib dipilih"); return; }
-        if (!name) { showToast("warning", "Nama wajib diisi"); return; }
-        if (!username) { showToast("warning", "Username wajib diisi"); return; }
+
+        // In single-company mode, use the provided company code; otherwise from select
+        const companyCode = singleCompanyMode
+            ? currentCompanyCode
+            : document.getElementById("f-company")?.value;
+
+        if (!companyCode) { showToast("warning", "Sesi perusahaan tidak ditemukan. Silakan login ulang."); return; }
+        if (!name) { showToast("warning", "Nama wajib diisi"); document.getElementById("f-name")?.focus(); return; }
+        if (!username) { showToast("warning", "Username wajib diisi"); document.getElementById("f-username")?.focus(); return; }
         const pass = document.getElementById("f-password")?.value;
-        if (!isEdit && !pass) { showToast("warning", "Password wajib diisi"); return; }
+        if (!isEdit && !pass) { showToast("warning", "Password wajib diisi"); document.getElementById("f-password")?.focus(); return; }
+
         const data = {
             companyCode, username, name,
             email: document.getElementById("f-email")?.value?.trim() || "",
-            role: document.getElementById("f-role")?.value || "viewer",
+            role: document.getElementById("f-role")?.value || "supervisor",
             password: pass || undefined
         };
         if (isEdit && !pass) delete data.password;

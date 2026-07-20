@@ -14,15 +14,15 @@ describe("Institution (Enhanced)", () => {
         it("should return current institution", () => {
             const inst = Institution.current();
             expect(inst).not.toBeNull();
-            expect(inst.id).toBe("INV001");
-            expect(inst.name).toBe("SMART Warehouse");
+            expect(inst.id).toBe("PT-001");
+            expect(inst.name).toBe("SMART Inventory");
         });
 
         it("should return copies (not references)", () => {
             const inst1 = Institution.current();
             const inst2 = Institution.current();
             inst1.name = "Modified";
-            expect(inst2.name).toBe("SMART Warehouse");
+            expect(inst2.name).toBe("SMART Inventory");
         });
 
     });
@@ -45,7 +45,7 @@ describe("Institution (Enhanced)", () => {
         it("should not change current institution on failure", () => {
             Institution.set("unknown");
             const inst = Institution.current();
-            expect(inst.id).toBe("INV001");
+            expect(inst.id).toBe("PT-001");
         });
 
     });
@@ -62,7 +62,7 @@ describe("Institution (Enhanced)", () => {
             const list = Institution.list();
             list[0].name = "Modified";
             const listAgain = Institution.list();
-            expect(listAgain[0].name).toBe("SMART Warehouse");
+            expect(listAgain[0].name).toBe("SMART Inventory");
         });
 
     });
@@ -73,7 +73,7 @@ describe("Institution (Enhanced)", () => {
         it("should filter institutions by type", () => {
             const list = Institution.byType("inventory");
             expect(list.length).toBe(1);
-            expect(list[0].id).toBe("INV001");
+            expect(list[0].id).toBe("PT-001");
         });
 
         it("should return empty array for unknown type", () => {
@@ -114,7 +114,7 @@ describe("Institution (Enhanced)", () => {
             const inst = Institution.get("inventory");
             inst.name = "Modified";
             const instAgain = Institution.get("inventory");
-            expect(instAgain.name).toBe("SMART Warehouse");
+            expect(instAgain.name).toBe("SMART Inventory");
         });
 
     });

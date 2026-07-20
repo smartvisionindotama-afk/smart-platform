@@ -17,7 +17,7 @@ import { companyStorage } from "./company-storage.js";
  * @typedef {object} CompanySessionData
  * @property {string|null} userId        Current user ID
  * @property {string|null} companyId     Current company database ID
- * @property {string|null} companyCode   Current company code (e.g. "CMP-001")
+ * @property {string|null} companyCode   Current company code (e.g. "INV001")
  * @property {string|null} companyName   Current company display name
  * @property {string|null} companyType   Company type (PT, CV, etc.)
  * @property {string|null} applicationId Current application slug

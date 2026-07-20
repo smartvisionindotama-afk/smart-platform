@@ -56,6 +56,53 @@
 | **EPIC-005** | **Application Generator**              | ⬜ | Sprint 7   | Full app from template. Depends on Module Generator. |
 | Inventory | Pembelian CRUD                        | ⬜ | —          | Placeholder only.                                                     |
 | Inventory | Customer CRUD                         | ⬜     | —          | Placeholder only.                                                     |
+| **Framework** | **Platform Login Module → smart-ui** | ✅     | 2026-07-19 | `SuperAdminLoginPage` + `initSuperAdminLoginPage` di `packages/smart-ui/src/modules/platform/login.js`. Self-contained, bisa dipakai aplikasi manapun. |
+| **Framework** | **Platform Dashboard Module → smart-ui** | ✅ | 2026-07-19 | `PlatformDashboardModule` DI-based di `packages/smart-ui/src/modules/platform/dashboard.js`. Menerima data services via parameter. |
+| **Inventory** | **Login Separation (Super Admin vs User)** | ✅ | 2026-07-19 | Superadmin login dipisah dari user login. SuperAdmin login → `/api/superadmins/login`, User login → `/api/auth/login`. Navigasi antar form via link. |
+| **Inventory** | **Platform Thin Wrappers** | ✅ | 2026-07-19 | `apps/inventory/src/pages/superadmin-login/` dan `platform/` jadi thin wrapper yang meng-import framework module dan inject data services. |
+| **Infra** | **Vite host:true + CORS** | ✅ | 2026-07-19 | Vite dev server bisa diakses via IP publik (host: true). CORS updated untuk IP 101.50.2.10 dan subnet 192.168.* / 10.*.
+| **Inventory** | **URL Routing: Path-based Separation** | ✅ | 2026-07-19 | `getAppMode()` di main.js. `/` → Login Inventory, `/platform` → Super Admin. Navigasi antar form pake full page navigation (href). |
+| **Inventory** | **Domain Mapping Display** | ✅ | 2026-07-19 | Info domain `inv.e-profit.id` (Inventory) dan `master.e-profit.id` (Super Admin) ditampilkan di login page. |
+| **Framework** | **Platform Login: href back link** | ✅ | 2026-07-19 | Back link di `packages/smart-ui/src/modules/platform/login.js` sekarang pake `href="/"` instead of JS callback. |
+| **Server** | **Hapus Endpoint /api/auth/unified-login** | ✅ | 2026-07-19 | Endpoint unified-login dihapus dari `apps/inventory/server/routes/auth.js`. Cleanup unused `SuperAdmin` import. Login sekarang terpisah: User → `/api/auth/login`, SuperAdmin → `/api/superadmins/login`. |
+| **Inventory** | **Hostname Detection Aktif** | ✅ | 2026-07-19 | `getAppMode()` di main.js sekarang cek `host === 'master.e-profit.id'` untuk mode platform. Fallback ke path-based `/platform` untuk development. Production tinggal DNS resolve. |
+| **Infra** | **SSL Permission Fix** | ✅ | 2026-07-19 | `/etc/letsencrypt/live/` permission `700` → `755`. Nginx tidak bisa traverse ke folder sertifikat karena hanya root yang bisa akses. |
+| **Infra** | **Nginx Deploy: master.e-profit.id + inv.e-profit.id** | ✅ | 2026-07-19 | Copy config dari `/srv/platform/config/nginx/` ke `/etc/nginx/sites-available/` + symlink di `sites-enabled`. Kedua domain `proxy_pass` ke `127.0.0.1:5173` (Vite). |
+| **Infra** | **Vite Dev Server Started via PM2** | ✅ | 2026-07-19 | `pm2 start npm --name "inventory-vite" -- run dev` di `/srv/apps/inventory`. Process name: `inventory-vite`, PID 630610. |
+| **Infra** | **Domain 200 OK Verified** | ✅ | 2026-07-19 | `curl -I http://master.e-profit.id/` → `200 OK`. `curl -I http://inv.e-profit.id/` → `200 OK`. Kedua domain sudah aktif. |
+| **Infra** | **SSL Certificate via Certbot** | ✅ | 2026-07-19 | `certbot --nginx -d master.e-profit.id -d inv.e-profit.id`. Certificate path: `/etc/letsencrypt/live/master.e-profit.id/`. Expiry: 2026-10-17. |
+| **Infra** | **Nginx ACME Challenge Location** | ✅ | 2026-07-19 | Added `location ^~ /.well-known/acme-challenge/` + `/var/www/acme-challenge` directory. Memungkinkan Certbot HTTP-01 validation. |
+| **Infra** | **HTTPS 200 OK Verified** | ✅ | 2026-07-19 | `curl -I https://master.e-profit.id/` → `200 OK`. `curl -I https://inv.e-profit.id/` → `200 OK`. HTTP → 301 redirect ke HTTPS. |
+| **Infra** | **Nginx Source Config Synced** | ✅ | 2026-07-19 | Config hasil Certbot disinkronkan dari `/etc/nginx/sites-available/` ke `/srv/platform/config/nginx/` agar tidak hilang saat deploy ulang. |
+| **Inventory** | **Hapus Demo Credentials dari Login** | ✅ | 2026-07-19 | Dihapus dari `apps/inventory/src/pages/login/index.js`: demo admin/operator, link Login Super Admin, domain info inv.e-profit.id/master.e-profit.id. |
+| **Framework** | **Hapus Demo & Back Link dari Super Admin Login** | ✅ | 2026-07-19 | Dihapus dari `packages/smart-ui/src/modules/platform/login.js`: demo superadmin, back link ← Kembali ke Login Inventory. CSS terkait juga dibersihkan. |
+| **Inventory** | **Background Login → Warna Sidebar** | ✅ | 2026-07-19 | Inventory login page: `linear-gradient(135deg, #1e293b, #334155)` → `linear-gradient(to bottom, #1e1b4b, #982deb)` (sama dengan sidebar). |
+| **Framework** | **Background Super Admin Login → Warna Sidebar** | ✅ | 2026-07-19 | Super Admin login page: `linear-gradient(135deg, #0f172a, #1e293b, #0f172a)` → `linear-gradient(to bottom, #1e1b4b, #982deb)` (sama dengan sidebar). |
+| **Infra** | **Production Deployment: Build + Nginx Static Serve** | ✅ | 2026-07-19 | Vite dev server (PM2) di-stop. Nginx config diubah: `proxy_pass` ke Vite → `root /srv/apps/inventory/dist` + `try_files` SPA fallback. `/api/` di-proxy ke Express (127.0.0.1:3001). HTTP 80: `return 404` → `301 redirect` ke HTTPS. CORS Express ditambah regex `*.e-profit.id`. Build sukses (582ms). |
+| **Infra** | **Vite Dev Server PM2 Stopped** | ✅ | 2026-07-19 | `inventory-vite` process (PID 630610) di-stop dan di-delete dari PM2. Tidak ada lagi Vite dev server yang rawan restart dan 403 intermittent. |
+| **Infra** | **Nginx Config: Static Files + SPA Routing** | ✅ | 2026-07-19 | `location /` sekarang `try_files $uri $uri/ /index.html` dari `/srv/apps/inventory/dist`. `location /api/` proxy ke Express dengan `proxy_buffering off`. |
+| **Infra** | **HTTP 301 Redirect** | ✅ | 2026-07-19 | HTTP (port 80) diubah dari `return 404` (Certbot default) menjadi `return 301 https://$host$request_uri`. |
+| **Framework** | **Platform Dashboard: Logo di Header** | ✅ | 2026-07-19 | `PlatformDashboardModule` sekarang menerima parameter `logo`. Header dashboard diubah dari emoji 🚀 menjadi logo image (sama dengan login page). CSS `.pd-logo-img` max 120x80. |
+| **Inventory** | **Platform Dashboard Logo: Factory + Logo Passthrough** | ✅ | 2026-07-19 | `pages/platform/index.js` di-refactor: export baru `createPlatformDashboard({logo})`. Default backward compat dipertahankan. `main.js` fetch logo dari API dan pass ke dashboard via factory. |
+
+## ═══════════════════════════════════════════════
+## REFACTORING & FIXES (2026-07-20)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **Enterprise RBAC — Test Validation** | ✅ | 2026-07-20 | Audit 17 test gagal di permission.test.js. Semua karena test masih pakai arsitektur lama (viewer/manager, hardcoded permissions). Refactor test tanpa menyentuh source code framework. 509/509 tests PASS. `docs/platform-architecture-audit.md` |
+| **Framework** | **Server Route: /api/platform/logo** | ✅ | 2026-07-20 | Route baru `apps/inventory/server/routes/platform.js` — GET/POST/DELETE untuk menyimpan logo di server (file-based). Bisa diakses seluruh subdomain. |
+| **Framework** | **Logo Upload: Direct POST from Dashboard** | ✅ | 2026-07-20 | Dashboard settings (``showSettingsView``) sekarang langsung POST ke `/api/platform/logo` tanpa bergantung DI callback. DI callback tetap dipanggil untuk kompatibilitas. |
+| **Framework** | **DI Callback: onLogoUpload/onLogoRemove** | ✅ | 2026-07-20 | `PlatformDashboardModule` ditambah parameter `onLogoUpload`/`onLogoRemove`. Dipanggil saat logo diupload/dihapus. |
+| **Inventory** | **Platform Wrapper: Logo Upload API** | ✅ | 2026-07-20 | `pages/platform/index.js` pass `uploadLogoToServer`/`removeLogoFromServer` via DI ke dashboard framework. |
+| **Inventory** | **Login: fetchCompanyLogo coba /api/platform/logo** | ✅ | 2026-07-20 | `main.js` — `fetchCompanyLogo()` coba `/api/platform/logo` dulu, fallback ke `/api/companies`. Prioritas: localStorage → server API → company API. |
+| **Framework** | **Logo Circular (Lingkaran)** | ✅ | 2026-07-20 | `.login-logo-img`, `.sa-logo-img`, `.pd-settings-logo-preview-img` diubah jadi lingkaran (`border-radius: 50%`, 100x100px, `object-fit: cover`). Konsisten di Inventory login, Super Admin login, dan settings preview. |
+| **Inventory** | **Topbar: SMART Inventory** | ✅ | 2026-07-20 | `institution.js` `name` diubah dari `"SMART Warehouse"` → `"SMART Inventory"`. `workspace/warehouse/workspace.json` `topbarTitle` juga diubah. Konsisten dengan form login. |
+| **Inventory** | **Cleanup: Hapus superadmin-login wrapper** | ✅ | 2026-07-20 | Hapus `apps/inventory/src/pages/superadmin-login/`. `main.js` langsung import `SuperAdminLoginPage`/`initSuperAdminLoginPage` dari `@smart/ui` dengan object API yang benar. |
+| **Infra** | **Express Server PM2 Restart** | ✅ | 2026-07-20 | `pm2 restart inventory-server` — memuat route `/api/platform/logo` yang baru. |
+| **Infra** | **Frontend Rebuild (3x)** | ✅ | 2026-07-20 | Build ulang 3 kali: CSS lingkaran, institution name, cleanup wrapper. Semua sukses. |
+| **Inventory** | **Cleanup: Hapus 3 unused re-export files** | ✅ | 2026-07-20 | Hapus `data/base-repository.js`, `data/company-context.js`, `data/mongodb.js` — semua re-export dari framework, sudah tidak dipakai. Update `data/index.js`. |
 
 ## ═══════════════════════════════════════════════
 ## COMPANY SDK REFACTORING (2026-07-16)

@@ -83,8 +83,13 @@ export async function apiFetch(method, url, body = null, options = {}) {
         }
         return res.json();
     } catch (err) {
-        console.warn(`[API] ${method} ${url} failed:`, err.message);
-        return null;
+        // Network error (TypeError) → return null to trigger local fallback
+        if (err instanceof TypeError) {
+            console.warn(`[API] ${method} ${url} failed (network):`, err.message);
+            return null;
+        }
+        // HTTP error (4xx, 5xx) → propagate up, jangan fallback ke local!
+        throw err;
     }
 }
 

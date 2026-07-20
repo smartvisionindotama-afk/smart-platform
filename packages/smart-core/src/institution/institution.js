@@ -9,9 +9,9 @@ const institutions = {
 
     inventory: {
 
-        id: "INV001",
+        id: "PT-001",
 
-        name: "SMART Warehouse",
+        name: "SMART Inventory",
 
         type: "inventory",
 

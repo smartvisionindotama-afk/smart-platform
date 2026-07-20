@@ -28,7 +28,7 @@ const users = {
 
         email: "admin@smart.id",
 
-        institution: "INV001",
+        institution: "PT-001",
 
         role: "owner",
 
@@ -45,7 +45,7 @@ const users = {
 
         email: "operator@smart.id",
 
-        institution: "INV001",
+        institution: "PT-001",
 
         role: "operator",
 

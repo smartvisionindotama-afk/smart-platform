@@ -13,8 +13,8 @@
  */
 function _getCompanyCode() {
     try {
-        if (typeof globalThis !== 'undefined' && globalThis.SMART && globalThis.SMART.Session) {
-            return globalThis.SMART.Session.get("company.code");
+        if (typeof globalThis !== 'undefined' && globalThis.SMART) {
+            return globalThis.SMART.Session.get("company.code") || globalThis.SMART.Company.getCode();
         }
     } catch {}
     return null;

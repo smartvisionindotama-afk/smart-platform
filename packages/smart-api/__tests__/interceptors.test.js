@@ -109,7 +109,7 @@ describe("Context Interceptor", () => {
 
         it("should add X-Institution-Id when available", () => {
             const mockInstitution = {
-                current: () => ({ id: "INV001" })
+                current: () => ({ id: "PT-001" })
             };
 
             initContextInterceptor({
@@ -120,7 +120,7 @@ describe("Context Interceptor", () => {
 
             const result = contextRequestInterceptor(config);
 
-            expect(result.headers["X-Institution-Id"]).toBe("INV001");
+            expect(result.headers["X-Institution-Id"]).toBe("PT-001");
         });
 
         it("should add X-App-Code when available", () => {

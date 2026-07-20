@@ -12,6 +12,8 @@ import {
 import roleDefinitions from "../src/permission/roles.js";
 
 
+// ── Test helpers ──
+
 // Snapshot of original role permissions for test isolation
 const originalPermissions = {};
 
@@ -29,6 +31,72 @@ function restoreOriginalPermissions() {
 
 // One-time save before any tests
 saveOriginalPermissions();
+
+/**
+ * Simulated server role-permission data for Permission Module tests.
+ *
+ * Di Enterprise RBAC, permissions berasal dari server (MongoDB)
+ * dan di-load via Permission.loadPermissions() setelah login.
+ *
+ * Struktur data ini mencerminkan apa yang akan dikirim oleh endpoint
+ * GET /api/permissions/roles.
+ */
+const testRoleData = [
+    {
+        name: "supervisor",
+        label: "Supervisor",
+        level: 10,
+        permissions: [
+            "inventory.dashboard.view",
+            "inventory.barang.read",
+            "inventory.supplier.read",
+            "inventory.pembelian.read",
+            "inventory.report.view"
+        ]
+    },
+    {
+        name: "operator",
+        label: "Operator Gudang",
+        level: 30,
+        permissions: [
+            "inventory.barang.create",
+            "inventory.pembelian.create",
+            "inventory.stock.adjust"
+        ]
+    },
+    {
+        name: "admin",
+        label: "Admin",
+        level: 70,
+        permissions: [
+            "inventory.barang.update",
+            "inventory.supplier.create",
+            "inventory.pembelian.approve",
+            "inventory.stock.opname"
+        ]
+    },
+    {
+        name: "owner",
+        label: "Owner",
+        level: 100,
+        permissions: [
+            "inventory.barang.delete",
+            "inventory.supplier.delete",
+            "settings.company.edit",
+            "settings.user.manage",
+            "settings.permission.manage",
+            "settings.role.manage",
+            "inventory.report.export",
+            "*"
+        ]
+    },
+    {
+        name: "superadmin",
+        label: "Super Admin",
+        level: 200,
+        permissions: ["*"]
+    }
+];
 
 
 // ──────────────────────────────────────────────
@@ -123,6 +191,11 @@ describe("Permission Engine", () => {
 
 // ──────────────────────────────────────────────
 // Roles: Role definitions and hierarchy
+//
+// NOTE: Di Enterprise RBAC, roleDefinitions di roles.js
+// hanya berisi hierarki level. Permissions sekarang
+// bersifat dinamis dari server (MongoDB).
+// Hardcoded permissions di roles.js hanyalah fallback.
 // ──────────────────────────────────────────────
 
 describe("Roles", () => {
@@ -134,39 +207,29 @@ describe("Roles", () => {
 
     describe("getEffectivePermissions()", () => {
 
-        it("should return viewer permissions for viewer role", () => {
-            const perms = getEffectivePermissions("viewer");
-            expect(perms).toContain("inventory.dashboard.view");
-            expect(perms).toContain("inventory.barang.read");
-            expect(perms).not.toContain("inventory.barang.create");
+        it("should return empty for supervisor (permissions are dynamic)", () => {
+            const perms = getEffectivePermissions("supervisor");
+            expect(perms).toEqual([]);
         });
 
-        it("should include inherited permissions for operator", () => {
+        it("should return inherited permissions for operator (dynamic only)", () => {
             const perms = getEffectivePermissions("operator");
-            expect(perms).toContain("inventory.dashboard.view");
-            expect(perms).toContain("inventory.barang.read");
-            expect(perms).toContain("inventory.barang.create");
-            expect(perms).not.toContain("inventory.barang.delete");
+            // Operator level 30 inherits from supervisor (level 10) + operator (level 30)
+            // Both have empty permissions in hardcoded fallback
+            expect(perms).toEqual([]);
         });
 
-        it("should include inherited permissions for manager", () => {
-            const perms = getEffectivePermissions("manager");
-            expect(perms).toContain("inventory.dashboard.view");
-            expect(perms).toContain("inventory.barang.read");
-            expect(perms).toContain("inventory.barang.create");
-            expect(perms).toContain("inventory.barang.update");
-            expect(perms).toContain("inventory.supplier.create");
+        it("should return inherited permissions for admin (dynamic only)", () => {
+            const perms = getEffectivePermissions("admin");
+            // Admin level 70 inherits from supervisor(10) + operator(30) + admin(70)
+            // All have empty permissions in hardcoded fallback
+            expect(perms).toEqual([]);
         });
 
-        it("should include all permissions for owner", () => {
+        it("should include wildcard for owner (hardcoded fallback)", () => {
             const perms = getEffectivePermissions("owner");
-            expect(perms).toContain("inventory.dashboard.view");
-            expect(perms).toContain("inventory.barang.read");
-            expect(perms).toContain("inventory.barang.create");
-            expect(perms).toContain("inventory.barang.update");
-            expect(perms).toContain("inventory.barang.delete");
-            expect(perms).toContain("settings.company.edit");
             expect(perms).toContain("*");
+            expect(perms.length).toBe(1);
         });
 
         it("should return empty array for unknown role", () => {
@@ -185,9 +248,9 @@ describe("Roles", () => {
     describe("getRole()", () => {
 
         it("should return role definition", () => {
-            const role = getRole("manager");
+            const role = getRole("admin");
             expect(role).not.toBeNull();
-            expect(role.name).toBe("Manager");
+            expect(role.name).toBe("Admin");
             expect(role.level).toBe(70);
         });
 
@@ -202,32 +265,36 @@ describe("Roles", () => {
 
         it("should return all role definitions", () => {
             const roles = listRoles();
-            expect(roles).toHaveProperty("viewer");
+            expect(roles).toHaveProperty("supervisor");
             expect(roles).toHaveProperty("operator");
-            expect(roles).toHaveProperty("manager");
+            expect(roles).toHaveProperty("admin");
             expect(roles).toHaveProperty("owner");
+            expect(roles).toHaveProperty("superadmin");
+            expect(Object.keys(roles).length).toBe(5);
         });
 
         it("should return a copy (not reference)", () => {
             const roles = listRoles();
-            roles.viewer = null;
+            roles.supervisor = null;
             const rolesAgain = listRoles();
-            expect(rolesAgain.viewer).not.toBeNull();
+            expect(rolesAgain.supervisor).not.toBeNull();
         });
 
     });
 
 
-    describe("grantPermission()", () => {            it("should add permission to a role", () => {
-            const result = grantPermission("viewer", "inventory.report.export");
+    describe("grantPermission()", () => {
+
+        it("should add permission to a role", () => {
+            const result = grantPermission("supervisor", "inventory.report.export");
             expect(result).toBe(true);
-            const perms = getEffectivePermissions("viewer");
+            const perms = getEffectivePermissions("supervisor");
             expect(perms).toContain("inventory.report.export");
         });
 
         it("should not duplicate permissions", () => {
-            grantPermission("viewer", "dashboard.view");
-            const perms = getEffectivePermissions("viewer");
+            grantPermission("supervisor", "dashboard.view");
+            const perms = getEffectivePermissions("supervisor");
             const count = perms.filter(p => p === "dashboard.view").length;
             expect(count).toBe(1);
         });
@@ -242,14 +309,16 @@ describe("Roles", () => {
     describe("revokePermission()", () => {
 
         it("should remove permission from a role", () => {
-            const result = revokePermission("viewer", "inventory.dashboard.view");
+            // Grant first so there's something to revoke
+            grantPermission("supervisor", "test.perm");
+            const result = revokePermission("supervisor", "test.perm");
             expect(result).toBe(true);
-            const perms = getEffectivePermissions("viewer");
-            expect(perms).not.toContain("inventory.dashboard.view");
+            const perms = getEffectivePermissions("supervisor");
+            expect(perms).not.toContain("test.perm");
         });
 
         it("should return false for non-existent permission", () => {
-            expect(revokePermission("viewer", "nonexistent")).toBe(false);
+            expect(revokePermission("supervisor", "nonexistent")).toBe(false);
         });
 
         it("should return false for unknown role", () => {
@@ -263,6 +332,11 @@ describe("Roles", () => {
 
 // ──────────────────────────────────────────────
 // Permission Module: User-aware facade
+//
+// Menggunakan Permission.loadPermissions() di beforeEach
+// untuk mensimulasikan data role-permission dari server.
+// Ini mencerminkan alur Enterprise RBAC:
+//   1. Login → 2. Sync dari server → 3. Cek permission
 // ──────────────────────────────────────────────
 
 describe("Permission Module", () => {
@@ -271,6 +345,13 @@ describe("Permission Module", () => {
         Auth.logout();
         Permission.setOverride(null);
         restoreOriginalPermissions();
+        // Load simulated server data — seperti setelah login + syncFromServer()
+        Permission.loadPermissions(testRoleData);
+    });
+
+    // Pastikan loadPermissions sudah benar
+    it("should have loaded dynamic permissions", () => {
+        expect(Permission.hasDynamicPermissions()).toBe(true);
     });
 
 
@@ -280,18 +361,21 @@ describe("Permission Module", () => {
             expect(Permission.can("dashboard.view")).toBe(false);
         });
 
-        it("should check permission for logged-in user", () => {
-            Auth.login("admin");
+        it("should check permission for owner (wildcard)", () => {
+            Auth.login("admin"); // role = owner
+            // Owner has ["*"] via dynamic data
             expect(Permission.can("inventory.dashboard.view")).toBe(true);
             expect(Permission.can("inventory.barang.read")).toBe(true);
             expect(Permission.can("inventory.barang.create")).toBe(true);
         });
 
         it("should check operator permissions", () => {
-            Auth.login("operator");
+            Auth.login("operator"); // role = operator
+            // Operator inherits from supervisor(level 10) + operator(level 30)
             expect(Permission.can("inventory.dashboard.view")).toBe(true);
             expect(Permission.can("inventory.barang.read")).toBe(true);
             expect(Permission.can("inventory.barang.create")).toBe(true);
+            // These are at admin level (70) — not inherited by operator (30)
             expect(Permission.can("inventory.barang.delete")).toBe(false);
             expect(Permission.can("inventory.supplier.create")).toBe(false);
         });
@@ -303,11 +387,13 @@ describe("Permission Module", () => {
 
         it("should return true if any permission matches", () => {
             Auth.login("operator");
+            // barang.delete → false, but barang.read → true
             expect(Permission.canAny(["inventory.barang.delete", "inventory.barang.read"])).toBe(true);
         });
 
         it("should return false if none match", () => {
             Auth.login("operator");
+            // Both are at higher levels (admin/owner) — not inherited by operator
             expect(Permission.canAny(["inventory.barang.delete", "inventory.supplier.create"])).toBe(false);
         });
 
@@ -317,12 +403,13 @@ describe("Permission Module", () => {
     describe("canAll()", () => {
 
         it("should return true if all match", () => {
-            Auth.login("admin");
+            Auth.login("admin"); // role = owner (wildcard)
             expect(Permission.canAll(["inventory.dashboard.view", "inventory.barang.read"])).toBe(true);
         });
 
         it("should return false if not all match", () => {
             Auth.login("operator");
+            // barang.read → true (from supervisor level), barang.delete → false (owner level)
             expect(Permission.canAll(["inventory.barang.read", "inventory.barang.delete"])).toBe(false);
         });
 
@@ -348,8 +435,8 @@ describe("Permission Module", () => {
     describe("role()", () => {
 
         it("should return role definition by name", () => {
-            const role = Permission.role("manager");
-            expect(role.name).toBe("Manager");
+            const role = Permission.role("admin");
+            expect(role.name).toBe("Admin");
             expect(role.level).toBe(70);
         });
 
@@ -358,9 +445,15 @@ describe("Permission Module", () => {
 
     describe("roles()", () => {
 
-        it("should return all roles", () => {
+        it("should return all roles from dynamic data", () => {
             const roles = Permission.roles();
+            // 5 roles in testRoleData
             expect(Object.keys(roles).length).toBe(5);
+            expect(roles).toHaveProperty("supervisor");
+            expect(roles).toHaveProperty("operator");
+            expect(roles).toHaveProperty("admin");
+            expect(roles).toHaveProperty("owner");
+            expect(roles).toHaveProperty("superadmin");
         });
 
     });
@@ -372,13 +465,18 @@ describe("Permission Module", () => {
             expect(Permission.menu()).toEqual([]);
         });
 
-        it("should return effective permissions for logged-in user", () => {
+        it("should return effective permissions for operator", () => {
             Auth.login("operator");
             const menu = Permission.menu();
+            // Operator inherits:
+            //   supervisor level: dashboard.view, barang.read, supplier.read, pembelian.read, report.view
+            //   operator level:   barang.create, pembelian.create, stock.adjust
             expect(menu).toContain("inventory.dashboard.view");
             expect(menu).toContain("inventory.barang.read");
             expect(menu).toContain("inventory.barang.create");
             expect(menu).toContain("inventory.pembelian.read");
+            // Should not include higher-level permissions
+            expect(menu).not.toContain("inventory.barang.delete");
         });
 
     });
@@ -400,8 +498,10 @@ describe("Permission Module", () => {
 
         it("should dynamically remove permission from a role", () => {
             Auth.login("operator");
+            // barang.read comes from supervisor level inheritance
             expect(Permission.can("inventory.barang.read")).toBe(true);
-            Permission.revoke("viewer", "inventory.barang.read");
+            // Revoke from the source role (supervisor)
+            Permission.revoke("supervisor", "inventory.barang.read");
             expect(Permission.can("inventory.barang.read")).toBe(false);
         });
 
@@ -417,13 +517,11 @@ describe("Permission Module", () => {
             expect(Permission.can("barang.view")).toBe(false);
         });
 
-        it("should clear override with null", () => {
+        it("should clear override with null and fall back to dynamic", () => {
             Permission.setOverride(["admin.access"]);
             Permission.setOverride(null);
-            Auth.login("admin");
-            // Admin (owner) has "*" wildcard, so "admin.access" IS accessible
+            Auth.login("admin"); // role = owner, has ["*"] in dynamic data
             expect(Permission.can("admin.access")).toBe(true);
-            // Normal role-based permissions should work
             expect(Permission.can("inventory.dashboard.view")).toBe(true);
         });
 
@@ -435,7 +533,7 @@ describe("Permission Module", () => {
         it("should notify subscribers on grant", () => {
             let called = false;
             const unsub = Permission.onChange(() => { called = true; });
-            Permission.grant("viewer", "test.perm");
+            Permission.grant("supervisor", "test.perm");
             expect(called).toBe(true);
             unsub();
         });
@@ -443,7 +541,7 @@ describe("Permission Module", () => {
         it("should notify subscribers on revoke", () => {
             let called = false;
             const unsub = Permission.onChange(() => { called = true; });
-            Permission.revoke("viewer", "inventory.dashboard.view");
+            Permission.revoke("supervisor", "inventory.dashboard.view");
             expect(called).toBe(true);
             unsub();
         });

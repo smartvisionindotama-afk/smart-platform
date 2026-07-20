@@ -23,7 +23,7 @@ import { Skeleton, Table, EmptyState, Pagination, Alert, Modal, Toast } from "..
  * @returns {{ render: function, init: function }}
  */
 export function SettingsCompanyModule({ listCompanies, getCompany, createCompany, updateCompany, deleteCompany, companyTypes = [] }) {
-    const state = { items: [], page: 1, limit: 10, total: 0, totalPages: 1, search: "", loading: false, formMode: null, editingId: null, deletingId: null };
+    const state = { items: [], page: 1, limit: 10, total: 0, totalPages: 1, search: "", loading: false, formMode: null, editingId: null, deletingId: null, viewModalShown: false, singleViewMode: false };
 
     /** @returns {string} HTML */
     function render() {
@@ -60,14 +60,6 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
                 loadData();
             }, 300));
         }
-        const pageActions = document.querySelector("#settings-company-page .page-actions");
-        if (pageActions) {
-            const addBtn = document.createElement("button");
-            addBtn.className = "smart-btn smart-btn-primary";
-            addBtn.innerHTML = "➕ Tambah Perusahaan";
-            addBtn.addEventListener("click", () => openForm("create"));
-            pageActions.appendChild(addBtn);
-        }
         loadData();
     }
 
@@ -92,6 +84,11 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
             state.totalPages = result.pagination.totalPages;
 
             tableArea.innerHTML = "";
+            // Show/hide "Tambah Perusahaan" button based on data
+            const pageActions = document.querySelector("#settings-company-page .page-actions");
+            const existingBtn = document.getElementById("btn-add-company");
+            if (existingBtn) existingBtn.remove();
+
             if (state.items.length === 0) {
                 tableArea.appendChild(EmptyState({
                     icon: "🏢", title: "Belum ada perusahaan",
@@ -99,25 +96,87 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
                     actionText: state.search ? "" : "Tambah Perusahaan",
                     onAction: state.search ? null : () => openForm("create")
                 }));
+                // Show add button when empty
+                if (pageActions && !state.search) {
+                    const addBtn = document.createElement("button");
+                    addBtn.id = "btn-add-company";
+                    addBtn.className = "smart-btn smart-btn-primary";
+                    addBtn.innerHTML = "➕ Tambah Perusahaan";
+                    addBtn.addEventListener("click", () => openForm("create"));
+                    pageActions.appendChild(addBtn);
+                }
             } else {
-                const table = Table({
-                    columns: [
-                        { key: "jenis", label: "Jenis", width: "110px" },
-                        { key: "name", label: "Nama Perusahaan" },
-                        { key: "email", label: "Email", width: "200px" },
-                        { key: "phone", label: "Telepon", width: "130px" },
-                        { key: "active", label: "Status", width: "85px", align: "center",
-                            render: (val) => val ? '<span style="color:#16a34a">Aktif</span>' : '<span style="color:#dc2626">Nonaktif</span>' },
-                        { key: "actions", label: "Aksi", width: "120px", align: "center",
-                            render: (_, row) => `<div class="action-buttons">
-                                <button class="action-btn action-btn-edit" data-edit="${row.id}">✏️ Edit</button>
-                                <button class="action-btn action-btn-delete" data-delete="${row.id}">🗑️ Hapus</button>
-                            </div>` }
-                    ], rows: state.items, striped: true, hoverable: true, bordered: false
-                });
-                tableArea.appendChild(table);
-                tableArea.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => openForm("edit", String(btn.dataset.edit))));
-                tableArea.querySelectorAll("[data-delete]").forEach(btn => btn.addEventListener("click", () => confirmDelete(String(btn.dataset.delete))));
+                const isSingleView = state.items.length === 1 && state.total === 1;
+                state.singleViewMode = isSingleView;
+
+                if (isSingleView) {
+                    // ── Single-company: render inline detail view ──
+                    const item = state.items[0];
+                    const html = renderInlineDetail(item);
+                    const wrapper = document.createElement("div");
+                    wrapper.innerHTML = html;
+                    tableArea.appendChild(wrapper.firstElementChild || wrapper);
+
+                    // Attach Edit button listener
+                    const editBtn = document.getElementById("btn-edit-company-inline");
+                    if (editBtn) {
+                        editBtn.addEventListener("click", () => openForm("edit", item.id));
+                    }
+
+                    // Hide pagination & page-info for single view
+                    if (paginationArea) paginationArea.innerHTML = "";
+                    if (pageInfo) pageInfo.textContent = "";
+                } else {
+                    // ── Multi-company: show table with Add button ──
+                    if (pageActions) {
+                        const addBtn = document.createElement("button");
+                        addBtn.id = "btn-add-company";
+                        addBtn.className = "smart-btn smart-btn-primary";
+                        addBtn.innerHTML = "➕ Tambah Perusahaan";
+                        addBtn.addEventListener("click", () => openForm("create"));
+                        pageActions.appendChild(addBtn);
+                    }
+
+                    const table = Table({
+                        columns: [
+                            { key: "jenis", label: "Jenis", width: "110px" },
+                            { key: "name", label: "Nama Perusahaan" },
+                            { key: "email", label: "Email", width: "200px" },
+                            { key: "phone", label: "Telepon", width: "130px" },
+                            { key: "active", label: "Status", width: "85px", align: "center",
+                                render: (val) => val ? '<span style="color:#16a34a">Aktif</span>' : '<span style="color:#dc2626">Nonaktif</span>' },
+                            { key: "actions", label: "Aksi", width: "140px", align: "center",
+                                render: (_, row) => `
+                                    <div class="action-buttons">
+                                        <button class="action-btn action-btn-edit" data-edit="${row.id}">✏️ Edit</button>
+                                        <button class="action-btn action-btn-delete" data-delete="${row.id}">🗑️ Hapus</button>
+                                    </div>` }
+                        ], rows: state.items, striped: true, hoverable: true, bordered: false
+                    });
+                    tableArea.appendChild(table);
+                    setTimeout(() => {
+                        tableArea.querySelectorAll("[data-edit]").forEach(btn => btn.addEventListener("click", () => openForm("edit", String(btn.dataset.edit))));
+                        tableArea.querySelectorAll("[data-delete]").forEach(btn => btn.addEventListener("click", () => confirmDelete(String(btn.dataset.delete))));
+                    }, 0);
+
+                    // Pagination
+                    if (paginationArea) {
+                        paginationArea.innerHTML = "";
+                        if (state.totalPages > 1) {
+                            paginationArea.appendChild(Pagination({
+                                current: state.page, total: state.total, pageSize: state.limit,
+                                onChange: (p) => { state.page = p; loadData(); }
+                            }));
+                        }
+                    }
+                    if (pageInfo) {
+                        if (state.total === 0) { pageInfo.textContent = ""; return; }
+                        const start = (state.page - 1) * state.limit + 1;
+                        const end = Math.min(state.page * state.limit, state.total);
+                        pageInfo.textContent = `Menampilkan ${start}–${end} dari ${state.total} perusahaan`;
+                    }
+                }
+                return; // Skip regular pagination for both branches
             }
 
             if (paginationArea) {
@@ -138,6 +197,79 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
         } catch (err) {
             console.error("[SettingsCompany] Failed to load:", err);
         } finally { state.loading = false; }
+    }
+
+    /**
+     * Open a read-only view modal showing company details at 75% width.
+     * @param {object} item Company data object
+     */
+    function openViewModal(item) {
+        if (!item) return;
+        const footer = `<button class="smart-btn smart-btn-primary" id="v-close">Tutup</button>`;
+
+        const content = `
+        <div class="company-view">
+            <div class="cv-header">
+                <div class="cv-logo">
+                    ${item.logo
+                        ? `<img src="${esc(item.logo)}" class="cv-logo-img" />`
+                        : `<div class="cv-logo-placeholder">${(item.name || "?").charAt(0)}</div>`
+                    }
+                </div>
+                <div class="cv-header-info">
+                    <div class="cv-name">${esc(item.name || "-")}</div>
+                    <div class="cv-meta">
+                        <span class="cv-badge-type">${esc(item.jenis || "-")}</span>
+                        <span class="cv-status ${item.active !== false ? 'active' : 'inactive'}">${item.active !== false ? "Aktif" : "Nonaktif"}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cv-section">
+                <div class="cv-section-title">Identitas Lembaga</div>
+                <div class="cv-grid">
+                    <div class="cv-field"><span class="cv-label">Kode Perusahaan</span><span class="cv-value">${esc(item.code || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Jenis</span><span class="cv-value">${esc(item.jenis || "-")}</span></div>
+                    <div class="cv-field cv-span-2"><span class="cv-label">Nama Lembaga</span><span class="cv-value">${esc(item.name || "-")}</span></div>
+                    <div class="cv-field cv-span-2"><span class="cv-label">Alamat</span><span class="cv-value">${esc(item.address || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Email</span><span class="cv-value">${esc(item.email || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Telepon</span><span class="cv-value">${esc(item.phone || "-")}</span></div>
+                </div>
+            </div>
+
+            <div class="cv-section">
+                <div class="cv-section-title">Data Legalitas</div>
+                <div class="cv-grid">
+                    <div class="cv-field"><span class="cv-label">ID Legalitas</span><span class="cv-value">${esc(item.legalId || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">No. Perdes</span><span class="cv-value">${esc(item.legalPerdes || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Tanggal Perdes</span><span class="cv-value">${esc(item.legalPerdesDate || "-")}</span></div>
+                    <div class="cv-field cv-span-2"><span class="cv-label">No. AHU</span><span class="cv-value">${esc(item.legalAhu || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">No. NIB</span><span class="cv-value">${esc(item.legalNib || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">No. NPWP</span><span class="cv-value">${esc(item.legalNpwp || item.taxId || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">No. Induk</span><span class="cv-value">${esc(item.legalInduk || "-")}</span></div>
+                    <div class="cv-field cv-span-2"><span class="cv-label">Ijin Lainnya</span><span class="cv-value">${esc(item.legalIjin || "-")}</span></div>
+                </div>
+            </div>
+
+            <div class="cv-section">
+                <div class="cv-section-title">Struktur Organisasi</div>
+                <div class="cv-grid">
+                    <div class="cv-field"><span class="cv-label">Penasehat</span><span class="cv-value">${esc(item.orgPenasehat || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Pengawas</span><span class="cv-value">${esc(item.orgPengawas || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Ketua / Direktur</span><span class="cv-value">${esc(item.orgKetua || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Sekretaris</span><span class="cv-value">${esc(item.orgSekretaris || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Bendahara</span><span class="cv-value">${esc(item.orgBendahara || "-")}</span></div>
+                </div>
+            </div>
+        </div>`;
+
+        const overlay = Modal({ open: true, title: `🏢 ${esc(item.name || "Detail Perusahaan")}`, content, footer, closable: true, onClose: removeModal });
+        // Apply 75% width to the dialog
+        overlay.querySelector(".smart-modal-dialog")?.classList.add("modal-lg");
+        document.body.appendChild(overlay);
+
+        document.getElementById("v-close")?.addEventListener("click", removeModal);
+        overlay.querySelector(".smart-modal-close")?.addEventListener("click", removeModal);
     }
 
     async function openForm(mode, id = null) {
@@ -259,6 +391,17 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
         const overlay = Modal({ open: true, title, content: contentHTML, footer, closable: true, onClose: removeModal });
         document.body.appendChild(overlay);
 
+        // When single-company view and editing, make kode perusahaan readonly
+        if (state.singleViewMode && isEdit) {
+            const codeInput = document.getElementById("f-code");
+            if (codeInput) {
+                codeInput.readOnly = true;
+                codeInput.style.background = "#f3f4f6";
+                codeInput.style.cursor = "not-allowed";
+                codeInput.title = "Kode perusahaan hanya dapat diubah oleh Super Admin";
+            }
+        }
+
         setTimeout(() => document.getElementById("f-name")?.focus(), 100);
 
         document.getElementById("f-cancel")?.addEventListener("click", removeModal);
@@ -351,6 +494,77 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
         state.formMode = null; state.editingId = null;
     }
 
+    /**
+     * Render an inline detail view of the company (for single-company mode).
+     * @param {object} item Company data
+     * @returns {string} HTML
+     */
+    function renderInlineDetail(item) {
+        if (!item) return "";
+        const logoHtml = item.logo
+            ? `<img src="${esc(item.logo)}" class="cv-logo-img" />`
+            : `<div class="cv-logo-placeholder">${(item.name || "?").charAt(0)}</div>`;
+
+        const phoneVal = item.phone || "-";
+        const emailVal = item.email || "-";
+
+        return `
+        <div class="company-inline-detail">
+            <div class="cv-header">
+                <div class="cv-logo">${logoHtml}</div>
+                <div class="cv-header-info">
+                    <div class="cv-name">${esc(item.name || "-")}</div>
+                    <div class="cv-address">${esc(item.address || "-")}</div>
+                    <div class="cv-contact">
+                        <span class="cv-contact-item">Telp. ${esc(phoneVal)}</span>
+                        <span class="cv-contact-sep">|</span>
+                        <span class="cv-contact-item">Email: ${esc(emailVal)}</span>
+                    </div>
+                </div>
+                <div class="cv-inline-actions">
+                    <button class="smart-btn smart-btn-primary" id="btn-edit-company-inline">✏️ Edit Perusahaan</button>
+                </div>
+            </div>
+
+            <div class="cv-section">
+                <div class="cv-section-title">Identitas Lembaga</div>
+                <div class="cv-grid">
+                    <div class="cv-field"><span class="cv-label">Kode Perusahaan</span><span class="cv-value">${esc(item.code || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Jenis</span><span class="cv-value">${esc(item.jenis || "-")}</span></div>
+                    <div class="cv-field cv-span-2"><span class="cv-label">Nama Lembaga</span><span class="cv-value">${esc(item.name || "-")}</span></div>
+                    <div class="cv-field cv-span-2"><span class="cv-label">Alamat</span><span class="cv-value">${esc(item.address || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Email</span><span class="cv-value">${esc(item.email || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Telepon</span><span class="cv-value">${esc(item.phone || "-")}</span></div>
+                </div>
+            </div>
+
+            <div class="cv-section">
+                <div class="cv-section-title">Data Legalitas</div>
+                <div class="cv-grid">
+                    <div class="cv-field"><span class="cv-label">ID Legalitas</span><span class="cv-value">${esc(item.legalId || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">No. Perdes</span><span class="cv-value">${esc(item.legalPerdes || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Tanggal Perdes</span><span class="cv-value">${esc(item.legalPerdesDate || "-")}</span></div>
+                    <div class="cv-field cv-span-2"><span class="cv-label">No. AHU</span><span class="cv-value">${esc(item.legalAhu || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">No. NIB</span><span class="cv-value">${esc(item.legalNib || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">No. NPWP</span><span class="cv-value">${esc(item.legalNpwp || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">No. Induk</span><span class="cv-value">${esc(item.legalInduk || "-")}</span></div>
+                    <div class="cv-field cv-span-2"><span class="cv-label">Ijin Lainnya</span><span class="cv-value">${esc(item.legalIjin || "-")}</span></div>
+                </div>
+            </div>
+
+            <div class="cv-section">
+                <div class="cv-section-title">Struktur Organisasi</div>
+                <div class="cv-grid">
+                    <div class="cv-field"><span class="cv-label">Penasehat</span><span class="cv-value">${esc(item.orgPenasehat || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Pengawas</span><span class="cv-value">${esc(item.orgPengawas || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Ketua / Direktur</span><span class="cv-value">${esc(item.orgKetua || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Sekretaris</span><span class="cv-value">${esc(item.orgSekretaris || "-")}</span></div>
+                    <div class="cv-field"><span class="cv-label">Bendahara</span><span class="cv-value">${esc(item.orgBendahara || "-")}</span></div>
+                </div>
+            </div>
+        </div>`;
+    }
+
     function showToast(variant, message) {
         let container = document.getElementById("toast-container");
         if (!container) {
@@ -389,6 +603,8 @@ function getStyles() { return `
 .crud-page .action-btn-edit:hover { background:#e0e7ff; }
 .crud-page .action-btn-delete { background:#fef2f2; color:#dc2626; border-color:#fecaca; }
 .crud-page .action-btn-delete:hover { background:#fee2e2; }
+.crud-page .action-btn-view { background:#f0fdf4; color:#16a34a; border-color:#bbf7d0; }
+.crud-page .action-btn-view:hover { background:#dcfce7; }
 .crud-page .skeleton-wrapper { padding:1rem; }
 .crud-page .page-info { text-align:center; font-size:0.85rem; color:var(--smart-text-secondary,#6b7280); padding:0.5rem 0 1rem; }
 .crud-page .required { color:#dc2626; }
@@ -412,5 +628,34 @@ function getStyles() { return `
 .delete-confirm { text-align:center; padding:0.5rem 0; }
 .delete-confirm p { font-size:0.95rem; margin-bottom:1rem; color:var(--smart-text-secondary,#6b7280); }
 .delete-confirm .item-name { font-weight:600; color:var(--smart-text-primary,#1e293b); }
-@media (max-width:640px) { .form-grid { grid-template-columns:1fr; } .crud-page .page-header { flex-direction:column; align-items:stretch; } }
+
+/* ── Large Modal (75% viewport width) ── */
+.modal-lg { max-width: 75vw !important; }
+@media (max-width: 768px) { .modal-lg { max-width: 95vw !important; } }
+
+/* ── Inline Company Detail ── */
+.company-inline-detail { padding: 1.5rem; background:var(--smart-card-bg,#fff); border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+.cv-inline-actions { margin-left:auto; flex-shrink:0; }
+
+/* ── Company View Modal ── */
+.company-view { padding: 0.25rem 0; }
+.cv-header { display:flex; align-items:center; gap:1.25rem; margin-bottom:1.5rem; padding-bottom:1.25rem; border-bottom:1px solid var(--smart-border,#e5e7eb); }
+.cv-logo { width:72px; height:72px; border-radius:12px; overflow:hidden; background:var(--smart-card-bg,#f1f5f9); display:flex; align-items:center; justify-content:center; flex-shrink:0; border:2px solid var(--smart-border,#e2e8f0); }
+.cv-logo-img { width:100%; height:100%; object-fit:cover; }
+.cv-logo-placeholder { font-size:1.6rem; font-weight:700; color:var(--smart-primary,#4f46e5); }
+.cv-header-info { flex:1; min-width:0; }
+.cv-name { font-size:1.15rem; font-weight:700; color:var(--smart-text-primary,#1e293b); margin-bottom:0.2rem; }
+.cv-address { font-size:0.85rem; color:var(--smart-text-secondary,#64748b); margin-bottom:0.15rem; line-height:1.4; }
+.cv-contact { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; font-size:0.82rem; color:var(--smart-text-secondary,#6b7280); }
+.cv-contact-item { white-space:nowrap; }
+.cv-contact-sep { color:var(--smart-border,#d1d5db); font-weight:300; }
+.cv-section { margin-bottom:1.25rem; padding-bottom:1rem; border-bottom:1px solid var(--smart-border,#e5e7eb); }
+.cv-section:last-child { border-bottom:none; margin-bottom:0; padding-bottom:0; }
+.cv-section-title { font-size:0.9rem; font-weight:600; color:var(--smart-text-primary,#1e293b); margin-bottom:0.75rem; padding-bottom:0.4rem; border-bottom:2px solid var(--smart-primary,#4f46e5); display:inline-block; }
+.cv-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.5rem 1.25rem; }
+.cv-field.cv-span-2 { grid-column:1/-1; }
+.cv-field { display:flex; flex-direction:column; gap:0.15rem; }
+.cv-label { font-size:0.75rem; font-weight:500; color:var(--smart-text-secondary,#94a3b8); text-transform:uppercase; letter-spacing:0.4px; }
+.cv-value { font-size:0.9rem; color:var(--smart-text-primary,#1e293b); padding:0.35rem 0.6rem; background:var(--smart-card-bg,#f8fafc); border-radius:4px; min-height:1.8rem; display:flex; align-items:center; }
+@media (max-width:640px) { .cv-grid { grid-template-columns:1fr; } .cv-header { flex-direction:column; text-align:center; } }
 `; }
