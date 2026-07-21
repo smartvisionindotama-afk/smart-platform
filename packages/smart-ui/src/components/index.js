@@ -22,3 +22,9 @@ export { Container } from "./container/container.js";
 export { Stack } from "./stack/stack.js";
 export { Divider } from "./divider/divider.js";
 export { PageContainer, renderBreadcrumb } from "./page-container/page-container.js";
+
+// ── Mobile Card View ──
+export { CardList, attachCardEvents } from "./card-list/card-list.js";
+
+// ── Barcode Scanner ──
+export { BarcodeScanner } from "./scanner/scanner.js";

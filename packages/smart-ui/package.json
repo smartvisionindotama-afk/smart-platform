@@ -25,6 +25,9 @@
     "lint": "eslint src/",
     "format": "prettier --write src/"
   },
+  "dependencies": {
+    "html5-qrcode": "^2.3.8"
+  },
   "description": "SMART UI — Design tokens, components, layouts, workspace engine, page container, and settings modules for SMART Platform",
   "author": "PT SMART VISION INDOTAMA"
 }

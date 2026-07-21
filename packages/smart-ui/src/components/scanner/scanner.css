@@ -1,0 +1,200 @@
+/* ── Scanner Section ── */
+.sm-scanner-section {
+    margin-bottom: 1rem;
+    border: 2px dashed var(--smart-border, #d1d5db);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.3s, opacity 0.3s, box-shadow 0.3s;
+    position: relative;
+    background: #000;
+}
+.sm-scanner-section.active {
+    border-color: #6366f1;
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.3), 0 0 40px rgba(99, 102, 241, 0.1);
+}
+
+.sm-scanner-section .sm-scanner-container {
+    width: 100%;
+    height: 280px;
+    overflow: hidden;
+}
+.sm-scanner-section .sm-scanner-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* ── Corner Frame ── */
+.sm-scanner-section .sm-scanner-frame {
+    position: absolute;
+    top: 12px; left: 12px; right: 12px; bottom: 12px;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s;
+}
+.sm-scanner-section.active .sm-scanner-frame { opacity: 1; }
+.sm-scanner-frame .sm-scanner-corner {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-color: #6366f1;
+    border-style: solid;
+    border-width: 0;
+}
+.sm-scanner-corner-tl { top: 0; left: 0; border-top-width: 3px; border-left-width: 3px; animation: smScanCornerPulse 2s ease-in-out infinite; }
+.sm-scanner-corner-tr { top: 0; right: 0; border-top-width: 3px; border-right-width: 3px; animation: smScanCornerPulse 2s ease-in-out infinite 0.25s; }
+.sm-scanner-corner-bl { bottom: 0; left: 0; border-bottom-width: 3px; border-left-width: 3px; animation: smScanCornerPulse 2s ease-in-out infinite 0.5s; }
+.sm-scanner-corner-br { bottom: 0; right: 0; border-bottom-width: 3px; border-right-width: 3px; animation: smScanCornerPulse 2s ease-in-out infinite 0.75s; }
+
+@keyframes smScanCornerPulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.95); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+/* ── Radar Ripple ── */
+.sm-scanner-section .sm-scanner-ripple {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 60px; height: 60px;
+    margin: -30px 0 0 -30px;
+    border: 2px solid rgba(99, 102, 241, 0.4);
+    border-radius: 50%;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+}
+.sm-scanner-section.active .sm-scanner-ripple {
+    opacity: 1;
+    animation: smScanRipple 2.5s ease-out infinite;
+}
+@keyframes smScanRipple {
+    0% { transform: scale(0.5); opacity: 0.6; }
+    100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* ── Center Dot ── */
+.sm-scanner-section .sm-scanner-dot {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 6px; height: 6px;
+    margin: -3px 0 0 -3px;
+    background: rgba(99, 102, 241, 0.7);
+    border-radius: 50%;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+    transition: opacity 0.5s;
+}
+.sm-scanner-section.active .sm-scanner-dot {
+    opacity: 1;
+    animation: smScanDotPulse 2s ease-in-out infinite;
+}
+@keyframes smScanDotPulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(99, 102, 241, 0.3); }
+    50% { box-shadow: 0 0 12px rgba(99, 102, 241, 0.7); }
+}
+
+/* ── Overlay Message ── */
+.sm-scanner-section .sm-scanner-msg {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.75);
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    animation: smScanMsgPulse 1.5s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 5;
+    white-space: nowrap;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+@keyframes smScanMsgPulse {
+    0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.95); }
+    50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* ── Scan Line ── */
+.sm-scanner-section .sm-scanner-scan-line {
+    position: absolute;
+    left: 8%; right: 8%;
+    height: 3px;
+    z-index: 4;
+    pointer-events: none;
+    animation: smScanMove 2.4s ease-in-out infinite;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.sm-scanner-section.active .sm-scanner-scan-line { opacity: 1; }
+.sm-scanner-scan-line .sm-scanner-line-glow {
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, #818cf8, #6366f1, #818cf8, transparent);
+    border-radius: 2px;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.6), 0 0 20px rgba(99, 102, 241, 0.3);
+}
+.sm-scanner-scan-line .sm-scanner-line-tail {
+    position: absolute;
+    top: 3px; left: 10%; right: 10%;
+    height: 20px;
+    background: linear-gradient(to bottom, rgba(99, 102, 241, 0.3), transparent);
+}
+@keyframes smScanMove {
+    0% { top: 8%; }
+    50% { top: 78%; }
+    100% { top: 8%; }
+}
+
+/* ── Flash (on success) ── */
+.sm-scanner-section .sm-scanner-flash {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 6;
+    pointer-events: none;
+    background: radial-gradient(circle at center, rgba(99, 255, 99, 0.6), transparent);
+    opacity: 0;
+}
+.sm-scanner-section .sm-scanner-flash.active {
+    animation: smScanFlashBurst 0.5s ease-out forwards;
+}
+@keyframes smScanFlashBurst {
+    0% { opacity: 0.8; transform: scale(0.8); }
+    50% { opacity: 0.4; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(1); }
+}
+
+/* ── Hint Bar ── */
+.sm-scanner-section .sm-scanner-hint-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    background: #f3f4f6;
+    font-size: 0.78rem;
+    color: #6b7280;
+}
+.sm-scanner-section .sm-scanner-hint-bar .sm-scanner-hint-left {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.sm-scanner-section .sm-scanner-hint-bar .sm-scanner-hint-switch {
+    background: none;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    color: #6b7280;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0.15rem 0.35rem;
+    transition: all 0.15s;
+    line-height: 1;
+}
+.sm-scanner-hint-switch:hover {
+    background: #e5e7eb;
+    color: #374151;
+}

@@ -15,7 +15,10 @@ import {
     Button as _Button,
     Card as _Card,
     Toast as _Toast,
-    Skeleton as _Skeleton
+    Skeleton as _Skeleton,
+    CardList as _CardList,
+    attachCardEvents as _attachCardEvents,
+    BarcodeScanner as _BarcodeScanner
 } from "./components/index.js";
 
 import { Sidebar as _Sidebar } from "./layouts/sidebar/Sidebar.js";
@@ -48,6 +51,9 @@ export const UI = {
     Loading: (opts) => _Skeleton(opts),
     Card: (opts) => _Card(opts),
     Toast: (opts) => _Toast(opts),
+    CardList: (items, renderContent) => _CardList(items, renderContent),
+    attachCardEvents: (container, onEdit, onDelete) => _attachCardEvents(container, onEdit, onDelete),
+    BarcodeScanner: _BarcodeScanner,
     load: loadUI
 };
 
@@ -57,6 +63,38 @@ export const UI = {
  */
 export function loadUI() {
     console.log("SMART UI Loaded");
+}
+
+// ── Toast Convenience ──
+
+let _toastContainer = null;
+
+/**
+ * Ensure toast container exists in DOM.
+ * @returns {HTMLElement}
+ */
+function _ensureToastContainer() {
+    if (!_toastContainer) {
+        _toastContainer = document.createElement("div");
+        _toastContainer.id = "toast-container";
+        _toastContainer.style.cssText =
+            "position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:0.5rem;max-width:400px;";
+        document.body.appendChild(_toastContainer);
+    }
+    return _toastContainer;
+}
+
+/**
+ * Show a toast notification. Framework-wide convenience function.
+ *
+ * @param {"success"|"danger"|"info"|"warning"} variant
+ * @param {string} message
+ */
+export function showToast(variant, message) {
+    const container = _ensureToastContainer();
+    const toast = _Toast({ variant, message, onDismiss: () => toast.remove() });
+    container.appendChild(toast);
+    setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3500);
 }
 
 // ── Attach SMART.UI to globalThis for console access ──

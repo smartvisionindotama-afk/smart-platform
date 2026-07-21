@@ -23,7 +23,7 @@ import "./tokens/index.css";
 //  PRIMARY API: UI Facade
 // ═══════════════════════════════════════════════════════════════
 
-export { UI, loadUI } from "./ui-facade.js";
+export { UI, loadUI, showToast } from "./ui-facade.js";
 
 // ═══════════════════════════════════════════════════════════════
 //  @deprecated — Backward Compatible Exports

@@ -105,6 +105,90 @@
 | **Inventory** | **Cleanup: Hapus 3 unused re-export files** | ✅ | 2026-07-20 | Hapus `data/base-repository.js`, `data/company-context.js`, `data/mongodb.js` — semua re-export dari framework, sudah tidak dipakai. Update `data/index.js`. |
 
 ## ═══════════════════════════════════════════════
+## SPRINT 2 — MASTER DATA COMPLETION (2026-07-20)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Kategori MongoDB Model + Route** | ✅ | 2026-07-20 | `server/models/Kategori.js` — companyCode required, compound index. `server/routes/kategori.js` — full CRUD with company scoping via x-company-code. |
+| **Inventory** | **Satuan MongoDB Model + Route** | ✅ | 2026-07-20 | `server/models/Satuan.js` + `server/routes/satuan.js`. Menu renamed from 'Unit' to 'Satuan' (Indonesian). Permission renamed from `inventory.unit.*` to `inventory.satuan.*`. |
+| **Inventory** | **Warehouse MongoDB Model + Route** | ✅ | 2026-07-20 | `server/models/Warehouse.js` + `server/routes/warehouse.js` — includes alamat, kontak, telepon. |
+| **Inventory** | **Supplier MongoDB Model + Route** | ✅ | 2026-07-20 | `server/models/Supplier.js` + `server/routes/supplier.js` — sebelumnya hanya client-side, sekarang ada server backend juga. |
+| **Inventory** | **Customer MongoDB Model + Route** | ✅ | 2026-07-20 | `server/models/Customer.js` + `server/routes/customer.js` — full CRUD with company scoping. |
+| **Inventory** | **Seed Data: Kategori, Satuan, Warehouse, Customer** | ✅ | 2026-07-20 | KATEGORI_SEED (9 items), SATUAN_SEED (12 items), WAREHOUSE_SEED (3 items), CUSTOMER_SEED (4 items). Semua di-seed saat first connect. |
+| **Inventory** | **Client Data Services (4)** | ✅ | 2026-07-20 | `kategori-data.js`, `satuan-data.js`, `warehouse-data.js`, `customer-data.js` — API-first dengan in-memory fallback. Multi-tenant via companyCode. |
+| **Inventory** | **Client Pages (4): Kategori, Satuan, Warehouse, Customer** | ✅ | 2026-07-20 | Full CRUD pages dengan SMART UI components. Terdaftar di router + menu. |
+| **Inventory** | **Barang: Dropdown Dinamis dari Master Data** | ✅ | 2026-07-20 | Kategori & Satuan dropdown di form Barang sekarang membaca dari master data via API, bukan hardcoded. |
+| **Inventory** | **Server Routes Registered** | ✅ | 2026-07-20 | 5 routes baru (kategori, satuan, warehouse, supplier, customer) terdaftar di `server/index.js`. |
+| **Infra** | **Frontend Rebuild (Sprint 2)** | ✅ | 2026-07-20 | Build 377ms. 509 tests PASS. |
+
+## ═══════════════════════════════════════════════
+## BARCODE SCANNER — DIAGNOSTIK (2026-07-21)
+## ═══════════════════════════════════════════════
+
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| **Scanner: Hapus formatsToSupport dari config** | ✅ | 2026-07-21 | `formatsToSupport` di `start()` config tidak diproses library (hanya diterima constructor). Dihapus agar library scan semua format default. |
+| **Scanner: Hapus qrbox (full frame scan)** | ✅ | 2026-07-21 | Hapus `qrbox: { width: 200, height: 120 }` — library sekarang scan seluruh frame video. |
+| **Scanner: Container height 180px → 280px** | ✅ | 2026-07-21 | Naikkan container camera dari 180px ke 280px untuk canvas ZXing yang lebih besar. |
+| **Scanner: deviceId { exact } → non-exact** | ✅ | 2026-07-21 | `deviceId: { exact: cam.id }` too strict untuk beberapa browser mobile. Ganti ke `deviceId: cam.id`. |
+| **Scanner: Hapus video CSS !important** | ✅ | 2026-07-21 | Hapus `width: 100% !important; height: 100% !important; object-fit: cover !important;` — biarkan library kontrol sizing. |
+| **Scanner: Prioritas kamera diubah** | ✅ | 2026-07-21 | Urutan: deviceId enumerasi → facingMode environment → facingMode user. Sebelumnya: facingMode dulu. |
+| **Scanner: verbose:true dihapus** | ✅ | 2026-07-21 | `verbose: true` banjiri console dengan ZXing debug log tiap frame. Dihapus. |
+| **Scanner: Decode error log tiap 100 frame** | ✅ | 2026-07-21 | Ganti dari `console.warn` tiap frame (10x/detik) jadi log setiap 100 frame (~10 detik). |
+| **Scanner: MediaStream track state check** | ✅ | 2026-07-21 | Tambah `video.srcObject?.getVideoTracks()?.[0]?.readyState` — untuk deteksi apakah stream live/ended. |
+| **⚠️ PROBLEM: VIDEO 0x0, readyState=0, no CANVAS** | ❌ | 2026-07-21 | Diagnostic: container cuma berisi 1 VIDEO element. Video: `0x0, readyState=0, paused=false`. Tidak ada CANVAS. Kamera start (getUserMedia sukses) tapi stream TIDAK mengirim frame. Bisa jadi bug library atau masalah browser security policy. **Belum teratasi.** |
+| **Scanner: Refactor ke Framework component** | ✅ | 2026-07-22 | Scanner dipindah ke `packages/smart-ui/src/components/scanner/` sebagai `UI.BarcodeScanner` class. Barang page panggil via `new UI.BarcodeScanner()`. Otomatis pilih kamera (HP→belakang, Laptop→depan) + switch camera. |
+| **⚠️ Scanner: Front camera tidak berfungsi** | ❌ | 2026-07-22 | Setelah refactor ke framework, scanner gagal start dengan kamera depan (laptop/HP). Toast: "⚠️ Kamera tidak tersedia". Fix import `Html5Qrcode` sudah diterapkan, tapi front camera tetap bermasalah. Kemungkinan bug internal library `html5-qrcode` dengan `facingMode: "user"` pada browser tertentu. **Belum teratasi.** |
+
+## ═══════════════════════════════════════════════
+## SPRINT 2.5 — UI HARMONISASI + REFACTOR (2026-07-22)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Barang HP: Card View + Layout** | ✅ | 2026-07-22 | Card view mobile: nama ungu, kode biru/merah/ungu, shadow border, scroll tanpa zoom. Pagination di luar card. Search + button 1 baris. Desktop tetap tabel. |
+| **Inventory** | **Master Data HP: Card View seragam** | ✅ | 2026-07-22 | Kategori, Satuan, Warehouse, Customer, Supplier — semua mobile card view konsisten dengan Barang (border biru, shadow, nama ungu, kode biru, tombol edit/hapus). |
+| **Inventory** | **Kategori/Satuan: Deskripsi di card** | ✅ | 2026-07-22 | Deskripsi rata kanan, max 50% lebar, line-clamp 3 baris, sejajar dengan nama. |
+| **Inventory** | **Page header rata kiri + alamat dihapus dari card** | ✅ | 2026-07-22 | Semua halaman: title di atas, actions di bawah (HP). Alamat dihapus dari card customer/supplier. |
+| **Framework** | **UI.CardList component** | ✅ | 2026-07-22 | `packages/smart-ui/src/components/card-list/` — `CardList(items, renderContent)` + `attachCardEvents()`. CSS: border #2563eb, shadow, nama ungu, kode biru, tombol edit/hapus. Diexport via UI.CardList / UI.attachCardEvents. |
+| **Framework** | **UI.BarcodeScanner component** | ✅ | 2026-07-22 | `packages/smart-ui/src/components/scanner/` — `BarcodeScanner` class. Auto camera selection (HP→back, laptop→front), switch camera. Diexport via UI.BarcodeScanner. Memiliki scanner CSS (corner frame, scan line, ripple, flash). |
+| **Inventory** | **Barang: Refactor card + scanner ke framework** | ✅ | 2026-07-22 | `renderBarangCards` → `UI.CardList()`. Scanner → `new UI.BarcodeScanner()`. Hapus ~200 baris scanner CSS + ~30 baris card CSS (sekarang di framework). |
+| **Inventory** | **5 CRUD pages: Refactor card ke framework** | ✅ | 2026-07-22 | Kategori, Satuan, Warehouse, Customer, Supplier — `renderCrudCards` → `UI.CardList()` + `UI.attachCardEvents()`. Duplicate card CSS dihapus dari masing-masing `getStyles()`. |
+| **Framework** | **Scanner: Fix Html5Qrcode import missing** | ✅ | 2026-07-22 | `scanner.js` ditambah `import { Html5Qrcode } from "html5-qrcode"`. Sebelumnya `Html5Qrcode` undefined karena pindah dari barang page ke framework tanpa import. `html5-qrcode` ditambah ke smart-ui dependencies. |
+| **Framework** | **Test: getScannerConfig → BarcodeScanner.getConfig** | ✅ | 2026-07-22 | `barang/index.test.js` diupdate: import dari `./index.js` (dihapus) → import dari `@smart/ui` dan test `new UI.BarcodeScanner().getConfig()`. |
+| **Inventory** | **Sort ascending by nama (6 pages)** | ✅ | 2026-07-22 | `state.items.sort((a, b) => (a.nama || "").localeCompare(...))` ditambahkan di loadData() untuk Barang, Kategori, Satuan, Warehouse, Customer, Supplier. Case-insensitive. Berlaku untuk HP (card) dan Desktop (table). |
+| **Inventory** | **Dashboard padding & gap konsisten** | ✅ | 2026-07-22 | Dashboard mobile: padding 0.75rem 0.25rem, gap stat cards 0.75rem, border-radius 10px, shadow sama dg card barang. Welcome card stacked di HP. |
+
+## ═══════════════════════════════════════════════
+## ACTIVITY LOG + SEED F&B (2026-07-22)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Server** | **ActivityLog Model** | ✅ | 2026-07-22 | `server/models/ActivityLog.js` — companyCode, action (create/update/delete), resource, resourceName, resourceCode, userName. Indexed. |
+| **Server** | **Route /api/activity** | ✅ | 2026-07-22 | `server/routes/activity.js` — GET dengan pagination, company scoping, optional resource filter. |
+| **Server** | **Barang: Activity Logging** | ✅ | 2026-07-22 | ActivityLog.create() di setiap create/update/delete barang. Baca x-user-name dari header. |
+| **Client** | **listActivity data service** | ✅ | 2026-07-22 | `src/data/activity-data.js` — fetch dari /api/activity. Fallback empty array. |
+| **Client** | **API: x-user-name header** | ✅ | 2026-07-22 | Kirim header x-user-name dari SMART.Session untuk activity logging. |
+| **Dashboard** | **Aktivitas Terbaru + Stok Menipis** | ✅ | 2026-07-22 | Render 5 aktivitas terbaru (icon + teks + timeago). Stok menipis dihitung dari barang dg stok ≤ stok_minimum. CSS activity list, item, icon, badge. |
+| **Seed** | **BARANG_SEED → F&B (12)** | ✅ | 2026-07-22 | Semua barang diubah ke Food & Beverage: Air Mineral, Kopi, Gula Pasir, Tepung, Minyak Goreng, Nugget, Sosis, Kecap, Saus, Keripik, Susu UHT, Roti Tawar. 3 item stok sengaja < minimum utk tes. |
+| **Seed** | **KATEGORI_SEED → F&B (9)** | ✅ | 2026-07-22 | Minuman, Makanan Ringan, Bumbu & Saus, Bahan Baku, Frozen Food, Susu & Olahan, Roti & Kue, Kemasan, Lainnya. |
+| **Seed** | **SATUAN_SEED → F&B (12)** | ✅ | 2026-07-22 | Gram, Ml, Pack, Botol, Gelas, Karton, Sachet ditambahkan. Sak, Batang, Lembar, Meter, Roll dihapus. |
+| **Seed** | **Activity Log dari DB asli** | ✅ | 2026-07-22 | Seed activity log baca dari koleksi Barang asli (jika ada data), bukan dari BARANG_SEED array. Stale seed entries (resourceId /^seed-/) dibersihkan otomatis. |
+| **Deploy** | **Build + Restart Server** | ✅ | 2026-07-22 | vite build (781ms). pm2 restart inventory-server — route & model activity log aktif. |
+
+## ═══════════════════════════════════════════════
+## DASHBOARD — STOK & LAYOUT (2026-07-22)
+## ═══════════════════════════════════════════════
+
+| Task | Status | Date | Notes |
+|------|--------|------|-------|
+| **Stok Menipis: stok 1-4** | ✅ | 2026-07-22 | Filter diubah dari `stok <= stok_minimum` jadi `stok > 0 && stok < 5`. Stok 0 = habis, bukan menipis. |
+| **Stok Habis: stat baru** | ✅ | 2026-07-22 | Kartu stat baru untuk stok = 0 dengan icon 🚫 background merah. Total 5 stat cards di dashboard. |
+| **5 Kartu 1 Baris Desktop** | ✅ | 2026-07-22 | `stats-grid` diubah dari `repeat(auto-fit, minmax(220px,1fr))` jadi `repeat(5, 1fr)` — 5 kartu dalam 1 baris. Mobile tetap 2/1 kolom. |
+
+## ═══════════════════════════════════════════════
 ## COMPANY SDK REFACTORING (2026-07-16)
 ## ═══════════════════════════════════════════════
 

@@ -53,21 +53,39 @@ export function normalizeList(response) {
 }
 
 /**
+ * Get current company code from SMART.Session for multi-tenant scoping.
+ * @returns {string|null}
+ */
+function _getCompanyCode() {
+    try {
+        if (typeof globalThis !== 'undefined' && globalThis.SMART) {
+            return globalThis.SMART.Session.get("company.code") || globalThis.SMART.Company.getCode();
+        }
+    } catch {}
+    return null;
+}
+
+/**
  * Make an API call with fetch. Returns null if fetch fails.
+ *
+ * Auto-attaches `x-company-code` header for multi-tenant isolation
+ * by reading the current company code from SMART.Session.
  *
  * @param {string} method HTTP method
  * @param {string} url Full URL
  * @param {object|null} body Request body
  * @param {object} [options]
  * @param {object} [options.headers] Additional headers
- * @param {string} [options.companyCode] Company code for multi-tenant header
+ * @param {string} [options.companyCode] Explicit company code (overrides auto-detect)
  * @returns {Promise<object|null>}
  */
 export async function apiFetch(method, url, body = null, options = {}) {
     const headers = { "Content-Type": "application/json", ...options.headers };
 
-    if (options.companyCode) {
-        headers["x-company-code"] = options.companyCode;
+    // Auto-attach company code from SMART.Session if not explicitly provided
+    const companyCode = options.companyCode || _getCompanyCode();
+    if (companyCode) {
+        headers["x-company-code"] = companyCode;
     }
 
     const fetchOptions = { method, headers };
@@ -83,13 +101,12 @@ export async function apiFetch(method, url, body = null, options = {}) {
         }
         return res.json();
     } catch (err) {
-        // Network error (TypeError) → return null to trigger local fallback
-        if (err instanceof TypeError) {
-            console.warn(`[API] ${method} ${url} failed (network):`, err.message);
-            return null;
-        }
-        // HTTP error (4xx, 5xx) → propagate up, jangan fallback ke local!
-        throw err;
+        // All errors → return null to trigger local fallback.
+        // This includes network errors (TypeError), HTTP errors (4xx, 5xx),
+        // and any unexpected errors — so the app stays functional even if
+        // the backend is down or returns an error.
+        console.warn(`[API] ${method} ${url} failed:`, err.message);
+        return null;
     }
 }
 
