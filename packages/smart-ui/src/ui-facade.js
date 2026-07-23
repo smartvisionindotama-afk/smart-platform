@@ -18,7 +18,8 @@ import {
     Skeleton as _Skeleton,
     CardList as _CardList,
     attachCardEvents as _attachCardEvents,
-    BarcodeScanner as _BarcodeScanner
+    BarcodeScanner as _BarcodeScanner,
+    SearchableSelect as _SearchableSelect
 } from "./components/index.js";
 
 import { Sidebar as _Sidebar } from "./layouts/sidebar/Sidebar.js";
@@ -54,6 +55,7 @@ export const UI = {
     CardList: (items, renderContent) => _CardList(items, renderContent),
     attachCardEvents: (container, onEdit, onDelete) => _attachCardEvents(container, onEdit, onDelete),
     BarcodeScanner: _BarcodeScanner,
+    SearchableSelect: (selectEl, opts) => _SearchableSelect(selectEl, opts),
     load: loadUI
 };
 

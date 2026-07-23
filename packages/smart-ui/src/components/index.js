@@ -28,3 +28,6 @@ export { CardList, attachCardEvents } from "./card-list/card-list.js";
 
 // ── Barcode Scanner ──
 export { BarcodeScanner } from "./scanner/scanner.js";
+
+// ── Searchable Select ──
+export { SearchableSelect } from "./searchable-select/index.js";

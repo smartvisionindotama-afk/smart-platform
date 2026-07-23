@@ -16,11 +16,12 @@
 export const COMPANY_TYPES = [
     "PT",
     "CV",
+    "Yayasan",
+    "Koperasi",
+    "Firma",
     "Perorangan",
     "BUMDes",
-    "Koperasi",
-    "Pesantren",
-    "Pemerintah",
+    "Pemdes",
     "Lainnya"
 ];
 

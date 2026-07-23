@@ -15,21 +15,14 @@
 export function Topbar({
     title = "SMART Platform",
     userName = "User",
-    impersonation = null,
-    onExitImpersonation = null
+    impersonation = null
 }) {
     const isImpersonating = impersonation && impersonation.companyName;
 
     const impersonationBadge = isImpersonating ? `
         <div class="topbar-impersonation-badge">
             <span class="imp-badge-dot">🔴</span>
-            <span class="imp-badge-text">
-                <strong>LOGIN AS</strong>
-                <span class="imp-company">${impersonation.companyName}</span>
-                <span class="imp-role">(Admin Perusahaan)</span>
-                <span class="imp-support">Support Mode Active</span>
-            </span>
-            ${onExitImpersonation ? `<button class="imp-exit-btn" id="btn-exit-impersonation" title="Kembali ke Super Admin">✕</button>` : ""}
+            <span class="imp-badge-text">Login As Admin</span>
         </div>
     ` : "";
 
@@ -52,33 +45,8 @@ export function Topbar({
                     font-size: 0.6rem;
                 }
                 .topbar-impersonation-badge .imp-badge-text {
-                    display: flex;
-                    align-items: center;
-                    gap: 0.4rem;
-                }
-                .topbar-impersonation-badge .imp-badge-text strong {
-                    font-size: 0.7rem;
-                    letter-spacing: 0.5px;
-                }
-                .topbar-impersonation-badge .imp-company {
                     font-weight: 600;
-                }
-                .topbar-impersonation-badge .imp-role {
-                    opacity: 0.8;
-                    font-size: 0.7rem;
-                }
-                .topbar-impersonation-badge .imp-exit-btn {
-                    padding: 2px 8px;
-                    border: 1px solid rgba(255,255,255,0.4);
-                    border-radius: 4px;
-                    background: rgba(255,255,255,0.15);
-                    color: #fff;
-                    cursor: pointer;
-                    font-size: 0.7rem;
-                    transition: background 0.15s;
-                }
-                .topbar-impersonation-badge .imp-exit-btn:hover {
-                    background: rgba(255,255,255,0.3);
+                    font-size: 0.78rem;
                 }
                 .topbar-left {
                     display: flex;

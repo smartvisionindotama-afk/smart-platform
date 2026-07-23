@@ -414,11 +414,18 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
         const btnLogo = document.getElementById("btn-logo-upload");
         const fileInput = document.getElementById("f-logo");
         if (btnLogo && fileInput) {
+            const MAX_LOGO_SIZE = 500 * 1024; // 500 KB
             btnLogo.addEventListener("click", () => fileInput.click());
             fileInput.addEventListener("change", (e) => {
                 const file = e.target.files[0];
                 const fileNameEl = document.getElementById("logo-file-name");
                 if (file) {
+                    if (file.size > MAX_LOGO_SIZE) {
+                        showToast("warning", `Ukuran logo terlalu besar! Maksimal 500 KB. File saat ini: ${(file.size / 1024).toFixed(0)} KB.`);
+                        fileInput.value = "";
+                        fileNameEl.textContent = "No file chosen";
+                        return;
+                    }
                     fileNameEl.textContent = file.name;
                     const reader = new FileReader();
                     reader.onload = (ev) => {

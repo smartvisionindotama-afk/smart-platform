@@ -44,3 +44,6 @@ export * from "./modules/platform/index.js";
 
 /** @deprecated Gunakan Auth modules via DI */
 export * from "./modules/auth/index.js";
+
+/** @deprecated Gunakan Dashboard module via DI */
+export * from "./modules/dashboard/index.js";

@@ -748,7 +748,116 @@ Infrastructure (MongoDB, localStorage, fetch, etc.)
 | Inventory import `@smart/ui/layouts`, `@smart/ui/modules` | Low | Bypass facade, tapi backward compat |
 | Deprecated API masih diexport | Low | Untuk backward compatibility, akan dihapus setelah migrasi penuh |
 
+## ═══════════════════════════════════════════════
+## SUPER ADMIN DASHBOARD — HEADER & UI FIXES (2026-07-22)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **Header: User login info** | ✅ | 2026-07-22 | `pd-user-name` span ditambahkan di header, diisi dari `Auth.user()` via `initPlatformDashboard()`. |
+| **Framework** | **Header: Background biru keunguan** | ✅ | 2026-07-22 | `.pd-header` background diubah dari `linear-gradient(135deg, #1e293b, #334155)` → `linear-gradient(135deg, #1e1b4b, #7c3aed)`. |
+| **Framework** | **Header HP: User name + Logout di kanan** | ✅ | 2026-07-22 | Mobile: `.pd-user-info` jadi `flex-end`, user name (tanpa badge) + logout berjejer di sisi kanan. Badge Super Admin tetap hidden di HP. |
+| **Framework** | **Header Desktop: Badge pindah ke kanan dekat logout** | ✅ | 2026-07-22 | Badge dipindah dari dalam `.pd-user-detail` ke `.pd-user-actions` wrapper agar duduk di kanan dekat tombol Logout. |
+| **Framework** | **User Tab: Card view default** | ✅ | 2026-07-22 | `showSuperAdminManagement()` ditambah `pd-user-cards-area`. `renderUserCards()` selalu tampilkan cards (table hidden). Menggunakan `UI.CardList()`. |
+| **Framework** | **Apps Tab: Hapus tombol Hapus Logo (✕)** | ✅ | 2026-07-22 | Tombol `✕` merah dihapus dari app card template beserta event handler (server sync, callback, localStorage) dan CSS. |
+| **Framework** | **Apps Tab: Hapus lingkaran abu-abu logo** | ✅ | 2026-07-22 | `.pd-app-logo-section` — hapus `border-radius:50%`, `background:#f1f5f9`, `border:3px solid`, `width/height` fixed. Ikon tetap center. |
+| **Framework** | **Apps Tab: Logo custom di heading company view** | ✅ | 2026-07-22 | `showCompaniesView()` sekarang tampilkan uploaded app logo (`getAppLogo(appSlug)`) sebagai `<img>` di heading, bukan default icon. CSS `.pd-view-app-logo` 28x28px. |
+| **Inventory** | **Login: Pesan error perusahaan non-aktif** | ✅ | 2026-07-22 | Client-side login (`initLoginPage`) diperbaiki: jika server return error (401/403), baca `errData.error` dari response dan tampilkan langsung, bukan fallback ke "Username atau password salah". |
+
+## ═══════════════════════════════════════════════
+## RAK ETALASE — MASTER DATA (2026-07-22)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Sidebar: Menu Rak Etalase** | ✅ | 2026-07-22 | Sub-menu "Rak Etalase" 🏪 ditambahkan di Master setelah Warehouse. Permission: `inventory.rak.read`. |
+| **Server** | **Rak MongoDB Model + Route** | ✅ | 2026-07-22 | `server/models/Rak.js` — kode, nama, lokasi, deskripsi, companyCode. `server/routes/rak.js` — full CRUD with company scoping. |
+| **Client** | **Rak Data Service** | ✅ | 2026-07-22 | `src/data/rak-data.js` — API-first with in-memory fallback. 5 seed items (Rak A1, A2, B1, E1, E2). |
+| **Client** | **Rak CRUD Page** | ✅ | 2026-07-22 | `src/pages/rak/index.js` — duplikasi dari satuan. Kolom tabel: kode, nama rak/etalase, lokasi, deskripsi. Card HP & form modal. |
+| **Inventory** | **Barang: Rak dropdown dinamis** | ✅ | 2026-07-22 | Input `rak` di form Barang diubah dari free-text menjadi dropdown yang membaca dari `listRak()`. Konsisten dengan dropdown Kategori & Satuan. |
+| **Infra** | **Server Routes Registered** | ✅ | 2026-07-22 | `/api/rak` terdaftar di `server/index.js`. Router client terdaftar di `routes.js`. |
+| **Infra** | **Frontend Rebuild** | ✅ | 2026-07-22 | Build sukses. |
+
+## ═══════════════════════════════════════════════
+## COMPANY TYPES + WILAYAH SELECTOR (2026-07-23)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **COMPANY_TYPES diselaraskan dengan Register form** | ✅ | 2026-07-23 | `company-types.js` diupdate: tambah Yayasan, Firma, Pemdes; hapus Pesantren, Pemerintah. Sekarang 9 jenis: PT, CV, Yayasan, Koperasi, Firma, Perorangan, BUMDes, Pemdes, Lainnya. Super Admin & Register pakai daftar sama. |
+| **Server** | **Route /api/wilayah (hierarchical)** | ✅ | 2026-07-23 | `server/routes/wilayah.js` — GET /provinces, /:prov/regencies, /:prov/:kab/districts, /:prov/:kab/:kec/villages. Membaca dari `shared/data/wilayah.json`. |
+| **Inventory** | **Register: Wilayah selector BUMDes/Pemdes** | ✅ | 2026-07-23 | Jika pilih BUMDes/Pemdes, muncul 4 dropdown cascading: Provinsi→Kab→Kec→Desa. Kode otomatis: `{jenis}-{kode_desa}`. Validasi desa wajib. |
+| **Framework** | **Dashboard: Wilayah selector BUMDes/Pemdes** | ✅ | 2026-07-23 | Modal Tambah Perusahaan di Super Admin: dropdown jenis diupdate (sama dengan Register). Jika BUMDes/Pemdes: cascading wilayah + kode auto `{jenis}-{kode_desa}`. |
+| **Server** | **Register route: BUMDes/Pemdes code** | ✅ | 2026-07-23 | `generateCompanyCode()` sekarang terima `desaCode`. Jika BUMDes/Pemdes + desaCode: return `${jenis}-${desaCode}` langsung. Juga terima `code` dari body. |
+| **Infra** | **509 tests PASS + Build sukses** | ✅ | 2026-07-23 | Semua test lulus (509/509). Vite build sukses (1.20s). |
+| **Framework** | **SearchableSelect component** | ✅ | 2026-07-23 | `packages/smart-ui/src/components/searchable-select/` — dropdown dengan filter pencarian. `UI.SearchableSelect(el, opts)`. Keyboard nav, click-outside-close, destroy() cleanup. |
+| **Framework** | **SearchableSelect dipakai di Register + Dashboard** | ✅ | 2026-07-23 | Wilayah dropdown di Register form dan Dashboard Super Admin pakai `UI.SearchableSelect` agar pencarian provinsi/kabupaten/kecamatan/desa mudah. |
+
+## ═══════════════════════════════════════════════
+## GOOGLE AUTH — AUTO-LOGIN FIX (2026-07-23)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Server** | **Google auto-login untuk user existing** | ✅ | 2026-07-23 | `server/routes/auth-google.js` — jika email sudah terdaftar, balikkan 200 + data user (auto-login langsung ke dashboard), bukan 409 error. Flow: pertama → 404 → register. Kedua → 200 → dashboard. |
+
+## ═══════════════════════════════════════════════
+## BARANG — RAK FIX + GUDANG FIELD (2026-07-23)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Server** | **Barang Model: rak field ditambahkan** | ✅ | 2026-07-23 | `rak` ditambahkan ke Mongoose schema Barang. Sebelumnya tidak ada di schema → Mongoose `strict: true` menghapus field saat save → dropdown rak kosong saat edit. Root cause fix. |
+| **Server** | **Barang Model: gudang field baru** | ✅ | 2026-07-23 | `gudang: { type: String, default: "" }` ditambahkan ke schema Barang. |
+| **Inventory** | **Barang: data service + gudang** | ✅ | 2026-07-23 | `rak` dan `gudang` ditambahkan di `createBarangLocal()` dan `updateBarangLocal()` di `barang-data.js`. |
+| **Inventory** | **Barang: Form Gudang dropdown** | ✅ | 2026-07-23 | Dropdown Gudang di form Barang, membaca dari `listWarehouse()`. Kolom Gudang di tabel desktop. Baris Gudang di detail modal. |
+| **Inventory** | **Barang: Gudang required + validasi** | ✅ | 2026-07-23 | Label Gudang diberi `*` merah. Validasi: jika gudang kosong saat submit → toast warning + fokus ke dropdown gudang. Wajib diisi. |
+| **Infra** | **Build + Server Restart** | ✅ | 2026-07-23 | Vite build sukses. PM2 restart inventory-server. 509/509 tests PASS. |
+
+## ═══════════════════════════════════════════════
+## REFACTOR — LOGIN & REGISTER KE FRAMEWORK (2026-07-23)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **Login Module → smart-ui/modules/auth** | ✅ | 2026-07-23 | `packages/smart-ui/src/modules/auth/login.js` — `LoginPageComponent` + `initLoginPageComponent` dengan DI. Support Google Sign-In, custom `loginFn`, `onRegisterClick`, `onForgotPassword`. |
+| **Framework** | **Register Module → smart-ui/modules/auth** | ✅ | 2026-07-23 | `packages/smart-ui/src/modules/auth/register.js` — `RegisterPageComponent` + `initRegisterPageComponent` dengan DI. Support BUMDes/Pemdes wilayah selector, Google auto-fill, custom `registerFn`/`generateCodeFn`/`wilayahBaseUrl`. |
+| **Framework** | **Auth Module index updated** | ✅ | 2026-07-23 | `packages/smart-ui/src/modules/auth/index.js` — export `LoginPageComponent`, `initLoginPageComponent`, `RegisterPageComponent`, `initRegisterPageComponent`. |
+| **Inventory** | **Login page jadi thin wrapper** | ✅ | 2026-07-23 | `apps/inventory/src/pages/login/index.js` — re-export dari `@smart/ui`. |
+| **Inventory** | **Register page jadi thin wrapper** | ✅ | 2026-07-23 | `apps/inventory/src/pages/register/index.js` — re-export dari `@smart/ui`. |
+| **Inventory** | **main.js: API options object** | ✅ | 2026-07-23 | `initLoginPage({onSuccess, onRegisterClick})` dan `initRegisterPage({onSuccess, onBackToLogin, prefill})`. |
+| **Framework** | **Fix: Error login tampil pesan server** | ✅ | 2026-07-23 | catch block `showError(err.message || ...)` — server error message tampil, bukan generic. |
+| **Framework** | **Fix: SearchableSelect static import** | ✅ | 2026-07-23 | Ganti `import("@smart/ui")` dinamis jadi `import { UI }` statis di register.js. |
+| **Infra** | **509 tests PASS + Build sukses** | ✅ | 2026-07-23 | Semua test lulus (509/509). Vite build sukses.
+
+
+## ═══════════════════════════════════════════════
+## DASHBOARD FRAMEWORK MODULE (2026-07-23)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **DashboardModule → smart-ui** | ✅ | 2026-07-23 | `DashboardModule({ listBarang, listSupplier, listActivity, ... })` — DI-based. Semua HTML, CSS, init, & activity loading pindah ke framework. |
+| **Inventory** | **Dashboard thin wrapper (15 baris)** | ✅ | 2026-07-23 | `apps/inventory/src/pages/dashboard/index.js` turun dari 397 baris jadi 15 baris — import DashboardModule, inject data services. |
+| **Framework** | **Dashboard export di package.json** | ✅ | 2026-07-23 | `@smart/ui/package.json` ditambah `./modules/dashboard` export. `packages/smart-ui/src/index.js` re-export. |
+
+## ═══════════════════════════════════════════════
+## EMAIL SERVICE — SMTP OPTIMASI + RESEND INTEGRASI (2026-07-23)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Server** | **SMTP: Connection pooling** | ✅ | 2026-07-23 | `pool:true`, maxConnections:3, maxMessages:20, rateLimit:5. Connection timeout 10s. |
+| **Server** | **SMTP: Auto-retry 3x + backoff** | ✅ | 2026-07-23 | Retry exponential backoff 2s/4s/8s untuk transient SMTP failures. |
+| **Server** | **SMTP: Connection verify startup** | ✅ | 2026-07-23 | `transporter.verify()` dipanggil non-blocking saat server start. |
+| **Server** | **Fire-and-forget email sending** | ✅ | 2026-07-23 | `sendResetPasswordEmailAsync()` — kirim email di background, response API tidak blocking. |
+| **Server** | **Resend API integration** | ✅ | 2026-07-23 | `npm install resend`. API key di `.env`. `sendViaResend()` sebagai primary email sender. |
+| **Server** | **Fallback chain: Resend → SMTP → Dev** | ✅ | 2026-07-23 | Priority: 1) Resend API (cepat, reliable), 2) SMTP hosting (retry 3x), 3) Dev mode log. |
+| **Server** | **GenerateToken: crypto.randomBytes** | ✅ | 2026-07-23 | Fix `import crypto` + hapus dead code `Uint32Array`. Token sekarang pake Node.js crypto. |
+
+## Legend
 ## Legend
 - ✅ Completed — Fitur selesai dan stabil
 - 🔄 Transition — Masih ada, tapi diganti dengan API baru
-- ⬜ Planned — Belum dimulai
+- ⬜ Planned — Belum dikerjakan
+- ❌ Blocked — Ada kendala
