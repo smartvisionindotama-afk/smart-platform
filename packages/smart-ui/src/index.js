@@ -47,3 +47,10 @@ export * from "./modules/auth/index.js";
 
 /** @deprecated Gunakan Dashboard module via DI */
 export * from "./modules/dashboard/index.js";
+
+/** @deprecated Gunakan Generic CRUD module via DI */
+export { CrudModule } from "./modules/master-crud/index.js";
+export { PembelianModule } from "./modules/pembelian/index.js";
+
+/** @deprecated Gunakan Barang module via DI */
+export { BarangModule } from "./modules/barang/index.js";

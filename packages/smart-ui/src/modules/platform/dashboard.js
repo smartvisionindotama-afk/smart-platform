@@ -639,7 +639,7 @@ function getCompanyAppBadges(companyCode) {
         const enabledApps = isEdit && item.code ? platform.getCompanyApps(item.code) : [];
         const enabledSlugs = enabledApps.map(a => a.slug);
 
-        const footer = `
+        const footerHTML = `
             <button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>
             <button class="smart-btn smart-btn-primary" id="f-submit">${isEdit ? "Simpan" : "Tambah"}</button>
         `;
@@ -738,7 +738,7 @@ function getCompanyAppBadges(companyCode) {
                         </div>
                     </div>
                 </div>
-            `, footer, closable: true, onClose: removeModal
+            `, footer: footerHTML, closable: true, onClose: removeModal
         });
         document.body.appendChild(modal);
 
@@ -1042,7 +1042,7 @@ function getCompanyAppBadges(companyCode) {
 
     function promptLoginAs(companyCode, companyName) {
         const apps = platform.getApps({ onlyActive: true });
-        const footer = `<button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>`;
+        const footerHTML = `<button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>`;
 
         const modal = Modal({
             open: true, title: `🔑 Login As — ${companyName}`,
@@ -1060,7 +1060,7 @@ function getCompanyAppBadges(companyCode) {
                         </div>
                     `).join("")}
                 </div>
-            `, footer, closable: true, onClose: removeModal
+            `, footer: footerHTML, closable: true, onClose: removeModal
         });
         document.body.appendChild(modal);
 
@@ -1128,7 +1128,7 @@ function getCompanyAppBadges(companyCode) {
 
             const enabledApps = platform.getCompanyApps(company.code);
 
-            const footer = `<button class="smart-btn smart-btn-primary" id="f-close">Tutup</button>`;
+            const footerHTML = `<button class="smart-btn smart-btn-primary" id="f-close">Tutup</button>`;
             const modal = Modal({
                 open: true, title: `👁️ ${company.name || company.code}`,
                 content: `
@@ -1147,7 +1147,7 @@ function getCompanyAppBadges(companyCode) {
                             <div class="pd-profile-row"><strong>Aplikasi Aktif:</strong> ${enabledApps.length > 0 ? enabledApps.map(a => `${a.icon} ${a.name}`).join(", ") : "Tidak ada"}</div>
                         </div>
                     </div>
-                `, footer, closable: true, onClose: removeModal
+                `, footer: footerHTML, closable: true, onClose: removeModal
             });
             document.body.appendChild(modal);
             document.getElementById("f-close")?.addEventListener("click", removeModal);
@@ -1166,7 +1166,7 @@ function getCompanyAppBadges(companyCode) {
         const enabled = platform.getCompanyApps(companyCode);
         const enabledSlugs = enabled.map(a => a.slug);
 
-        const footer = `<button class="smart-btn smart-btn-secondary" id="f-cancel">Tutup</button>`;
+        const footerHTML = `<button class="smart-btn smart-btn-secondary" id="f-cancel">Tutup</button>`;
 
         const modal = Modal({
             open: true, title: `📋 Atur Langganan — ${companyName}`,
@@ -1190,7 +1190,7 @@ function getCompanyAppBadges(companyCode) {
                         `;
             }).join("")}
                 </div>
-            `, footer, closable: true, onClose: removeModal
+            `, footer: footerHTML, closable: true, onClose: removeModal
         });
         document.body.appendChild(modal);
 
@@ -1221,7 +1221,7 @@ function getCompanyAppBadges(companyCode) {
     async function toggleCompanyStatus(id, code, isActive) {
         const newStatus = !isActive;
         const action = newStatus ? "Aktifkan" : "Nonaktifkan";
-        const footer = `
+        const footerHTML = `
             <button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>
             <button class="smart-btn smart-btn-${newStatus ? 'success' : 'danger'}" id="f-confirm">Ya, ${action}</button>
         `;
@@ -1230,7 +1230,7 @@ function getCompanyAppBadges(companyCode) {
             open: true, title: `Konfirmasi ${action}`,
             content: `<p>${action} perusahaan <strong>${code}</strong>?</p>
                 <p style="font-size:0.85rem;color:#64748b">${newStatus ? "Perusahaan akan kembali aktif" : "Perusahaan tidak dapat mengakses aplikasi"}.</p>`,
-            footer, closable: true, onClose: removeModal
+            footer: footerHTML, closable: true, onClose: removeModal
         });
         document.body.appendChild(modal);
 
@@ -1253,7 +1253,7 @@ function getCompanyAppBadges(companyCode) {
     // ══════════════════════════════════════════════
 
     async function deleteCompanyAction(id, companyName) {
-        const footer = `
+        const footerHTML = `
             <button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>
             <button class="smart-btn smart-btn-danger" id="f-confirm">Ya, Hapus</button>
         `;
@@ -1262,7 +1262,7 @@ function getCompanyAppBadges(companyCode) {
             open: true, title: "🗑️ Konfirmasi Hapus Perusahaan",
             content: `<p>Hapus perusahaan <strong>${esc(companyName)}</strong>?</p>
                 <p style="font-size:0.85rem;color:#64748b">Semua data perusahaan ini akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.</p>`,
-            footer, closable: true, onClose: removeModal
+            footer: footerHTML, closable: true, onClose: removeModal
         });
         document.body.appendChild(modal);
 
@@ -1362,7 +1362,7 @@ function getCompanyAppBadges(companyCode) {
     // ══════════════════════════════════════════════
 
     function openAddSuperAdmin() {
-        const footer = `
+        const footerHTML = `
             <button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>
             <button class="smart-btn smart-btn-primary" id="f-submit">Tambah</button>
         `;
@@ -1390,7 +1390,7 @@ function getCompanyAppBadges(companyCode) {
                         </div>
                     </div>
                 </div>
-            `, footer, closable: true, onClose: removeModal
+            `, footer: footerHTML, closable: true, onClose: removeModal
         });
         document.body.appendChild(modal);
 
@@ -1423,7 +1423,7 @@ function getCompanyAppBadges(companyCode) {
             const user = users.find(u => u._id === id);
             if (!user) { showToast("danger", "User tidak ditemukan"); return; }
 
-            const footer = `
+            const footerHTML = `
                 <button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>
                 <button class="smart-btn smart-btn-primary" id="f-submit">Simpan</button>
             `;
@@ -1458,7 +1458,7 @@ function getCompanyAppBadges(companyCode) {
                             </div>
                         </div>
                     </div>
-                `, footer, closable: true, onClose: removeModal
+                `, footer: footerHTML, closable: true, onClose: removeModal
             });
             document.body.appendChild(modal);
 
@@ -1490,7 +1490,7 @@ function getCompanyAppBadges(companyCode) {
     }
 
     async function deleteSuperAdminAction(id, username) {
-        const footer = `
+        const footerHTML = `
             <button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>
             <button class="smart-btn smart-btn-danger" id="f-confirm">Ya, Hapus</button>
         `;
@@ -1499,7 +1499,7 @@ function getCompanyAppBadges(companyCode) {
             open: true, title: "🗑️ Konfirmasi Hapus",
             content: `<p>Hapus User <strong>${esc(username)}</strong>?</p>
                 <p style="font-size:0.85rem;color:#64748b">Akun ini tidak dapat lagi login ke platform. Tindakan ini tidak dapat dibatalkan.</p>`,
-            footer, closable: true, onClose: removeModal
+            footer: footerHTML, closable: true, onClose: removeModal
         });
         document.body.appendChild(modal);
 

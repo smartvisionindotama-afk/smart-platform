@@ -855,6 +855,72 @@ Infrastructure (MongoDB, localStorage, fetch, etc.)
 | **Server** | **Fallback chain: Resend → SMTP → Dev** | ✅ | 2026-07-23 | Priority: 1) Resend API (cepat, reliable), 2) SMTP hosting (retry 3x), 3) Dev mode log. |
 | **Server** | **GenerateToken: crypto.randomBytes** | ✅ | 2026-07-23 | Fix `import crypto` + hapus dead code `Uint32Array`. Token sekarang pake Node.js crypto. |
 
+
+## ═══════════════════════════════════════════════
+## GENERIC CRUD MODULE — FRAMEWORK REFACTOR (2026-07-23)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **CrudModule factory → smart-ui** | ✅ | 2026-07-23 | `CrudModule(config)` di `packages/smart-ui/src/modules/master-crud/index.js`. Menangani semua boilerplate: loadData, renderModal, confirmDelete, pagination, search, card view, form submission, delete confirmation. Semua CSS (crud-page, form-grid) pindah ke framework. |
+| **Framework** | **CrudModule exports** | ✅ | 2026-07-23 | `package.json` ditambah `./modules/master-crud` export. `index.js` re-export `CrudModule`. |
+| **Inventory** | **Kategori → thin wrapper** | ✅ | 2026-07-23 | 257 → 61 baris. Import CrudModule dari @smart/ui. |
+| **Inventory** | **Satuan → thin wrapper** | ✅ | 2026-07-23 | 257 → 61 baris. |
+| **Inventory** | **Warehouse → thin wrapper** | ✅ | 2026-07-23 | 275 → 82 baris. |
+| **Inventory** | **Rak → thin wrapper** | ✅ | 2026-07-23 | 272 → 73 baris. |
+| **Inventory** | **Customer → thin wrapper** | ✅ | 2026-07-23 | 279 → 87 baris. |
+| **Inventory** | **Supplier → thin wrapper** | ✅ | 2026-07-23 | 277 → 87 baris. |
+| **Infra** | **Build + Test** | ✅ | 2026-07-23 | Build 766ms. 509 tests PASS. |
+
+
+## ═══════════════════════════════════════════════
+## RESET PASSWORD — NGINX X-FRAME-OPTIONS & FAVICON (2026-07-23)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Infra** | **Nginx: X-Frame-Options + CSP frame-ancestors** | ✅ | 2026-07-23 | `inv.e-profit.id.conf` & `master.e-profit.id.conf` ditambah `X-Frame-Options: SAMEORIGIN` dan `Content-Security-Policy: frame-ancestors 'self';` di `location /`. Mencegah halaman dimuat di cross-origin sandboxed iframe (seperti Gmail desktop link preview). |
+| **Infra** | **Nginx: Deploy & Reload** | ✅ | 2026-07-23 | Manual copy config ke `/etc/nginx/sites-available/`. Config test OK, reload sukses. |
+| **Infra** | **Nginx: Cleanup app-template.conf symlink** | ✅ | 2026-07-23 | Hapus symlink `app-template.conf` yang broken (placeholder `PORT`) dari `/etc/nginx/sites-enabled/` yang blocking nginx reload. |
+| **Inventory** | **Reset Password: Favicon** | ✅ | 2026-07-23 | `main.js` — route handler `/reset-password` sekarang set favicon dengan prioritas: localStorage → `/api/platform/app-logo/inventory` → `fetchCompanyLogo()`. Sama dengan halaman login & superadmin. |
+
+
+## ═══════════════════════════════════════════════
+## DUPLIKAT KODE — VALIDASI + ALERT RED + CASE-INSENSITIVE (2026-07-26)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **Barang: Duplikat kode → Alert merah + disable nama** | ✅ | 2026-07-26 | `validateKode()` di `barang/index.js`. Jika kode duplikat: Alert merah muncul ✕, field Nama & tombol Submit di-disable. Ganti kode → Nama & Submit aktif lagi. |
+| **Framework** | **Barang: Case-insensitive kode** | ✅ | 2026-07-26 | `Kopi-001` == `kopi-001` == `KOPI-001` dianggap duplikat. `.toLowerCase()` di client + `$regex` case-insensitive di server `check-kode/:kode`. |
+| **Framework** | **Barang: Auto-focus ke field kode** | ✅ | 2026-07-26 | Saat modal buka, kursor langsung ke `#f-kode`, bukan ke `#f-nama`. |
+| **Framework** | **CrudModule: Alert merah + disable nama (6 master)** | ✅ | 2026-07-26 | `validateKode()` + `clearKodeError()` di `packages/smart-ui/src/modules/master-crud/index.js`. Sama persis dengan Barang: Alert merah, Nama disabled, Submit disabled. `grid-column:1/-1` pakai inline JS karena CSS scoped gak kena di modal. |
+| **Framework** | **CrudModule: Case-insensitive + auto-focus kode** | ✅ | 2026-07-26 | 6 master sub-menu (Kategori, Satuan, Rak, Supplier, Customer, Warehouse) — case-insensitive `.toLowerCase()`, focus ke `#f-kode`. |
+| **Framework** | **Alert position: appendChild ke dalam form-group** | ✅ | 2026-07-26 | Error div di-appendChild ke DALAM `.form-group` (#f-kode parent), bukan sebagai sibling grid. Persis seperti Barang module. Tidak perlu `grid-column`. |
+| **Server** | **6 routes: /check-kode/:kode** | ✅ | 2026-07-26 | Kategori, Satuan, Rak, Supplier, Customer, Warehouse — endpoint GET case-insensitive regex. Ditaruh SEBELUM `/:id` biar gak conflict. |
+| **Client** | **6 data services: checkKodeExists + duplicate** | ✅ | 2026-07-26 | kategoridata, satuan, rak, supplier, customer, warehouse — fungsi `checkKodeExists()`, validasi duplikat di `createLocal()`/`updateLocal()`. |
+| **Build** | **Build + Test** | ✅ | 2026-07-26 | Build ~920ms. 509 tests PASS. |
+
+## ═══════════════════════════════════════════════
+## SHARED HELPERS — EKSTRAKSI DUPLIKAT KODE (2026-07-26)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **helpers.js: checkKodeExists + findDuplicateKode** | ✅ | 2026-07-26 | `apps/inventory/src/data/helpers.js` — 2 fungsi shared: `checkKodeExists(endpoint, items, kode)` (API-first), `findDuplicateKode(items, kode, excludeId)` (local only). Case-insensitive, company-scoped. |
+| **Client** | **6 data services → pake helper** | ✅ | 2026-07-26 | Kategori, Satuan, Rak, Supplier, Customer, Warehouse — semua import `checkKodeExists as checkKodeExistsHelper` + `findDuplicateKode` dari helpers. Hemat ~140 baris duplikasi kode. |
+| **Build** | **Build + Test** | ✅ | 2026-07-26 | Build sukses. 509 tests PASS. |
+
+## ═══════════════════════════════════════════════
+## PEMBELIAN — STATE RESET REFACTOR (2026-07-26)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **Pembelian: State reset di initPembelianPage()** | ✅ | 2026-07-26 | `packages/smart-ui/src/modules/pembelian/index.js` — state di-reset di awal `initPembelianPage()`: items `[]`, pagination default, search kosong, loading `false`, editingId `null`. Memastikan tiap init state fresh. |
+| **Build** | **Build + Test** | ✅ | 2026-07-26 | Build 878ms. 509 tests PASS. |
+
+
 ## Legend
 ## Legend
 - ✅ Completed — Fitur selesai dan stabil

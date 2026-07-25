@@ -74,6 +74,15 @@
 }
 
 
+/* Wide modal variant */
+
+.smart-modal-dialog.modal-lg {
+
+    max-width: 800px;
+
+}
+
+
 /* Header */
 
 .smart-modal-header {

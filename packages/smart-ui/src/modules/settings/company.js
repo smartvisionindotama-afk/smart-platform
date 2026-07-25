@@ -205,7 +205,7 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
      */
     function openViewModal(item) {
         if (!item) return;
-        const footer = `<button class="smart-btn smart-btn-primary" id="v-close">Tutup</button>`;
+        const footerHTML = `<button class="smart-btn smart-btn-primary" id="v-close">Tutup</button>`;
 
         const content = `
         <div class="company-view">
@@ -263,7 +263,7 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
             </div>
         </div>`;
 
-        const overlay = Modal({ open: true, title: `🏢 ${esc(item.name || "Detail Perusahaan")}`, content, footer, closable: true, onClose: removeModal });
+        const overlay = Modal({ open: true, title: `🏢 ${esc(item.name || "Detail Perusahaan")}`, content, footer: footerHTML, closable: true, onClose: removeModal });
         // Apply 75% width to the dialog
         overlay.querySelector(".smart-modal-dialog")?.classList.add("modal-lg");
         document.body.appendChild(overlay);
@@ -385,10 +385,10 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
             </div>
         </div>`;
 
-        const footer = `<button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>
+        const footerHTML = `<button class="smart-btn smart-btn-secondary" id="f-cancel">Batal</button>
             <button class="smart-btn smart-btn-primary" id="f-submit">${isEdit ? "Simpan Perubahan" : "Tambah Perusahaan"}</button>`;
 
-        const overlay = Modal({ open: true, title, content: contentHTML, footer, closable: true, onClose: removeModal });
+        const overlay = Modal({ open: true, title, content: contentHTML, footer: footerHTML, closable: true, onClose: removeModal });
         document.body.appendChild(overlay);
 
         // When single-company view and editing, make kode perusahaan readonly
@@ -478,12 +478,12 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
     function confirmDelete(id) {
         const item = state.items.find(i => i.id === id);
         const name = item ? item.name : `#${id}`;
-        const footer = `<button class="smart-btn smart-btn-secondary" id="d-cancel">Batal</button>
+        const footerHTML = `<button class="smart-btn smart-btn-secondary" id="d-cancel">Batal</button>
             <button class="smart-btn smart-btn-danger" id="d-confirm">Ya, Hapus</button>`;
         const overlay = Modal({
             open: true, title: "Konfirmasi Hapus",
             content: `<div class="delete-confirm"><p>Hapus <span class="item-name">${esc(name)}</span>?</p><p style="font-size:0.85rem;color:#6b7280">Tindakan tidak dapat dibatalkan.</p></div>`,
-            footer, closable: true, onClose: removeModal
+            footer: footerHTML, closable: true, onClose: removeModal
         });
         overlay.querySelector("#d-confirm")?.setAttribute("style", "background:#dc2626;color:#fff;border-color:#dc2626;");
         document.body.appendChild(overlay);

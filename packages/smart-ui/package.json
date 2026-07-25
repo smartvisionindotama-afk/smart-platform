@@ -18,7 +18,10 @@
     "./modules/settings": "./src/modules/settings/index.js",
     "./modules/platform": "./src/modules/platform/index.js",
     "./modules/auth/*": "./src/modules/auth/*.js",
-    "./modules/dashboard": "./src/modules/dashboard/index.js"
+    "./modules/dashboard": "./src/modules/dashboard/index.js",
+    "./modules/master-crud": "./src/modules/master-crud/index.js",
+    "./modules/pembelian": "./src/modules/pembelian/index.js",
+    "./modules/barang": "./src/modules/barang/index.js"
   },
   "scripts": {
     "dev": "echo '@smart/ui: No dev server needed'",
@@ -29,7 +32,8 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "html5-qrcode": "^2.3.8"
+    "html5-qrcode": "^2.3.8",
+    "qrcode": "^1.5.4"
   },
   "description": "SMART UI — Design tokens, components, layouts, workspace engine, page container, and settings modules for SMART Platform",
   "author": "PT SMART VISION INDOTAMA"
