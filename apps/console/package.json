@@ -1,0 +1,22 @@
+{
+  "name": "console",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
+  },
+  "devDependencies": {
+    "vite": "^8.1.1"
+  },
+  "dependencies": {
+    "@smart/core": "1.0.0",
+    "@smart/ui": "1.0.0",
+    "@smart/api": "1.0.0",
+    "@smart/data": "1.0.0"
+  }
+}
