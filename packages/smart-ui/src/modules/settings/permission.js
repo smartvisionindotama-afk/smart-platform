@@ -20,7 +20,7 @@ import { Modal, Toast, Table, EmptyState, Alert, Skeleton } from "../../index.js
  * @param {function} options.getPermissionGroups       Sync () => { [group]: string[] }
  * @returns {{ render: function, init: function }}
  */
-export function SettingsPermissionModule({ getRolesWithPermissions, getRolePermissions, grantPermissionToRole, revokePermissionFromRole, getPermissionGroups }) {
+export function SettingsPermissionModule({ getRolesWithPermissions, getRolePermissions, grantPermissionToRole, revokePermissionFromRole, getPermissionGroups, onPermissionsChanged }) {
     const state = { items: [], page: 1, limit: 20, loading: false };
 
     function render() {
@@ -147,14 +147,24 @@ export function SettingsPermissionModule({ getRolesWithPermissions, getRolePermi
                 const rName = e.target.dataset.role;
                 const label = e.target.closest(".perm-item");
                 try {
+                    let ok;
                     if (e.target.checked) {
-                        await grantPermissionToRole(rName, perm);
-                        label?.classList.add("checked");
+                        ok = await grantPermissionToRole(rName, perm);
                     } else {
-                        await revokePermissionFromRole(rName, perm);
-                        label?.classList.remove("checked");
+                        ok = await revokePermissionFromRole(rName, perm);
                     }
+                    if (!ok) {
+                        e.target.checked = !e.target.checked;
+                        showToast("danger", `Gagal ${e.target.checked ? "menambahkan" : "mencabut"} izin ${perm}`);
+                        return;
+                    }
+                    if (e.target.checked) label?.classList.add("checked");
+                    else label?.classList.remove("checked");
                     showToast("success", `Izin ${perm} ${e.target.checked ? "ditambahkan" : "dicabut"}`);
+                    // Notifikasi agar sesi aktif & sidebar ikut diperbarui (jika disediakan oleh host app)
+                    if (typeof onPermissionsChanged === "function") {
+                        Promise.resolve(onPermissionsChanged()).catch(() => {});
+                    }
                 } catch (err) {
                     console.error("Permission change failed:", err);
                     e.target.checked = !e.target.checked;

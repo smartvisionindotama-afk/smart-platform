@@ -32,6 +32,8 @@ import { Modal, Table, Pagination, EmptyState, Alert, Skeleton, showToast, UI } 
  * @param {Object} config.formDataDefaults — Default empty form data
  * @param {Function} config.mapFormData    — (item) => formData for editing
  * @param {Function} config.getPayload     — () => data object from DOM
+ * @param {Function} [config.loadFormDependencies] — Async () => extra data passed to renderFormFields as 3rd param
+ * @param {Function} [config.validateForm] — (getPayload) => string|null error message; return null if valid
  * @returns {{ CrudPage: Function, initCrudPage: Function }}
  */
 export function CrudModule(config) {
@@ -51,7 +53,9 @@ export function CrudModule(config) {
         renderFormFields,
         formDataDefaults,
         mapFormData,
-        getPayload
+        getPayload,
+        loadFormDependencies,
+        validateForm
     } = config;
 
     const checkKodeExists = services.checkKodeExists;
@@ -241,7 +245,22 @@ export function CrudModule(config) {
             }
         }
 
-        renderModal(title, renderFormFields(esc, formData), isEdit, id);
+        // Load form dependencies (e.g., warehouse list for dropdown)
+        let extra = {};
+        if (typeof loadFormDependencies === "function") {
+            try {
+                extra = await loadFormDependencies();
+            } catch (err) {
+                console.warn(`[${singularName}] Failed to load form dependencies:`, err);
+            }
+        }
+
+        renderModal(title, renderFormFields(esc, formData, extra), isEdit, id);
+
+        // Post-render hook for async population (e.g., dropdowns)
+        if (typeof extra._postRender === "function") {
+            setTimeout(() => extra._postRender(), 50);
+        }
     }
 
     function renderModal(title, contentHTML, isEdit, editId) {
@@ -360,6 +379,15 @@ export function CrudModule(config) {
             showToast("warning", `Kode ${singularName.toLowerCase()} wajib diisi`);
             document.getElementById("f-kode")?.focus();
             return;
+        }
+
+        // Custom form validation
+        if (typeof validateForm === "function") {
+            const errMsg = validateForm(getPayload);
+            if (errMsg) {
+                showToast("warning", errMsg);
+                return;
+            }
         }
 
         const data = getPayload();

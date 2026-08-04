@@ -169,7 +169,7 @@ export function SettingsUserModule({ listUsers, getUser, createUser, updateUser,
         state.editingId = id;
         const isEdit = mode === "edit";
         const title = isEdit ? "Edit User" : "Tambah User Baru";
-        const roles = getRoleOptions();
+        const roles = await getRoleOptions();
         let formData = { username: "", name: "", email: "", role: "supervisor", companyCode: "", password: "" };
 
         if (isEdit && id) {
