@@ -23,7 +23,7 @@ import "./tokens/index.css";
 //  PRIMARY API: UI Facade
 // ═══════════════════════════════════════════════════════════════
 
-export { UI, loadUI, showToast } from "./ui-facade.js";
+export { UI, loadUI, showToast, printToWindow } from "./ui-facade.js";
 
 // ═══════════════════════════════════════════════════════════════
 //  @deprecated — Backward Compatible Exports
@@ -45,12 +45,5 @@ export * from "./modules/platform/index.js";
 /** @deprecated Gunakan Auth modules via DI */
 export * from "./modules/auth/index.js";
 
-/** @deprecated Gunakan Dashboard module via DI */
-export * from "./modules/dashboard/index.js";
-
 /** @deprecated Gunakan Generic CRUD module via DI */
 export { CrudModule } from "./modules/master-crud/index.js";
-export { PembelianModule } from "./modules/pembelian/index.js";
-
-/** @deprecated Gunakan Barang module via DI */
-export { BarangModule } from "./modules/barang/index.js";

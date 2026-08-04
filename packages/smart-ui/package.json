@@ -18,10 +18,7 @@
     "./modules/settings": "./src/modules/settings/index.js",
     "./modules/platform": "./src/modules/platform/index.js",
     "./modules/auth/*": "./src/modules/auth/*.js",
-    "./modules/dashboard": "./src/modules/dashboard/index.js",
-    "./modules/master-crud": "./src/modules/master-crud/index.js",
-    "./modules/pembelian": "./src/modules/pembelian/index.js",
-    "./modules/barang": "./src/modules/barang/index.js"
+    "./modules/master-crud": "./src/modules/master-crud/index.js"
   },
   "scripts": {
     "dev": "echo '@smart/ui: No dev server needed'",
