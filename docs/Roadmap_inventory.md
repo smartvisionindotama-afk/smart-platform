@@ -265,7 +265,23 @@ Audit Log
 Setting
 
 Profile
-6. DATABASE COLLECTION
+6. MULTI-COMPANY DATA ISOLATION
+
+Setiap data WAJIB terikat dengan perusahaan (companyCode) dari user yang sedang login.
+
+Aturan:
+
+- Setiap dokumen MongoDB WAJIB memiliki field `companyCode`
+- Setiap operasi CREATE WAJIB menyertakan `companyCode` dari session user aktif
+- Setiap operasi READ/UPDATE/DELETE WAJIB memfilter berdasarkan `companyCode`
+- Auto-numbering (nomor PO, invoice, dll) WAJIB unik per companyCode, BUKAN global
+- Tidak boleh ada data dari perusahaan A yang terlihat oleh perusahaan B
+- Repository Layer otomatis menambahkan companyCode (via SMART.Session / BaseRepository)
+- API endpoint wajib membaca header `x-company-code` untuk scoping
+
+Pelanggaran terhadap aturan ini menyebabkan kebocoran data antar perusahaan dan merupakan CRITICAL BUG.
+
+7. DATABASE COLLECTION
 users
 
 roles
@@ -305,7 +321,7 @@ inventory_logs
 audit_logs
 
 settings
-7. UI STANDARD
+8. UI STANDARD
 
 Seluruh halaman WAJIB menggunakan SMART UI.
 
@@ -338,7 +354,7 @@ EmptyState
 Skeleton
 
 Breadcrumb
-8. DEFINITION OF DONE
+9. DEFINITION OF DONE
 
 Inventory dinyatakan selesai apabila:
 
@@ -372,17 +388,17 @@ Inventory dinyatakan selesai apabila:
 
 ✅ Build sukses
 
-9. EXECUTION ORDER (MANDATORY)
+10. EXECUTION ORDER (MANDATORY)
 
 FreeBuff WAJIB mengerjakan modul sesuai urutan berikut dan tidak boleh melompat tanpa instruksi.
 
 Sprint	Modul	Status
-Sprint 1	Login, Dashboard, Sidebar, Workspace, MongoDB, Repository	🔴
-Sprint 2	Barang, Kategori, Satuan	🔴
-Sprint 3	Gudang, Supplier, Pelanggan	🔴
-Sprint 4	User, Role, Permission	🔴
-Sprint 5	Pembelian	🔴
-Sprint 6	Penjualan	🔴
-Sprint 7	Transfer, Mutasi, Adjustment, Opname	🔴
-Sprint 8	Laporan	🔴
-Sprint 9	Audit Log, Setting, Final Testing	🔴
+Sprint 1	Login, Dashboard, Sidebar, Workspace, MongoDB, Repository	✅
+Sprint 2	Barang, Kategori, Satuan	✅
+Sprint 3	Gudang, Supplier, Pelanggan	✅
+Sprint 4	User, Role, Permission	✅
+Sprint 5	Pembelian	✅
+Sprint 6	Penjualan	✅
+Sprint 7	Transfer, Mutasi, Adjustment, Opname	🔄 Transfer ✅ • Opname ✅ • Mutasi ⬜ • Adjustment ⬜
+Sprint 8	Laporan	✅ Laporan Stok ✅ • Pembelian ✅ • Penjualan ✅ • Nilai Inventori ✅ • Mutasi ✅ • Supplier ✅ • Customer ✅
+Sprint 9	Audit Log, Setting, Final Testing	⬜

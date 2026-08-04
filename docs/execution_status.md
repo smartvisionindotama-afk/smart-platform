@@ -927,3 +927,262 @@ Infrastructure (MongoDB, localStorage, fetch, etc.)
 - 🔄 Transition — Masih ada, tapi diganti dengan API baru
 - ⬜ Planned — Belum dikerjakan
 - ❌ Blocked — Ada kendala
+
+## ═══════════════════════════════════════════════
+## PENJUALAN — SALES ORDER MODULE (2026-07-27)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Penjualan: SO/SJ/Invoice/Nota/Kwitansi Print** | ✅ | 2026-07-27 | Modul Penjualan dengan lifecycle: SO → Surat Jalan → Invoice → Nota → Kwitansi. Cetak langsung ke dialog print via `printToWindow()`. QR code di SO, SJ, Invoice, Nota. |
+| **Inventory** | **Penjualan: Surat Jalan format khusus** | ✅ | 2026-07-27 | SJ tanpa nominal, hanya kode+nama+qty+satuan+keterangan. TTD Penerima & Pengirim dengan placeholder. |
+| **Inventory** | **Penjualan: Invoice & Nota Penjualan** | ✅ | 2026-07-27 | Invoice (normal) + Nota Penjualan (normal + thermal/struk). QR code, TTD 1 orang (Dibuat oleh). |
+| **Inventory** | **Penjualan: Kwitansi** | ✅ | 2026-07-27 | Kwitansi dengan total pembayaran, terbilang, TTD bendahara. Nama kota dari alamat perusahaan. |
+| **Inventory** | **Penjualan: Stock otomatis berkurang saat SJ** | ✅ | 2026-07-27 | Status delivered → generate noSuratJalan + kurangi stock. Delete SO → reversal stock. |
+| **Inventory** | **Penjualan: Nomor urut per tahun** | ✅ | 2026-07-27 | SO, SJ, INV, KWT masing-masing punya counter terpisah. Reset tiap tahun. |
+| **Inventory** | **Penjualan: Sales Master Data** | ✅ | 2026-07-27 | Sub-menu Sales di Master. Duplikasi dari Customer. Dropdown Sales di form SO + TTD "Dibuat oleh" nama sales. |
+| **Inventory** | **Penjualan: Kirim Dari (Gudang)** | ✅ | 2026-07-27 | Field dropdown gudang di form SO. Tampil sebagai "Kirim Dari" di cetakan. |
+| **Inventory** | **Penjualan: Auto-print dialog** | ✅ | 2026-07-27 | Semua cetakan langsung trigger dialog print via `printToWindow()` — tanpa Ctrl+P. |
+| **Framework** | **Shared printToWindow utility** | ✅ | 2026-07-27 | `printToWindow(html, label, triggerParentPrint)` ditambahkan ke `@smart/ui/ui-facade.js` sebagai shared utility. Pembelian & Penjualan pakai fungsi yang sama. |
+| **Inventory** | **Penjualan: Delete all status** | ✅ | 2026-07-27 | DELETE route izinkan hapus semua status dengan reversal stock. Tombol 🗑️ di semua baris, pindah ke akhir kolom aksi. |
+| **Inventory** | **Penjualan: Sales dihapus dari info grid SO** | ✅ | 2026-07-27 | Kolom Sales di info grid cetakan SO dihapus karena sudah ada di signature "Dibuat oleh" di bagian bawah. |
+| **Inventory** | **Build & Deploy** | ✅ | 2026-07-27 | Build sukses. Server restart. Semua perubahan aktif. |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## PEMBELIAN — Toolbar HP & Retur Manual (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Pembelian: Toolbar HP 1 baris** | ✅ | 2026-08-03 | Search-wrapper flex:1 + min-width:0, page-actions flex-wrap:nowrap, button flex-shrink:0. Pencarian & tombol '+Buat PO Baru' jadi 1 baris di HP. |
+| **Inventory** | **Retur Pembelian: Input Manual** | ✅ | 2026-08-03 | Mode select (PO/Manual) di modal retur. Manual: input kode editable+scanner, +Tambah Item Barang, nama/harga/qty editable, tombol Tutup. Datalist auto-fill. Submit tanpa PO. |
+| **Inventory** | **Retur Pembelian: Qty Stok (manual)** | ✅ | 2026-08-03 | Mode manual: kolom Qty PO → Qty Stok, terisi otomatis dari field `stok` master barang via datalist. Validasi qty retur max = stok (PO tetap max = qty PO). |
+| **Bugfix** | **attachScanner import + server restart** | ✅ | 2026-08-03 | Fix `ReferenceError: attachScanner is not defined` (import hilang di pembelian). Restart pm2 `inventory-api` → route `/api/retur-pembelian` aktif (sebelumnya 404, server 5 hari belum restart). |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## SPRINT 7 — TRANSFER, OPNAME & MONITORING (2026-07-27 s.d. 07-30)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Transfer: MongoDB Model + Route** | ✅ | 2026-07-27 | `server/models/Transfer.js` — nomor `TRF-DDMMYYYY-XXXX` reset per tahun, status draft → transferred. `server/routes/transfer.js` — full CRUD + `PUT /:id/status` (eksekusi transfer memindahkan stok antar gudang). Company-scoped via `x-company-code`. |
+| **Inventory** | **Transfer: Data Service** | ✅ | 2026-07-27 | `src/data/transfer-data.js` — API-first fallback: listTransfer/getTransfer/createTransfer/updateTransfer/updateTransferStatus/deleteTransfer/resetTransferData. |
+| **Framework** | **TransferModule → smart-ui** | ✅ | 2026-07-29 | `packages/smart-ui/src/modules/transfer/` — tabel desktop + card mobile, form dengan scanner barcode, filter barang per gudang asal, validasi stok, cetak **Tiket Transfer** normal + thermal via `printToWindow()`. DI-based. |
+| **Inventory** | **Transfer: Page + Menu + Router** | ✅ | 2026-07-27 | `src/pages/transfer/index.js` thin wrapper. Menu "Transfer" 🚚 di Transaksi. Route `/transfer` permission `inventory.transfer.read`. |
+| **Inventory** | **Stock Opname: MongoDB Model + Route** | ✅ | 2026-07-30 | `server/models/StockOpname.js` — lifecycle draft → in_progress → completed (+cancelled), selisih stok. `server/routes/stock-opname.js` — CRUD + `PATCH /:id/status` + `POST /:id/reconcile` (stok sistem disesuaikan dengan stok fisik) + `GET /barang-stock`. |
+| **Inventory** | **Stock Opname: Data Service + Page** | ✅ | 2026-07-30 | `src/data/stock-opname-data.js` (list/get/create/update/delete/status/reconcile/getBarangForOpname). Tab 📋 **Stock Opname** di halaman Inventory (`pages/inventory/index.js`) — CRUD, card view, status flow, reconcile. |
+| **Inventory** | **Inventory Monitoring: Route + Data + Page** | ✅ | 2026-07-30 | `server/routes/inventory-monitoring.js` — stats, by-warehouse, low-stock, out-of-stock, recent-movement, stock-value. `src/data/inventory-data.js` + Tab 📊 **Stock Monitoring** di halaman Inventory. |
+| **Inventory** | **BarangGudang: Model + Route** | ✅ | 2026-07-27 | `server/models/BarangGudang.js` — stok per gudang (source of truth multi-warehouse). `server/routes/barang-gudang.js` — `GET /` + `POST /init`. |
+| **Infra** | **MongoDB Migration → Community Server** | ✅ | 2026-07-28 | Migrasi `mongodb-memory-server` → **MongoDB Community Server 8.0.28** (`mongod.service`, `/var/lib/mongodb`). Data 169 dokumen dipindah. Backup di `/srv/backup/inventory-migration/`. Detail: `docs/mongodb-migration-report.md`. |
+| **Framework** | **Scanner: Shared helpers** | ✅ | 2026-07-28 | `scannerSectionHTML()`, `scanButtonHTML()`, `attachScanner()` di `components/scanner/scanner.js` — dipakai bersama Barang, Pembelian, Penjualan, Transfer. Flash effect + beep + switch camera + destroy cleanup. |
+| **Framework** | **Dashboard: Stat Penjualan (6 kartu)** | ✅ | 2026-07-27 | Kartu stat 💰 **Penjualan** ditambahkan (total 6 kartu 1 baris desktop, 2 kolom HP). DI `listPembelian`/`listPenjualan`. |
+| **Framework** | **Barang: Auto-fill gudang dari rak + kode per gudang** | ✅ | 2026-07-29 | Pilih Rak → Gudang otomatis terisi. Validasi kode unik **per gudang** (kode sama di gudang beda dianggap valid). Card barang menampilkan gudang. |
+| **Framework** | **CrudModule: loadFormDependencies + validateForm** | ✅ | 2026-07-27 | Opsi baru di CrudModule: `loadFormDependencies()` (dropdown dinamis async) & `validateForm()` (custom validation sebelum submit). |
+| **Framework** | **API: Auto x-user-name header** | ✅ | 2026-07-27 | `fallback.js` auto-attach header `x-user-name` — prioritas SMART.Session → Auth.user → fallback, untuk activity logging. |
+| **Framework** | **PenjualanModule & TransferModule exports** | ✅ | 2026-07-29 | `@smart/ui` re-export `PenjualanModule` + `TransferModule` + `printToWindow`. |
+| **Inventory** | **Pembelian: Scanner barcode di form** | ✅ | 2026-07-29 | Form item Pembelian memakai shared scanner (📷 per baris) + cetak PO via `printToWindow()`. |
+
+## ═══════════════════════════════════════════════
+## PEMBELIAN — LAYOUT ITEM FORM MOBILE FIX (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **Pembelian: Ikon kamera di kanan-atas kolom Kode (mobile)** | ✅ | 2026-08-03 | `packages/smart-ui/src/modules/pembelian/index.js` — CSS `@media (max-width:768px)`. Ikon 📷 dipindah dari inline dalam input kode → `position:absolute` `right:0` di KANAN-ATAS kolom isian kode (scope `:has(.btn-scan)`). Input kode full-width, sejajar & sama ukuran dengan Nama Barang. |
+| **Framework** | **Pembelian: Subtotal SAMA PERSIS dengan field lain (mobile)** | ✅ | 2026-08-03 | Nilai subtotal diubah dari `<span>` → **`<input type="text" readonly>`** (PO + Retur) sehingga otomatis memakai rule `.po-item-row input` yang identik dengan Nama Barang/Harga/Diskon — label `::before` (min-width 70px, x=0) + input, tanpa padding ekstra di baris subtotal. Tombol **"Tutup"** (pengganti `[X]`) anchor pindah dari `.po-col-subtotal` ke card (`.po-item-row:has(.po-item-remove) { padding-bottom: 2.3rem }`), posisi tetap kanan-bawah di bawah field subtotal. `recalcRow`/`recalcReturRow` `textContent` → `.value`. `value` di-escape `esc()`. |
+| **Framework** | **Pembelian: Kolom Subtotal desktop 90px → 120px** | ✅ | 2026-08-03 | `grid-template-columns` di `.po-items-header`, `.po-item-row`, `.pr-items-header` diubah kolom terakhir 90px → 120px agar chip "Tutup" tidak menutupi digit nilai subtotal di desktop. Mobile tidak terpengaruh (flex layout). |
+| **Framework** | **Pembelian: Retur tidak terpengaruh** | ✅ | 2026-08-03 | Scope `:has()` memastikan baris Retur Pembelian (tanpa kamera/tombol X) tidak kena padding baru — layout retur ikut bersih tanpa `padding-right:1.5rem` yang lama. |
+| **Build** | **Build + Test** | ✅ | 2026-08-03 | Build inventory sukses. 509 tests PASS. ESLint: 0 issue baru (1 error + 11 warning sudah ada sebelum perubahan). |
+| **Framework** | **Pembelian: Format ribuan qty/harga/diskon** | ✅ | 2026-08-03 | Input qty, harga, diskon (PO + Retur) diubah `type=number` → `type=text inputmode=numeric` dengan helper `formatThousand()` (→ `15.000`) & `unformatThousand()` (→ 15000). Handler focus (angka mentah) + blur (format ulang), sanksi digit-only di `input` (anti desimal), `findAndFillBarang` format harga, semua pembaca nilai (recalcRow, calcTotals, handleSubmit, retur) pakai `unformatThousand`. Konsisten dengan format Subtotal. |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## PEMBELIAN — Toolbar HP & Retur Manual (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Pembelian: Toolbar HP 1 baris** | ✅ | 2026-08-03 | Search-wrapper flex:1 + min-width:0, page-actions flex-wrap:nowrap, button flex-shrink:0. Pencarian & tombol '+Buat PO Baru' jadi 1 baris di HP. |
+| **Inventory** | **Retur Pembelian: Input Manual** | ✅ | 2026-08-03 | Mode select (PO/Manual) di modal retur. Manual: input kode editable+scanner, +Tambah Item Barang, nama/harga/qty editable, tombol Tutup. Datalist auto-fill. Submit tanpa PO. |
+| **Inventory** | **Retur Pembelian: Qty Stok (manual)** | ✅ | 2026-08-03 | Mode manual: kolom Qty PO → Qty Stok, terisi otomatis dari field `stok` master barang via datalist. Validasi qty retur max = stok (PO tetap max = qty PO). |
+| **Bugfix** | **attachScanner import + server restart** | ✅ | 2026-08-03 | Fix `ReferenceError: attachScanner is not defined` (import hilang di pembelian). Restart pm2 `inventory-api` → route `/api/retur-pembelian` aktif (sebelumnya 404, server 5 hari belum restart). |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## RETUR PEMBELIAN — SUPPLIER DROPDOWN (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Retur Pembelian: Supplier (Kode) & (Nama) jadi dropdown master** | ✅ | 2026-08-03 | Kedua field diubah dari `<input readonly>` → `<select>` di-populate dari `listSupplier`. Cross-fill: pilih kode → nama auto-terisi, pilih nama → kode auto-terisi. Mode PO: select disabled, nilai otomatis dari PO (prefer nama master jika kode cocok). Mode Manual: select enabled. Fallback option otomatis ditambahkan jika supplier lama tidak ada di master (tidak hilang saat edit). |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## RETUR PEMBELIAN — TOMBOL TUTUP DESKTOP & SUPPLIER PO (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Retur: tombol Tutup setelah kolom Subtotal (desktop)** | ✅ | 2026-08-03 | Tombol dipindah keluar dari span subtotal → grid item ke-8. `.pr-item-row:has(.po-item-remove)` + `.pr-items-header` jadi 8 kolom (`...120px auto`), tombol `position:static; justify-self:start` → tepat setelah field Subtotal (sebelumnya berada di tengah antara Harga & Qty Retur). Mobile tidak berubah (media query tetap menang). |
+| **Inventory** | **Retur: supplier disembunyikan di mode PO** | ✅ | 2026-08-03 | Baris Supplier (Kode) & (Nama) dibungkus `#pr-supplier-section` (display:none default). Mode PO: tersembunyi (PO sudah include supplier). Mode Manual: ditampilkan + enabled. Nilai tetap diset/dikirim saat tersembunyi. |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## RETUR PEMBELIAN — FIX 400 MANUAL MODE (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Bugfix** | **Retur manual: POST 400 → 201** | ✅ | 2026-08-03 | Server `validateItemsAgainstPo` mengembalikan `"Referensi PO wajib diisi"` (400) saat `idPO` kosong — retur manual (tanpa PO) selalu ditolak. Fix: `if (!idPO) return null` (lewati validasi PO di mode manual, berlaku untuk POST & PUT). Toast "berhasil" semu muncul karena `apiFetch` menelan 4xx → fallback lokal. Setelah fix, data tersimpan ke MongoDB. Restart pm2 + verifikasi curl: POST manual → 201, DELETE → 200. |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## PEMBELIAN (PO) — TOMBOL TUTUP DESKTOP (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **PO: tombol Tutup setelah kolom Subtotal (desktop)** | ✅ | 2026-08-03 | Tombol dipindah keluar dari span subtotal → grid item ke-8 (sama seperti Retur). Aturan CSS di-generalisasi: `.po-item-row:has(.po-item-remove)` + `.po-item-row .po-item-remove { position:static; justify-self:start }` → berlaku untuk PO & Retur. `.po-items-header` dapat kolom `auto` ke-8. Mobile tidak berubah (media query tetap menang). |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## PENJUALAN & TRANSFER — PARITAS UX DENGAN PEMBELIAN (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **Penjualan: format ribuan qty/harga/diskon** | ✅ | 2026-08-03 | Helper `formatThousand`/`unformatThousand` + input `text inputmode=numeric` (focus→mentah, blur→format, digit-only). Semua pembaca nilai (recalc/calcTotals/submit/fill/f-diskon) pakai `unformatThousand`. Subtotal jadi `<input readonly>` identik field lain. |
+| **Framework** | **Penjualan: tombol Tutup setelah Subtotal (desktop)** | ✅ | 2026-08-03 | Grid 8 kolom (`100px 180px 50px 60px 80px 70px 90px auto`) utk `.ps-items-header`/`.ps-item-row`/`.prj-items-header`; tombol `[X]` → chip "Tutup"; mobile tombol di kanan-bawah card (`padding-bottom:2.3rem`). |
+| **Framework** | **Penjualan: ikon kamera kanan-atas + toolbar HP 1 baris** | ✅ | 2026-08-03 | `:has(.btn-scan) .ps-col-code { padding-top:1.7rem }` + tombol 📷 absolute kanan-atas. Toolbar mobile: `page-header` column, `page-actions` justify-end, search flex:1 → pencarian + tombol "Buat SO Baru" 1 baris di bawah judul. |
+| **Inventory** | **Retur Penjualan: opsi Input Manual** | ✅ | 2026-08-03 | Mode select (SO/Manual) di modal retur. Manual: kode editable+scanner, +Tambah Item Barang, nama/harga editable, Qty Stok (dari barang.stok), tombol Tutup, pelanggan dropdown master (cross-fill kode↔nama, tersembunyi di mode SO). Submit tanpa SO (`idSO:""`, `nomorSO:"(Manual)"`). Edit retur manual didukung. Scanner re-attach setelah tambah item. |
+| **Framework** | **Transfer: format qty + tombol Tutup + kamera + toolbar** | ✅ | 2026-08-03 | Qty format ribuan; grid 5 kolom (`...auto`); tombol `[X]` → "Tutup"; kamera kanan-atas; toolbar HP 1 baris. |
+| **Bugfix** | **Server: retur-penjualan mode manual** | ✅ | 2026-08-03 | `validateItemsAgainstSo`: `if (!idSO) return null` (lewati validasi SO di mode manual, POST & PUT). Verifikasi curl: POST manual → 201, DELETE → 200. Restart pm2. |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## SPRINT 8 — LAPORAN MODULE (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Laporan: Server route** | ✅ | 2026-08-03 | `server/routes/laporan.js` — 7 endpoint: `/stock` (per barang + nilaiBeli/nilaiJual + statusStok aman/menipis/habis), `/purchase` & `/sales` (filter tanggal startDate/endDate + search + summary), `/inventory-value` (total + by gudang/kategori), `/mutation` (gabung Pembelian received, Penjualan delivered/invoiced/paid, Transfer transferred, Retur Pembelian/Penjualan returned, Opname completed), `/supplier` & `/customer` (group PO/SO per partner + merge master kontak). Semua company-scoped via `x-company-code`. Validasi tanggal invalid → 400. |
+| **Inventory** | **Laporan: Data service** | ✅ | 2026-08-03 | `src/data/laporan-data.js` — API-first via `apiCall`, fallback komputasi lokal dari data service existing (listBarang/listPembelian/dll). Export di `data/index.js`. |
+| **Framework** | **LaporanModule → smart-ui** | ✅ | 2026-08-03 | `packages/smart-ui/src/modules/laporan/` — 7 tab laporan, toolbar search + filter tanggal, summary cards, tabel desktop + scroll horizontal, pagination, cetak via `printToWindow()` + `buildPrintHTML()` (header company + TTD). Race-condition guard antar tab, printValue 1 dokumen dengan page-break. DI-based. |
+| **Inventory** | **Laporan: Page + Route** | ✅ | 2026-08-03 | `src/pages/report/index.js` thin wrapper. Route `/report` (sebelumnya placeholder) pakai LaporanPage, permission `inventory.report.view` (sudah ada di seed). |
+| **Build & Deploy** | **Validasi** | ✅ | 2026-08-03 | 509/509 tests PASS, build sukses, server restart. Curl live: semua 7 endpoint → 200, data nyata (PO-03082026-0003, Aquaviva dll). Invalid date → 400. |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## LAPORAN — MENU RENAME + LABA-RUGI + PIUTANG (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Inventory** | **Menu sidebar: Inventory→Persediaan, Report→Laporan** | ✅ | 2026-08-03 | `config/menu.js` — title diubah, page key & permission tidak berubah (tidak ada break pada route/breadcrumb). |
+| **Inventory** | **Laporan Laba-Rugi (detail & rekap)** | ✅ | 2026-08-03 | Tab 💹 Laba-Rugi. Server `GET /laporan/labarugi` — SO status delivered/invoiced/paid; **HPP = qty × harga_beli** (map dari master Barang by kode); **Laba Kotor = Penjualan − HPP**; mode `detail` (per SO, paginated) & `rekap` (per bulan + margin %); summary margin otomatis. Fallback lokal di `laporan-data.js`. UI: sub-view Detail/Rekap, search + filter tanggal, kartu summary, cetak via `printToWindow`. Catatan: item yang kodenya tidak ada di master Barang dihitung HPP 0 (laba kotor ter-inflasi) — limitasi diketahui. |
+| **Inventory** | **Laporan Piutang (belum lunas + overdue)** | ✅ | 2026-08-03 | Tab 📋 Piutang. Server `GET /laporan/piutang` — SO status delivered/invoiced (belum lunas); **jatuh tempo = tanggalInvoice (atau tanggalSJ/tanggal) + termDays** (default 30, bisa diubah di UI); badge 🟢 Belum tempo / ⚠️ Overdue / 🗓️ Hari ini; summary total piutang, belum jatuh tempo, total overdue, jumlah overdue; filter tanggal + search; cetak. |
+| **Framework** | **Bugfix: search/date/pagination laporan tidak re-render** | ✅ | 2026-08-03 | Semua `loadX().then` hanya set state tanpa `renderContent()` → search/filter/pagination di SEMUA tab laporan tidak pernah update tabel. Fix: `renderContent()` + guard `state.activeTab` di setiap loader; `loadLabarugi` tambah guard view (detail/rekap) anti response basi; toggle view render instan. |
+| **Framework** | **Laba negatif tampil merah** | ✅ | 2026-08-03 | `.lpr-laba-cell.neg { color:#dc2626 }` — rugi tampil merah, untung hijau. |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
+
+## ═══════════════════════════════════════════════
+## SETTING — PERMISSION & ROLE COMPLETE OVERHAUL (2026-08-03)
+## ═══════════════════════════════════════════════
+
+| Roadmap | Task | Status | Date | Notes |
+|---------|------|--------|------|-------|
+| **Framework** | **Catalog permission lengkap: inventory.rak.*** | ✅ | 2026-08-03 | `PERMISSION_CATALOG` di settings-data.js ditambah `inventory.rak.read/create/update/delete` — sebelumnya menu & route Rak Etalase pakai `inventory.rak.read` tapi tidak ada di catalog → tidak bisa dicentang di halaman Permission. |
+| **Framework** | **Checkbox grant/revoke sinkron ke sesi aktif** | ✅ | 2026-08-03 | `grantPermissionToRole`/`revokePermissionFromRole` kini memanggil `Permission.grant()/revoke()` dari @smart/core (hanya jika persist sukses, guard `if (ok)`) → `Permission.can()` langsung akurat tanpa login ulang; route guard & menu langsung terpengaruh. |
+| **Framework** | **Role kustom tampil di form User** | ✅ | 2026-08-03 | `getRoleOptions()` jadi async: gabungan role bawaan + role kustom dari `listRoles()`; `SettingsUserModule.openForm` kini `await getRoleOptions()` — role yang dibuat di Setting→Role bisa dipilih saat membuat/editing user. |
+| **Framework** | **Sidebar refresh otomatis setelah permission berubah** | ✅ | 2026-08-03 | DI baru `onPermissionsChanged` di `SettingsPermissionModule` → page wrapper resync `Permission.syncFromServer()` + `window.__app.refreshSidebarMenus()` (re-filter menu + re-render `.sidebar-menu` tanpa kehilangan halaman aktif). |
+| **Framework** | **Checkbox handler cek return value** | ✅ | 2026-08-03 | Gagal grant/revoke (return falsy) → checkbox di-revert + toast danger (sebelumnya selalu tampil sukses). |
+| **Inventory** | **Server: proteksi role bawaan** | ✅ | 2026-08-03 | DELETE role supervisor/operator/admin/owner/superadmin → 400. PUT tidak bisa ganti `name` role bawaan (memutus linkage user→permission). Label/level tetap bisa diedit. |
+| **Inventory** | **Server: cleanup & linkage role↔permission** | ✅ | 2026-08-03 | DELETE role → hapus dokumen `Permission` miliknya. POST create role → auto-buat dokumen Permission kosong (`ensurePermissionDoc`). |
+| **Inventory** | **Seed: format permission baru + migrasi idempotent** | ✅ | 2026-08-03 | `PERMISSION_TEMPLATES` seed diganti ke namespace baru (`inventory.barang.read` dst). `repairRolePermissions()` (idempotent, tiap boot): map format lama→baru (`barang.view`→`inventory.barang.read`, `purchase.approve`→`inventory.pembelian.approve`, `unit.*`→`satuan.*`, dst), buang garbage 1–2 segmen, pertahankan SEMUA permission namespace ≥3 segmen (future-proof, `audit.view` dll tidak ikut terbuang), pastikan doc role bawaan ada. Verifikasi live: 3 dokumen ter-normalisasi, tidak ada format lama tersisa. |
+
+---
+## Legend
+| Status | Meaning |
+|--------|---------|
+| ✅ | Done |
+| ⬜ | Pending |
+| ❌ | Blocked / Problem |
