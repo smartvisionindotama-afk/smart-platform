@@ -17,7 +17,7 @@ import { AppShell } from "@smart/ui/layouts";
 
 import menus from "./config/menu";
 import { navigate } from "./router";
-import { configureKasirShell } from "./pages/pos";
+import { configureKasirShell, requestKasirLogout } from "./pages/pos";
 import { LoginPage, initLoginPage } from "./pages/login";
 import { ResetPasswordPage, initResetPasswordPage } from "./pages/reset-password";
 import { RegisterPage, initRegisterPage } from "./pages/register";
@@ -28,6 +28,7 @@ import {
     clearAuthTokens,
     getAccessToken,
     getRefreshToken,
+    refreshAccessToken,
     apiCall
 } from "./data/api.js";
 import { getCompanyConfig, saveCompanyConfig, refreshCompanyConfig, filterMenusByLokasi, lisensiLabel } from "./config/company-config.js";
@@ -763,6 +764,49 @@ function platformUrl(path) {
 }
 
 /**
+ * Fetch dengan timeout (AbortController) — mencegah halaman login menggantung
+ * saat salah satu endpoint logo/config lambat (SP-029 M6-FIX perf).
+ * @param {string} url
+ * @param {object} [options]
+ * @param {number} [timeoutMs] Batas waktu default 5000ms
+ * @returns {Promise<Response|null>} null saat gagal/timeout
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * Resolve logo halaman login dengan prioritas:
+ * 1. stored superadmin logo (localStorage)
+ * 2. app-specific logo (POS) dari Master Platform
+ * 3. platform logo / company logo (fallback)
+ * Semua fetch dibatasi timeout — aman dipanggil paralel.
+ * @returns {Promise<string|null>}
+ */
+async function resolveLoginLogo() {
+    try {
+        const stored = localStorage.getItem("smart_superadmin_logo");
+        if (stored) return stored;
+    } catch { /* ignore */ }
+
+    const resp = await fetchWithTimeout(platformUrl("/api/platform/app-logo/pos"));
+    if (resp && resp.ok) {
+        const data = await resp.json().catch(() => null);
+        if (data && data.logo) return data.logo;
+    }
+
+    return fetchCompanyLogo();
+}
+
+/**
  * Ambil Google OAuth Client ID dari server (public config, bukan secret).
  * Server adalah sumber kebenaran konfigurasi Google — sebelum hardening ini
  * client mengandalkan VITE_GOOGLE_CLIENT_ID yang tidak pernah ter-set saat
@@ -770,13 +814,11 @@ function platformUrl(path) {
  * @returns {Promise<string>} Client ID atau string kosong
  */
 async function fetchGoogleClientId() {
-    try {
-        const resp = await fetch("/api/auth/google/config");
-        if (resp.ok) {
-            const data = await resp.json();
-            if (data && data.clientId) return data.clientId;
-        }
-    } catch { /* silent */ }
+    const resp = await fetchWithTimeout("/api/auth/google/config");
+    if (resp && resp.ok) {
+        const data = await resp.json().catch(() => null);
+        if (data && data.clientId) return data.clientId;
+    }
     return "";
 }
 
@@ -786,31 +828,11 @@ async function fetchGoogleClientId() {
  * fallback ke company logo. Sidebar tetap pakai logo masing-masing company.
  */
 async function showLogin() {
-    // Prioritaskan stored superadmin logo untuk login page
-    let logoUrl = null;
-    try { logoUrl = localStorage.getItem("smart_superadmin_logo"); } catch { /* ignore */ }
-
-    // Fallback: app-specific logo (Inventory) yg diupload dari Super Admin tab Aplikasi
-    if (!logoUrl) {
-        try {
-            const resp = await fetch(platformUrl("/api/platform/app-logo/pos"));
-            if (resp.ok) {
-                const data = await resp.json();
-                if (data && data.logo) logoUrl = data.logo;
-            }
-        } catch { /* silent */ }
-    }
-
-    // Fallback: platform logo or company logo
-    if (!logoUrl) {
-        logoUrl = await fetchCompanyLogo();
-    }
-    if (logoUrl) setFavicon(logoUrl);
-
-    // Google Sign-In: ambil client ID dari server (inv.e-profit.id)
-    const googleClientId = await fetchGoogleClientId();
-
-    document.querySelector("#app").innerHTML = LoginPage({ logo: logoUrl });
+    // SP-029 M6-FIX — render form login SEGERA tanpa menunggu fetch lambat.
+    // googleConfig dibaca login module saat tombol Google DIKLIK (bukan saat
+    // init), jadi clientId aman diisi belakangan setelah fetch selesai.
+    const googleConfig = {};
+    document.querySelector("#app").innerHTML = LoginPage({});
     initLoginPage({
         onSuccess: async () => {
             // Normal user → boot app (role kasir = kasir standalone)
@@ -819,10 +841,29 @@ async function showLogin() {
         // onRegisterClick dipakai link "Daftar" & fallback Google (login module
         // membaca googleConfig.onRegisterClick || onRegisterClick).
         onRegisterClick: (prefill) => { (window.__showRegister || showRegister)(prefill); },
-        googleConfig: {
-            clientId: googleClientId
-        }
+        googleConfig
     });
+
+    // Resolve logo + Google client ID secara PARALEL (masing-masing dengan
+    // timeout) — sebelumnya berurutan & tanpa timeout, sehingga halaman login
+    // bisa menggantung beberapa menit saat salah satu endpoint lambat.
+    const [logoUrl, clientId] = await Promise.all([
+        resolveLoginLogo(),
+        fetchGoogleClientId()
+    ]);
+    if (clientId) googleConfig.clientId = clientId;
+    if (logoUrl) {
+        setFavicon(logoUrl);
+        const img = document.querySelector(".login-logo-img");
+        if (img) {
+            img.src = encodeURI(logoUrl);
+        } else {
+            const logoBox = document.querySelector(".login-card .logo");
+            if (logoBox && logoBox.textContent.trim() === "🚀") {
+                logoBox.innerHTML = `<img src="${encodeURI(logoUrl)}" alt="Logo" class="login-logo-img" />`;
+            }
+        }
+    }
 }
 
 
@@ -850,25 +891,21 @@ function setFavicon(url) {
 async function fetchCompanyLogo() {
     // Priority 1: Platform logo (uploaded from Pengaturan Super Admin) —
     // disimpan di server Console (master.e-profit.id)
-    try {
-        const resp = await fetch(platformUrl("/api/platform/logo"));
-        if (resp.ok) {
-            const data = await resp.json();
-            if (data && data.logo) return data.logo;
-        }
-    } catch { /* silent */ }
+    const resp1 = await fetchWithTimeout(platformUrl("/api/platform/logo"));
+    if (resp1 && resp1.ok) {
+        const data = await resp1.json().catch(() => null);
+        if (data && data.logo) return data.logo;
+    }
 
     // Priority 2: Company logo fallback — data company juga di server Console
-    try {
-        const resp = await fetch(platformUrl("/api/companies"));
-        if (resp.ok) {
-            const data = await resp.json();
-            const list = data?.data || data || [];
-            const companies = Array.isArray(list) ? list : Object.values(list);
-            const company = companies.find(c => c?.logo) || companies[0];
-            return company?.logo || null;
-        }
-    } catch { /* silent */ }
+    const resp2 = await fetchWithTimeout(platformUrl("/api/companies"));
+    if (resp2 && resp2.ok) {
+        const data = await resp2.json().catch(() => null);
+        const list = data?.data || data || [];
+        const companies = Array.isArray(list) ? list : Object.values(list);
+        const company = companies.find(c => c?.logo) || companies[0];
+        return company?.logo || null;
+    }
     return null;
 }
 
@@ -910,11 +947,45 @@ function handleLogout() {
         exitImpersonation();
         return;
     }
-    revokeSession();
-    SMART.Company.clear();
-    Auth.logout();
-    clearAuthTokens();
-    showLogin();
+    // M6-FIX v3 — kasir TIDAK boleh logout selama shift masih terbuka:
+    // wajib tutup shift dulu (modal Tutup Shift), baru logout. Guard ganda
+    // (tombol kasir + jalur AppShell/manapun yang memanggil handleLogout).
+    const doLogout = () => {
+        revokeSession();
+        SMART.Company.clear();
+        Auth.logout();
+        clearAuthTokens();
+        showLogin();
+    };
+    if (isKasirRole()) {
+        requestKasirLogout(doLogout);
+        return;
+    }
+    doLogout();
+}
+
+
+/**
+ * Cek apakah access token (JWT) sudah kedaluwarsa berdasarkan klaim `exp`
+ * (di-decode lokal, tanpa network). Dipakai refresh preventif sebelum /me
+ * agar tidak ada request 401 yang menampilkan error di console browser.
+ * @param {string} token
+ * @returns {boolean} true bila token pasti kedaluwarsa / tidak ter-decode
+ */
+function isJwtExpired(token) {
+    try {
+        const parts = String(token || "").split(".");
+        if (parts.length !== 3) return true;
+        // JWT payload = base64url → pad & ganti karakter utk globalThis.atob
+        const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+        const payload = JSON.parse(globalThis.atob(padded));
+        if (!payload || !payload.exp) return true;
+        return Number(payload.exp) * 1000 <= Date.now();
+    } catch {
+        // Gagal decode → anggap kedaluwarsa (aman: refresh via cookie)
+        return true;
+    }
 }
 
 
@@ -1020,18 +1091,8 @@ async function start() {
 
     if (window.location.pathname === "/reset-password" && resetToken && resetEmail) {
         // Set favicon sama seperti halaman login / superadmin
-        let logoUrl = null;
-        try { logoUrl = localStorage.getItem("smart_superadmin_logo"); } catch {}
-        if (!logoUrl) {
-            try {
-                const resp = await fetch(platformUrl("/api/platform/app-logo/pos"));
-                if (resp.ok) {
-                    const data = await resp.json();
-                    if (data && data.logo) logoUrl = data.logo;
-                }
-            } catch { /* silent */ }
-        }
-        if (!logoUrl) logoUrl = await fetchCompanyLogo();
+        // (reuse resolveLoginLogo — fetch dibatasi timeout, tidak menggantung)
+        const logoUrl = await resolveLoginLogo();
         if (logoUrl) setFavicon(logoUrl);
 
         document.querySelector("#app").innerHTML = ResetPasswordPage(resetToken, resetEmail);
@@ -1040,29 +1101,40 @@ async function start() {
     }
 
     // ── SP-027 M3: restore sesi dari access token (verifikasi server via /me) ──
+    // M6-FIX v4: refresh PREVENTIF bila access token sudah kedaluwarsa (decode
+    // klaim exp JWT lokal) SEBELUM memanggil /me. Tanpa ini, /me dipanggil
+    // dengan token mati → server balas 401 → error merah di console browser
+    // tiap kali halaman dimuat ulang (tidak mengganggu aplikasi, tapi
+    // mengganggu pandangan). Refresh memakai httpOnly cookie — tanpa 401.
     const accessToken = getAccessToken();
     if (accessToken) {
         try {
-            const res = await fetch("/api/auth/me", {
-                credentials: "include",
-                headers: { Authorization: `Bearer ${accessToken}` }
-            });
-            if (res.ok) {
-                const me = await res.json();
-                Auth.currentUser = {
-                    id: String(me.id),
-                    name: me.name,
-                    email: me.email,
-                    institution: me.institution,
-                    role: me.role
-                };
-                SMART.Session.restore();
-                console.log("User (restored):", Auth.user().name);
-                await bootApp();
-                return;
+            let meToken = accessToken;
+            if (isJwtExpired(accessToken)) {
+                meToken = await refreshAccessToken();
             }
-            console.warn("[App] Sesi tidak valid (" + res.status + "), kembali ke login");
-            clearAuthTokens();
+            if (meToken) {
+                const res = await fetch("/api/auth/me", {
+                    credentials: "include",
+                    headers: { Authorization: `Bearer ${meToken}` }
+                });
+                if (res.ok) {
+                    const me = await res.json();
+                    Auth.currentUser = {
+                        id: String(me.id),
+                        name: me.name,
+                        email: me.email,
+                        institution: me.institution,
+                        role: me.role
+                    };
+                    SMART.Session.restore();
+                    console.log("User (restored):", Auth.user().name);
+                    await bootApp();
+                    return;
+                }
+                console.warn("[App] Sesi tidak valid (" + res.status + "), kembali ke login");
+                clearAuthTokens();
+            }
         } catch (e) {
             console.warn("[App] Gagal memverifikasi sesi:", e);
             clearAuthTokens();

@@ -23,6 +23,7 @@
 import { Modal, Table, Pagination, EmptyState, Alert, showToast, UI, printToWindow } from "@smart/ui";
 import { scannerSectionHTML, scanButtonHTML, attachScanner } from "@smart/ui";
 import QRCode from "qrcode";
+import { esc, formatThousand, unformatThousand, formatDate } from "@smart/core";
 
 // ═══════════════════════════════════════════════
 //  State
@@ -40,41 +41,8 @@ let state = {
 //  Helpers
 // ═══════════════════════════════════════════════
 
-function esc(str) {
-    if (str === null || str === undefined) return "";
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-function formatDate(iso) {
-    if (!iso) return "-";
-    try {
-        return new Date(iso).toLocaleDateString("id-ID", {
-            year: "numeric", month: "short", day: "numeric"
-        });
-    } catch { return "-"; }
-}
-
-/**
- * Format angka menjadi format ribuan Indonesia: 15000 → "15.000".
- */
-function formatThousand(v) {
-    const n = Math.round(Number(v) || 0);
-    return n.toLocaleString("id-ID");
-}
-
-/**
- * Ubah string berformat ribuan ("15.000") menjadi angka bulat (15000).
- */
-function unformatThousand(v) {
-    if (v === null || v === undefined) return 0;
-    const cleaned = String(v).replace(/[^\d]/g, "");
-    return cleaned ? parseInt(cleaned, 10) : 0;
-}
+// Framework First: formatDate/formatThousand/unformatThousand dari
+// @smart/core (util global, bukan duplikat lokal)
 
 function statusBadgeHTML(status) {
     const map = {

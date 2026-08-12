@@ -16,7 +16,6 @@
     "./workspaces/engine": "./src/workspaces/engine.js",
     "./workspaces/*": "./src/workspaces/*/index.js",
     "./modules/settings": "./src/modules/settings/index.js",
-    "./modules/platform": "./src/modules/platform/index.js",
     "./modules/auth/*": "./src/modules/auth/*.js",
     "./modules/master-crud": "./src/modules/master-crud/index.js"
   },

@@ -25,7 +25,12 @@ const shiftSchema = new mongoose.Schema({
     totalPenjualan: { type: Number, default: 0 }, // grandTotal (termasuk pajak)
     totalPajak: { type: Number, default: 0 },
     totalDiskon: { type: Number, default: 0 },
-    // expected = kasAwal + totalPenjualan - totalVoid (V1: void tidak dihitung)
+    // M6-FIX v3 — breakdown metode bayar saat tutup shift: tunai (cash) vs
+    // non-tunai (transfer/qris/card). Kas diharapkan = kasAwal + penjualanTunai.
+    penjualanTunai: { type: Number, default: 0 },
+    penjualanNonTunai: { type: Number, default: 0 },
+    // expected = kasAwal + penjualanTunai (pembayaran non-tunai tidak menambah
+    // uang fisik di laci — V1: void tidak dihitung)
     expectedCash: { type: Number, default: 0 },
     // actual = hasil hitung fisik kasir (input saat close)
     actualCash: { type: Number, default: 0 },

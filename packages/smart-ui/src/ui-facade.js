@@ -99,6 +99,54 @@ export function showToast(variant, message) {
     setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3500);
 }
 
+/**
+ * Print HTML ke dialog print browser (jendela baru).
+ *
+ * Utility bersama untuk cetak dokumen (SO, Surat Jalan, Invoice, dll).
+ * Restorasi export yang sempat hilang saat ekstraksi domain (SP-025).
+ *
+ * @param {string} html HTML yang akan dicetak (boleh dokumen penuh atau fragment)
+ * @param {string} [title="Print"] Judul jendela cetak
+ * @param {boolean} [usePopup=false] Cadangan (dipetakan ke mode popup)
+ */
+export function printToWindow(html, title = "Print", _usePopup = false) {
+    const printWindow = window.open("", "_blank", "width=900,height=650");
+    if (!printWindow) {
+        console.warn("[UI] printToWindow: popup diblokir browser");
+        return;
+    }
+
+    const isFullDocument = /<!doctype\s+html|<html[\s>]/i.test(html || "");
+    const documentContent = isFullDocument
+        ? html
+        : `<!doctype html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <title>${String(title).replace(/[<>&"]/g, "")}</title>
+    <style>
+        body { font-family: 'Inter', system-ui, sans-serif; color: #1e293b; margin: 0; padding: 24px; }
+        @media print { body { padding: 0; } }
+    </style>
+</head>
+<body>${html}</body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(documentContent);
+    printWindow.document.close();
+    printWindow.focus();
+
+    const timer = setInterval(() => {
+        if (printWindow.document.readyState === "complete") {
+            clearInterval(timer);
+            setTimeout(() => {
+                try { printWindow.print(); } catch { /* abaikan */ }
+            }, 50);
+        }
+    }, 100);
+}
+
 // ── Attach SMART.UI to globalThis for console access ──
 if (typeof globalThis !== "undefined") {
     try {

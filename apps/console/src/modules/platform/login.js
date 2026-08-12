@@ -9,6 +9,7 @@
  */
 
 import { showForgotPasswordModal } from "@smart/ui/modules/auth/forgot-password";
+import { initPasswordToggle } from "@smart/ui/modules/auth/password-toggle";
 
 // Resolve logo: prefer stored superadmin logo, fallback to company API
 async function resolveLogo() {
@@ -71,7 +72,10 @@ export function SuperAdminLoginPage({ logo } = {}) {
 
                 <div class="form-group">
                     <label for="sa-login-password">Password</label>
-                    <input type="password" id="sa-login-password" placeholder="Masukkan password" autocomplete="current-password" />
+                    <div class="password-wrapper">
+                        <input type="password" id="sa-login-password" placeholder="Masukkan password" autocomplete="current-password" />
+                        <button type="button" id="sa-login-password-toggle" class="password-toggle" title="Tampilkan password" aria-label="Tampilkan password">👁</button>
+                    </div>
                     <div class="login-forgot"><a id="sa-login-forgot-link">Lupa Password?</a></div>
                 </div>
 
@@ -155,6 +159,15 @@ export function initSuperAdminLoginPage({ onSuccess, onBackToUser: _onBackToUser
                 role: "superadmin"
             };
 
+            // SP-027 M3: simpan JWT pair (access + refresh) via hook aplikasi
+            try {
+                if (typeof window !== "undefined" && typeof window.__SMART_AUTH_TOKEN_HOOK__ === "function") {
+                    window.__SMART_AUTH_TOKEN_HOOK__(userData);
+                }
+            } catch (err) {
+                console.warn("[SuperAdminLogin] Token hook error:", err);
+            }
+
             if (typeof onSuccess === "function") {
                 onSuccess();
             }
@@ -167,6 +180,9 @@ export function initSuperAdminLoginPage({ onSuccess, onBackToUser: _onBackToUser
     }
 
     btn.addEventListener("click", handleLogin);
+
+    // M3-FIX v28g — eye toggle via shared helper (@smart/ui/modules/auth/password-toggle)
+    initPasswordToggle("sa-login-password", "sa-login-password-toggle");
 
     // Forgot password
     document.getElementById("sa-login-forgot-link")?.addEventListener("click", showForgotPasswordModal);
@@ -290,5 +306,14 @@ function getStyles() {
     color: #dc2626; text-decoration: none; cursor: pointer; transition: color 0.15s;
 }
 .sa-login-card .login-forgot a:hover { color: #b91c1c; text-decoration: underline; }
+.sa-login-card .password-wrapper { position: relative; }
+.sa-login-card .password-wrapper input { padding-right: 44px; }
+.sa-login-card .password-toggle {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: 0; cursor: pointer; font-size: 1.1rem;
+    padding: 5px; line-height: 1; opacity: 0.6; transition: opacity 0.15s, background 0.15s;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+}
+.sa-login-card .password-toggle:hover { opacity: 1; background: #f1f5f9; }
 `;
 }

@@ -77,7 +77,7 @@
 | **PM2 Autostart** | ✅ **enabled** — pm2-smartvision.service |
 | **API Health** | ✅ `{"status":"ok"}` — http://localhost:3001/api/health |
 | **Login (admin)** | ✅ `operator/operator123` — role: operator |
-| **Login (owner)** | ✅ `fejsingtop/Nadazalfa00!` — role: owner |
+| **Login (owner)** | ✅ `fejsingtop/******** — role: owner |
 
 ---
 

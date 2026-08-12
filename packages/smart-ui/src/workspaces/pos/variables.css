@@ -1,0 +1,25 @@
+:root {
+
+    /* SMART Kasir brand override */
+    --primary:
+        #059669;
+
+    --secondary:
+        #6d28d9;
+
+
+    /* Layout */
+    --sidebar-bg:
+        #064e3b;
+
+    --sidebar-text:
+        #ecfdf5;
+
+
+    --topbar-bg:
+        var(--surface);
+
+    --topbar-text:
+        #064e3b;
+
+}

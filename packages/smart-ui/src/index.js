@@ -39,9 +39,6 @@ export { loadWorkspace } from "./workspaces/engine.js";
 /** @deprecated Gunakan Settings modules via DI */
 export * from "./modules/settings/index.js";
 
-/** @deprecated Gunakan Platform modules via DI */
-export * from "./modules/platform/index.js";
-
 /** @deprecated Gunakan Auth modules via DI */
 export * from "./modules/auth/index.js";
 

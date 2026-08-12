@@ -94,6 +94,16 @@ export async function apiCall(method, path, body = null) {
             if (user?.name) headers["x-user-name"] = user.name;
         }
     } catch {}
+    // M6-FIX v3 — fallback: POS tidak selalu set SMART.Session user; pakai
+    // Auth.user() agar x-user-name selalu terisi (dipakai server utk nama kasir
+    // pada open shift & activity log).
+    try {
+        if (!headers["x-user-name"]) {
+            const { Auth } = await import("@smart/core");
+            const authUser = Auth.user && Auth.user();
+            if (authUser && authUser.name) headers["x-user-name"] = authUser.name;
+        }
+    } catch {}
 
     const options = {
         method,

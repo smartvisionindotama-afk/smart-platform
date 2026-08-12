@@ -95,5 +95,25 @@ export function posDashboardCSS() {
 @media (max-width: 900px) {
     .pos-dash-grid { grid-template-columns:1fr; }
 }
+
+/* ── M6-FIX v3 — Ringkasan Tutup Shift (saldo awal, tunai, non-tunai) ── */
+.shift-summary {
+    display:grid; gap:6px;
+    border:1px solid var(--smart-border,#e2e8f0); border-radius:8px;
+    padding:10px 12px; margin-bottom:10px; background:#f8fafc;
+}
+[data-theme="dark"] .shift-summary { background:#0f172a; border-color:#334155; }
+.shift-summary-row {
+    display:flex; justify-content:space-between; gap:12px; font-size:13px;
+    color:var(--smart-text-primary,#1e293b);
+}
+.shift-summary-row strong { font-variant-numeric:tabular-nums; }
+.shift-summary-sub { padding-top:4px; border-top:1px dashed #cbd5e1; }
+.shift-summary-expected { padding-top:6px; border-top:1px solid #cbd5e1; font-weight:700; }
+.shift-summary-expected strong { color:var(--smart-primary,#10b981); }
+.shift-selisih { margin-top:6px; font-size:13px; }
+.shift-selisih-ok { color:#059669; font-weight:600; }
+.shift-selisih-warn { color:#b45309; font-weight:600; }
+.shift-selisih-minus { color:#dc2626; }
 `;
 }

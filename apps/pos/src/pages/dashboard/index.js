@@ -15,17 +15,14 @@
  * @module pos/pages/dashboard
  */
 
-import { Auth } from "@smart/core";
+import { Auth, esc } from "@smart/core";
 import { apiCall } from "../../data/api.js";
 import { formatRupiah } from "../../data/index.js";
 import { posDashboardCSS } from "../pos-styles.js";
 
 const PAYMENT_LABELS = { cash: "💵 Tunai", transfer: "🏦 Transfer", qris: "📱 QRIS", card: "💳 Kartu" };
 
-function esc(str) {
-    if (str === null || str === undefined) return "";
-    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
+// Framework First: esc dari @smart/core (util global, bukan duplikat lokal)
 
 export function DashboardPage() {
     return `

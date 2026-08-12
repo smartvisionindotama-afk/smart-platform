@@ -11,7 +11,8 @@ export default defineConfig({
         // Include test files matching these patterns
         include: [
             "packages/*/__tests__/**/*.test.js",
-            "packages/*/src/**/*.test.js"
+            "packages/*/src/**/*.test.js",
+            "apps/*/server/**/*.test.js"
         ],
 
         // Exclude node_modules and dist

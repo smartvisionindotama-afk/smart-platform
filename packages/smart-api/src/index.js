@@ -70,3 +70,17 @@ export {
     apiDeleteFallback,
     apiGetFallback
 } from "./fallback.js";
+
+// ═══════════════════════════════════════════════════════════════
+//  SP-027 M3 — Auth Token Store (JWT client-side)
+// ═══════════════════════════════════════════════════════════════
+
+export {
+    configureAuthTokens,
+    getAccessToken,
+    getRefreshToken,
+    setAuthTokens,
+    clearAuthTokens,
+    refreshAccessToken,
+    authorizedFetch
+} from "./token-store.js";

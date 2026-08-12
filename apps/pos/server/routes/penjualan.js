@@ -52,6 +52,10 @@ router.get("/", async (req, res) => {
 
         const query = {};
         if (companyCode) query.companyCode = companyCode;
+        // STRICT (SP-029 M6-FIX): server POS HANYA melayani transaksi kasir
+        // (sumber="pos"). Data SO/admin TIDAK tampil di POS walaupun satu
+        // collection MongoDB — dua aplikasi, dua domain data.
+        query.sumber = "pos";
         // PRD V1 §7.5 — filter status (mis. status=held untuk daftar transaksi ditahan)
         if (req.query.status && req.query.status !== "all") {
             query.status = String(req.query.status);
@@ -87,6 +91,8 @@ router.get("/:id", async (req, res) => {
         const item = await Penjualan.findById(req.params.id);
         if (!item) return res.status(404).json({ error: "Not found" });
         if (!checkCompany(item, req)) return res.status(404).json({ error: "Not found" });
+        // STRICT: detail hanya boleh diakses untuk transaksi domain POS (kasir).
+        if (item.sumber !== "pos") return res.status(404).json({ error: "Not found" });
         res.json(item);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -126,9 +132,12 @@ router.post("/", async (req, res) => {
                 return res.status(400).json({ error: "Kode member wajib diisi — scan kartu member atau input kode member" });
             }
             const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const rx = new RegExp(`^${esc(memberKode)}$`, "i");
+            // M6-FIX — kode NFC ikut dicocokkan: kasir men-tap kartu NFC (kodeNfc)
+            // atau scan/ketik kode member (kode) → member yang sama ditemukan.
             const member = await Customer.findOne({
                 companyCode,
-                kode: { $regex: new RegExp(`^${esc(memberKode)}$`, "i") },
+                $or: [{ kode: rx }, { kodeNfc: rx }],
                 active: true,
                 status: { $ne: "archived" }
             }).lean();

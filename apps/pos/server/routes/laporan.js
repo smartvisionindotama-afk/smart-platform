@@ -68,6 +68,14 @@ function paginateParams(req) {
 }
 
 /**
+ * STRICT (SP-029 M6-FIX): laporan POS HANYA transaksi kasir (sumber=pos).
+ * SO/admin tidak termasuk walaupun satu collection MongoDB.
+ */
+function posScope(q) {
+    return { ...q, sumber: "pos" };
+}
+
+/**
  * GET /stock — Laporan Stok per barang.
  * Query: search (kode/nama), sort (nilai|stok|nama), page, limit
  */
@@ -150,6 +158,8 @@ router.get("/purchase", async (req, res) => {
             .sort({ tanggal: -1 })
             .lean();
 
+        await attachReturPembelian(all, companyQuery(req));
+
         const total = all.length;
         const totalPages = Math.max(1, Math.ceil(total / limit));
         const data = all.slice((page - 1) * limit, page * limit);
@@ -157,7 +167,9 @@ router.get("/purchase", async (req, res) => {
         const summary = {
             totalTransaksi: total,
             totalItem: all.reduce((s, p) => s + (p.items || []).reduce((si, i) => si + (i.qty || 0), 0), 0),
-            totalPembelian: all.reduce((s, p) => s + (p.grandTotal || 0), 0)
+            totalRetur: all.reduce((s, p) => s + (Number(p.retur) || 0), 0),
+            // Neto setelah retur — kolom Total pada tabel menampilkan nilai ini.
+            totalPembelian: all.reduce((s, p) => s + ((p.grandTotal || 0) - (Number(p.retur) || 0)), 0)
         };
 
         res.json({ data, summary, pagination: { page: Math.min(page, totalPages), limit, total, totalPages } });
@@ -170,6 +182,57 @@ router.get("/purchase", async (req, res) => {
  * GET /sales — Laporan Penjualan.
  * Query: startDate, endDate, search (nomor/pelanggan), page, limit
  */
+/**
+ * Tambahkan kolom `retur` (total retur penjualan terkait) pada setiap baris.
+ * Semua status retur dihitung (draft + returned) — "saat barang di retur"
+ * tercatat, nilai retur langsung tampil di laporan. Pencocokan via idSO
+ * (ObjectId) lalu nomorSO.
+ * @param {Array} rows Baris penjualan (sudah .lean())
+ * @param {object} scope Filter tambahan untuk ReturPenjualan (company+sumber)
+ */
+async function attachReturPenjualan(rows, scope) {
+    const ids = rows.map(r => String(r._id)).filter(Boolean);
+    const nomors = rows.map(r => r.nomor).filter(Boolean);
+    if (!ids.length && !nomors.length) return;
+    const returs = await ReturPenjualan.find({
+        ...scope,
+        $or: [{ idSO: { $in: ids } }, { nomorSO: { $in: nomors } }]
+    }).select("idSO nomorSO total").lean();
+    // Satu key per retur (idSO diutamakan, fallback nomorSO) agar retur tidak
+    // pernah terhitung ganda di dua baris yang berbeda.
+    const byKey = {};
+    for (const r of returs) {
+        const key = (r.idSO && String(r.idSO)) || r.nomorSO;
+        if (!key) continue;
+        byKey[key] = (byKey[key] || 0) + (Number(r.total) || 0);
+    }
+    for (const row of rows) {
+        row.retur = byKey[String(row._id)] ?? byKey[row.nomor] ?? 0;
+    }
+}
+
+/** Tambahkan kolom `retur` (total retur pembelian terkait, semua status). */
+async function attachReturPembelian(rows, scope) {
+    const ids = rows.map(r => String(r._id)).filter(Boolean);
+    const nomors = rows.map(r => r.nomor).filter(Boolean);
+    if (!ids.length && !nomors.length) return;
+    const returs = await ReturPembelian.find({
+        ...scope,
+        $or: [{ idPO: { $in: ids } }, { nomorPO: { $in: nomors } }]
+    }).select("idPO nomorPO total").lean();
+    // Satu key per retur (idPO diutamakan, fallback nomorPO) agar retur tidak
+    // pernah terhitung ganda di dua baris yang berbeda.
+    const byKey = {};
+    for (const r of returs) {
+        const key = (r.idPO && String(r.idPO)) || r.nomorPO;
+        if (!key) continue;
+        byKey[key] = (byKey[key] || 0) + (Number(r.total) || 0);
+    }
+    for (const row of rows) {
+        row.retur = byKey[String(row._id)] ?? byKey[row.nomor] ?? 0;
+    }
+}
+
 router.get("/sales", async (req, res) => {
     try {
         const { page, limit } = paginateParams(req);
@@ -187,10 +250,12 @@ router.get("/sales", async (req, res) => {
             ];
         }
 
-        const all = await Penjualan.find(query)
-            .select("nomor tanggal pelanggan pelangganNama items total diskon grandTotal status createdBy")
+        const all = await Penjualan.find(posScope(query))
+            .select("nomor tanggal pelanggan pelangganNama items total diskon pajak grandTotal status createdBy")
             .sort({ tanggal: -1 })
             .lean();
+
+        await attachReturPenjualan(all, { ...companyQuery(req), sumber: "pos" });
 
         const total = all.length;
         const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -199,7 +264,11 @@ router.get("/sales", async (req, res) => {
         const summary = {
             totalTransaksi: total,
             totalItem: all.reduce((s, p) => s + (p.items || []).reduce((si, i) => si + (i.qty || 0), 0), 0),
-            totalPenjualan: all.reduce((s, p) => s + (p.grandTotal || 0), 0)
+            totalPajak: all.reduce((s, p) => s + (p.pajak || 0), 0),
+            totalRetur: all.reduce((s, p) => s + (Number(p.retur) || 0), 0),
+            // Net Sales = grandTotal − retur − pajak (grandTotal sudah include
+            // pajak yang dipungut dari pembeli) — M6-FIX v2.
+            totalPenjualan: all.reduce((s, p) => s + ((p.grandTotal || 0) - (Number(p.retur) || 0) - (p.pajak || 0)), 0)
         };
 
         res.json({ data, summary, pagination: { page: Math.min(page, totalPages), limit, total, totalPages } });
@@ -279,10 +348,10 @@ router.get("/mutation", async (req, res) => {
         // Status yang memengaruhi stok
         const [pembelian, penjualan, transfer, returPembelian, returPenjualan, opname] = await Promise.all([
             Pembelian.find({ ...base, status: "received" }).select("nomor tanggal supplierName items grandTotal").lean(),
-            Penjualan.find({ ...base, status: { $in: ["delivered", "invoiced", "paid"] } }).select("nomor tanggal pelangganNama items grandTotal").lean(),
+            Penjualan.find(posScope({ ...base, status: { $in: ["delivered", "invoiced", "paid"] } })).select("nomor tanggal pelangganNama items grandTotal").lean(),
             Transfer.find({ ...base, status: "transferred" }).select("nomor tanggal gudangAsalNama gudangTujuanNama items").lean(),
             ReturPembelian.find({ ...base, status: "returned" }).select("nomor tanggal supplierName items total").lean(),
-            ReturPenjualan.find({ ...base, status: "returned" }).select("nomor tanggal pelangganNama items total").lean(),
+            ReturPenjualan.find(posScope({ ...base, status: "returned" })).select("nomor tanggal pelangganNama items total").lean(),
             StockOpname.find({ ...base, status: "completed" }).select("nomor tanggal gudangNama items totalSelisih completedAt").lean()
         ]);
 
@@ -436,7 +505,7 @@ router.get("/customer", async (req, res) => {
         if (dateQ === null) return res.status(400).json({ error: "Format tanggal tidak valid" });
 
         const base = { ...companyQuery(req), ...dateQ };
-        const allSO = await Penjualan.find(base)
+        const allSO = await Penjualan.find(posScope(base))
             .select("pelanggan pelangganNama grandTotal status")
             .lean();
 
@@ -522,7 +591,7 @@ router.get("/labarugi", async (req, res) => {
             ];
         }
 
-        const all = await Penjualan.find(query)
+        const all = await Penjualan.find(posScope(query))
             .select("nomor tanggal pelanggan pelangganNama items grandTotal status")
             .sort({ tanggal: -1 })
             .lean();
@@ -617,7 +686,7 @@ router.get("/piutang", async (req, res) => {
             ];
         }
 
-        const all = await Penjualan.find(query)
+        const all = await Penjualan.find(posScope(query))
             .select("nomor tanggal pelanggan pelangganNama grandTotal status tanggalSJ tanggalInvoice")
             .sort({ tanggal: -1 })
             .lean();

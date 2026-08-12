@@ -1,0 +1,20 @@
+{
+  "name": "@smart/console-server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SMART Platform Console — Backend API Server (Platform domain only)",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.8.0"
+  }
+}

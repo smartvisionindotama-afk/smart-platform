@@ -11,15 +11,15 @@ function createSeedData() {
     const C = currentCompanyCode() || "";
     const now = Date.now();
     return [
-        { id: "1",  companyCode: C, kode: "KAT-001", nama: "Material Bangunan", deskripsi: "Bahan-bahan material konstruksi bangunan", active: true, createdAt: now, updatedAt: now },
-        { id: "2",  companyCode: C, kode: "KAT-002", nama: "Cat",               deskripsi: "Cat tembok, cat kayu, dan cat besi", active: true, createdAt: now, updatedAt: now },
-        { id: "3",  companyCode: C, kode: "KAT-003", nama: "Pipa",              deskripsi: "Pipa PVC, pipa besi, dan perlengkapannya", active: true, createdAt: now, updatedAt: now },
-        { id: "4",  companyCode: C, kode: "KAT-004", nama: "Elektrikal",        deskripsi: "Peralatan dan material listrik", active: true, createdAt: now, updatedAt: now },
-        { id: "5",  companyCode: C, kode: "KAT-005", nama: "Perekat",           deskripsi: "Lem, sealant, dan perekat lainnya", active: true, createdAt: now, updatedAt: now },
-        { id: "6",  companyCode: C, kode: "KAT-006", nama: "Sanitary",          deskripsi: "Peralatan sanitair kamar mandi", active: true, createdAt: now, updatedAt: now },
-        { id: "7",  companyCode: C, kode: "KAT-007", nama: "Peralatan",         deskripsi: "Alat-alat kerja dan peralatan", active: true, createdAt: now, updatedAt: now },
-        { id: "8",  companyCode: C, kode: "KAT-008", nama: "Safety",            deskripsi: "Alat keselamatan kerja (APD)", active: true, createdAt: now, updatedAt: now },
-        { id: "9",  companyCode: C, kode: "KAT-009", nama: "Lainnya",           deskripsi: "Kategori lainnya", active: true, createdAt: now, updatedAt: now }
+        { id: "1",  companyCode: C, kode: "KAT-001", nama: "Material Bangunan", icon: "🏠", deskripsi: "Bahan-bahan material konstruksi bangunan", active: true, createdAt: now, updatedAt: now },
+        { id: "2",  companyCode: C, kode: "KAT-002", nama: "Cat",               icon: "🧴", deskripsi: "Cat tembok, cat kayu, dan cat besi", active: true, createdAt: now, updatedAt: now },
+        { id: "3",  companyCode: C, kode: "KAT-003", nama: "Pipa",              icon: "🛒", deskripsi: "Pipa PVC, pipa besi, dan perlengkapannya", active: true, createdAt: now, updatedAt: now },
+        { id: "4",  companyCode: C, kode: "KAT-004", nama: "Elektrikal",        icon: "📱", deskripsi: "Peralatan dan material listrik", active: true, createdAt: now, updatedAt: now },
+        { id: "5",  companyCode: C, kode: "KAT-005", nama: "Perekat",           icon: "🧰", deskripsi: "Lem, sealant, dan perekat lainnya", active: true, createdAt: now, updatedAt: now },
+        { id: "6",  companyCode: C, kode: "KAT-006", nama: "Sanitary",          icon: "🧼", deskripsi: "Peralatan sanitair kamar mandi", active: true, createdAt: now, updatedAt: now },
+        { id: "7",  companyCode: C, kode: "KAT-007", nama: "Peralatan",         icon: "🧰", deskripsi: "Alat-alat kerja dan peralatan", active: true, createdAt: now, updatedAt: now },
+        { id: "8",  companyCode: C, kode: "KAT-008", nama: "Safety",            icon: "💊", deskripsi: "Alat keselamatan kerja (APD)", active: true, createdAt: now, updatedAt: now },
+        { id: "9",  companyCode: C, kode: "KAT-009", nama: "Lainnya",           icon: "🏷️", deskripsi: "Kategori lainnya", active: true, createdAt: now, updatedAt: now }
     ];
 }
 
@@ -64,7 +64,7 @@ async function createKategoriLocal(data) {
     if (existing) {
         throw new Error(`Kode "${newKode}" sudah digunakan untuk ${existing.nama}. Silakan gunakan kode lain.`);
     }
-    const newItem = { id: nextStringId(), ...tagData({}), kode: newKode, nama: data.nama, deskripsi: data.deskripsi || "", active: data.active !== false, createdAt: now, updatedAt: now };
+    const newItem = { id: nextStringId(), ...tagData({}), kode: newKode, nama: data.nama, icon: data.icon || "", deskripsi: data.deskripsi || "", active: data.active !== false, createdAt: now, updatedAt: now };
     items.unshift(newItem);
     return { ...newItem };
 }

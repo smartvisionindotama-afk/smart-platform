@@ -4,8 +4,13 @@
  * Aplikasi tidak boleh memakai fetch() secara langsung.
  * Gunakan API Facade untuk semua komunikasi HTTP.
  *
+ * SP-027 M3: seluruh request otomatis menyertakan Authorization header
+ * (JWT access token) via token-store, dengan retry saat 401.
+ *
  * @module @smart/api/api-facade
  */
+
+import { authorizedFetch } from "./token-store.js";
 
 /**
  * Get company code from current session for multi-tenant scoping.
@@ -47,7 +52,8 @@ async function _request(method, url, body = null, options = {}) {
         method,
         headers: _headers(options.headers),
         body: body ? JSON.stringify(body) : undefined,
-        signal: options.signal || null
+        signal: options.signal || null,
+        credentials: "include" // kirim httpOnly cookie refresh token (SP-027 M3)
     };
 
     if (options.responseType === "blob") {
@@ -55,7 +61,7 @@ async function _request(method, url, body = null, options = {}) {
     }
 
     try {
-        const res = await fetch(fullUrl, fetchOptions);
+        const res = await authorizedFetch(fullUrl, fetchOptions);
 
         if (options.responseType === "blob") {
             if (!res.ok) throw new Error(`API Error: ${res.status}`);
@@ -138,7 +144,9 @@ export const API = {
         const code = _getCompanyCode();
         if (code) headers["x-company-code"] = code;
 
-        const res = await fetch(fullUrl, {
+        // authorizedFetch menambah Authorization: Bearer <accessToken> + credentials
+        // (SP-027 M3) — upload ke endpoint privat wajib token.
+        const res = await authorizedFetch(fullUrl, {
             method: "POST",
             headers,
             body: formData,

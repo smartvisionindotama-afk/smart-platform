@@ -5,8 +5,13 @@
  * then fall back to a local function if the API is unavailable.
  * Includes response normalization for MongoDB _id → id mapping.
  *
+ * SP-027 M3: seluruh request otomatis menyertakan Authorization header
+ * (JWT access token) via token-store, dengan retry saat 401.
+ *
  * @module @smart/api/fallback
  */
+
+import { authorizedFetch } from "./token-store.js";
 
 /**
  * Build query string from params object.
@@ -82,8 +87,11 @@ function _getCompanyCode() {
 export async function apiFetch(method, url, body = null, options = {}) {
     const headers = { "Content-Type": "application/json", ...options.headers };
 
-    // Auto-attach company code from SMART.Session if not explicitly provided
-    const companyCode = options.companyCode || _getCompanyCode();
+    // Auto-attach company code dari SMART.Session, KECUALI dipaksa eksplisit:
+    //   options.companyCode = "CMP-001" → kirim header tsb
+    //   options.companyCode = null       → JANGAN kirim header (list ALL / lintas company)
+    //   options.companyCode = undefined  → auto dari sesi (default)
+    const companyCode = options.companyCode === undefined ? _getCompanyCode() : options.companyCode;
     if (companyCode) {
         headers["x-company-code"] = companyCode;
     }
@@ -94,7 +102,7 @@ export async function apiFetch(method, url, body = null, options = {}) {
     }
 
     try {
-        const res = await fetch(url, fetchOptions);
+        const res = await authorizedFetch(url, fetchOptions);
         if (!res.ok) {
             const err = await res.json().catch(() => ({ error: res.statusText }));
             throw new Error(err.error || `API Error: ${res.status}`);

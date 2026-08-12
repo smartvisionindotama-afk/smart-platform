@@ -29,43 +29,45 @@ function createSeedData() {
     return [
         {
             id: "1", companyCode: C,
-            nomor: `SO-${dd}${mm}${yyyy}-0001`,
+            // STRICT (SP-029 M6-FIX): POS = transaksi kasir — nota TANPA prefix,
+            // sumber "pos". SO/admin bukan domain POS.
+            nomor: `${dd}${mm}${yyyy}-0001`,
             tanggal: today.toISOString(),
-            pelanggan: "CST-001", pelangganNama: "Toko Maju Jaya", pelangganAlamat: "Jl. Merdeka No. 123, Jakarta",
-            noPoPelanggan: "PO/CUST/2026/001",
+            pelanggan: "UMUM", pelangganNama: "Pelanggan Umum", pelangganAlamat: "",
+            noPoPelanggan: "",
             kirimDari: "GDG-001", kirimDariNama: "Gudang Utama",
             items: [
                 { kode: "BRG-001", nama: "Air Mineral 600ml", satuan: "Karton", qty: 10, harga: 32000, diskon: 0, subtotal: 320000 },
                 { kode: "BRG-002", nama: "Kopi Bubuk 200gr", satuan: "Pack", qty: 5, harga: 25000, diskon: 0, subtotal: 125000 }
             ],
-            total: 445000, diskon: 0, grandTotal: 445000,
-            catatan: "PO dari pelanggan via telepon",
-            status: "order",
-            noSuratJalan: "", noInvoice: "", noKwitansi: "",
-            tanggalSJ: null, tanggalInvoice: null, tanggalKwitansi: null,
+            total: 445000, diskon: 0, pajak: 48950, grandTotal: 493950,
+            bayar: 500000, kembalian: 6050, metode_bayar: "cash",
+            catatan: "Penjualan kasir",
+            status: "paid", sumber: "pos", kasir: "Kasir",
+            noSuratJalan: "", noInvoice: "", noKwitansi: `${dd}${mm}${yyyy}-0001`,
+            tanggalSJ: null, tanggalInvoice: null, tanggalKwitansi: today.toISOString(),
             sales: "",
-            createdBy: "System", createdAt: now, updatedAt: now
+            createdBy: "Kasir", createdAt: now, updatedAt: now
         },
         {
             id: "2", companyCode: C,
-            nomor: `SO-${dd}${mm}${yyyy}-0002`,
+            nomor: `${dd}${mm}${yyyy}-0002`,
             tanggal: today.toISOString(),
-            pelanggan: "CST-002", pelangganNama: "RM Sederhana", pelangganAlamat: "Jl. Sudirman No. 45, Bandung",
+            pelanggan: "MEMBER-001", pelangganNama: "Member Sari", pelangganAlamat: "",
             noPoPelanggan: "",
             kirimDari: "GDG-001", kirimDariNama: "Gudang Utama",
             items: [
                 { kode: "BRG-003", nama: "Minyak Goreng 1L", satuan: "Botol", qty: 20, harga: 18000, diskon: 0, subtotal: 360000 },
                 { kode: "BRG-004", nama: "Gula Pasir 1kg", satuan: "Pack", qty: 15, harga: 15000, diskon: 0, subtotal: 225000 }
             ],
-            total: 585000, diskon: 10000, grandTotal: 575000,
-            catatan: "",
-            status: "delivered",
-            noSuratJalan: `SJ-${dd}${mm}${yyyy}-0001`,
-            noInvoice: "", noKwitansi: "",
-            tanggalSJ: new Date(now - 3600000).toISOString(),
-            tanggalInvoice: null, tanggalKwitansi: null,
+            total: 585000, diskon: 10000, pajak: 63250, grandTotal: 638250,
+            bayar: 640000, kembalian: 1750, metode_bayar: "qris",
+            catatan: "Penjualan kasir",
+            status: "paid", sumber: "pos", kasir: "Kasir 2", tipePelanggan: "member",
+            noSuratJalan: "", noInvoice: "", noKwitansi: `${dd}${mm}${yyyy}-0002`,
+            tanggalSJ: null, tanggalInvoice: null, tanggalKwitansi: today.toISOString(),
             sales: "",
-            createdBy: "System", createdAt: now - 86400000, updatedAt: now - 3600000
+            createdBy: "Kasir 2", createdAt: now - 86400000, updatedAt: now - 3600000
         }
     ];
 }
@@ -128,6 +130,8 @@ async function listPenjualanLocal(params = {}) {
     const search = (params.search || "").toLowerCase().trim();
 
     let filtered = filterData(items);
+    // STRICT (SP-029 M6-FIX): POS hanya menampilkan transaksi kasir (sumber=pos).
+    filtered = filtered.filter(item => item.sumber === "pos");
     if (search) {
         filtered = filtered.filter(item =>
             item.nomor.toLowerCase().includes(search) ||
@@ -303,7 +307,8 @@ async function updateStatusLocal(id, status) {
 // ═══════════════════════════════════════════════
 
 export async function listPenjualan(params = {}) {
-    return apiListFallback("/api/penjualan", params, () => listPenjualanLocal(params));
+    // STRICT: selalu scope ke transaksi kasir — server juga memfilter (defense in depth).
+    return apiListFallback("/api/penjualan", { ...params, sumber: "pos" }, () => listPenjualanLocal(params));
 }
 
 export async function getPenjualan(id) {

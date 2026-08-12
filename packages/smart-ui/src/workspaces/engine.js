@@ -1,6 +1,7 @@
 import defaultConfig from "./default/workspace.json";
 import corporateConfig from "./corporate/workspace.json";
 import warehouseConfig from "./warehouse/workspace.json";
+import posConfig from "./pos/workspace.json";
 
 import { validateWorkspaceConfig } from "./schema.js";
 
@@ -23,6 +24,13 @@ const workspaces = {
         config: warehouseConfig,
         css: () =>
             import("./warehouse/variables.css")
+    },
+
+    // SMART Kasir (M1) — workspace baru, additive (backward compatible)
+    pos: {
+        config: posConfig,
+        css: () =>
+            import("./pos/variables.css")
     }
 
 };

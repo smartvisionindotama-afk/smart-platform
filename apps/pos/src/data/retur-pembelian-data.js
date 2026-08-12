@@ -9,7 +9,8 @@ import {
     apiCreateFallback,
     apiUpdateFallback,
     apiDeleteFallback,
-    apiGetFallback
+    apiGetFallback,
+    apiCall
 } from "./api.js";
 
 import { currentCompanyCode, filterData, tagData, delay } from "./helpers.js";
@@ -232,16 +233,12 @@ export async function updateReturPembelianStatus(id, status) {
             }
             if (userName) headers["x-user-name"] = userName;
         } catch {}
-        const res = await fetch(`/api/retur-pembelian/${id}/status`, {
-            method: "PATCH",
-            headers,
-            body: JSON.stringify({ status })
-        });
-        if (res.ok) return res.json();
-        const err = await res.json().catch(() => ({ error: "Gagal update status" }));
-        throw new Error(err.error || "Gagal update status");
+        // M6-FIX v2: apiCall (authorizedFetch) — fetch polos tanpa Authorization
+        // → 401 Unauthorized saat token tidak disertakan.
+        const res = await apiCall("PATCH", `/retur-pembelian/${id}/status`, { status });
+        if (res !== null) return res;
     } catch (e) {
-        if (e.message && !e.message.includes("Failed to fetch")) throw e;
+        if (e && e.message && !e.message.includes("Failed to fetch")) throw e;
         return updateStatusLocal(id, status);
     }
 }

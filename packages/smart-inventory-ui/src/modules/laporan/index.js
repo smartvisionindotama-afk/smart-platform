@@ -28,6 +28,7 @@
  */
 
 import { Modal, Pagination, EmptyState, showToast, UI, printToWindow } from "@smart/ui";
+import { esc, formatNumber as fmtNum, formatRupiahID as fmtRupiah, formatDate } from "@smart/core";
 
 let services = {};
 
@@ -83,30 +84,8 @@ function debounce(fn, ms) {
 //  Helpers
 // ═══════════════════════════════════════════════
 
-function esc(str) {
-    if (str === null || str === undefined) return "";
-    return String(str)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-function fmtNum(n) {
-    if (n === null || n === undefined || isNaN(n)) return "0";
-    return new Intl.NumberFormat("id-ID").format(n);
-}
-
-function fmtRupiah(n) {
-    if (n === null || n === undefined || isNaN(n)) return "Rp0";
-    return "Rp" + new Intl.NumberFormat("id-ID").format(n);
-}
-
-function formatDate(iso) {
-    if (!iso) return "-";
-    try {
-        return new Date(iso).toLocaleDateString("id-ID", { year: "numeric", month: "short", day: "numeric" });
-    } catch { return "-"; }
-}
+// Framework First: fmtNum/fmtRupiah/formatDate dari @smart/core
+// (util global, bukan duplikat lokal)
 
 const TAB_LABELS = {
     stock: "📦 Stok",
@@ -387,24 +366,31 @@ function renderPurchaseTab() {
     const summaryHTML = renderSummaryCards(s.summary, [
         { icon: "🧾", label: "Total PO", value: sum => fmtNum(sum.totalTransaksi) },
         { icon: "📦", label: "Total Item", value: sum => fmtNum(sum.totalItem) },
-        { icon: "🛒", label: "Total Pembelian", value: sum => fmtRupiah(sum.totalPembelian), color: "success" }
+        { icon: "↩️", label: "Total Retur", value: sum => fmtRupiah(sum.totalRetur), color: "warning" },
+        { icon: "🛒", label: "Total Pembelian (Neto)", value: sum => fmtRupiah(sum.totalPembelian), color: "success" }
     ]);
 
-    const rowsHTML = (s.data || []).map(p => `
+    const rowsHTML = (s.data || []).map(p => {
+        const retur = Number(p.retur) || 0;
+        const totalNet = (Number(p.grandTotal) || 0) - retur;
+        return `
         <tr>
             <td><strong>${esc(p.nomor)}</strong></td>
             <td>${formatDate(p.tanggal)}</td>
             <td>${esc(p.supplierName || p.supplier || "-")}</td>
             <td style="text-align:center">${(p.items || []).length}</td>
-            <td style="text-align:right">${fmtRupiah(p.grandTotal)}</td>
+            <td style="text-align:right">${retur > 0 ? fmtRupiah(retur) : "-"}</td>
+            <td style="text-align:right"><strong>${fmtRupiah(totalNet)}</strong></td>
             <td>${statusBadge(p.status)}</td>
         </tr>
-    `).join("");
+    `;
+    }).join("");
 
     const tableHTML = renderTableWrap(
         [
             { label: "No. PO" }, { label: "Tanggal" }, { label: "Supplier" },
-            { label: "Item", align: "center" }, { label: "Total", align: "right" }, { label: "Status" }
+            { label: "Item", align: "center" }, { label: "Retur", align: "right" },
+            { label: "Total", align: "right" }, { label: "Status" }
         ],
         rowsHTML,
         state.loading ? "Memuat..." : "Belum ada data pembelian"
@@ -423,36 +409,70 @@ function renderPurchaseTab() {
 }
 
 function renderSalesTab() {
+    const isPos = services.isPos === true;
     const s = state.sales;
     const summaryHTML = renderSummaryCards(s.summary, [
-        { icon: "🧾", label: "Total SO", value: sum => fmtNum(sum.totalTransaksi) },
+        { icon: "🧾", label: isPos ? "Total Nota" : "Total SO", value: sum => fmtNum(sum.totalTransaksi) },
         { icon: "📦", label: "Total Item", value: sum => fmtNum(sum.totalItem) },
-        { icon: "💰", label: "Total Penjualan", value: sum => fmtRupiah(sum.totalPenjualan), color: "primary" }
+        { icon: "🧾", label: "Total Pajak", value: sum => fmtRupiah(sum.totalPajak), color: "success" },
+        { icon: "↩️", label: "Total Retur", value: sum => fmtRupiah(sum.totalRetur), color: "warning" },
+        { icon: "💰", label: isPos ? "Net Sales" : "Total Penjualan (Neto)", value: sum => fmtRupiah(sum.totalPenjualan), color: "primary" }
     ]);
 
-    const rowsHTML = (s.data || []).map(p => `
+    const rowsHTML = (s.data || []).map(p => {
+        const retur = Number(p.retur) || 0;
+        // Net Sales = grandTotal − retur − pajak (POS; grandTotal include pajak)
+        const totalNet = (Number(p.grandTotal) || 0) - retur - (isPos ? (Number(p.pajak) || 0) : 0);
+        if (isPos) {
+            // M6-FIX: urutan kolom POS — tanggal, no. nota, pelanggan, item,
+            // penjualan (gross), retur, pajak, net sales (status selalu paid).
+            return `
+            <tr>
+                <td>${formatDate(p.tanggal)}</td>
+                <td><strong>${esc(p.nomor)}</strong></td>
+                <td>${esc(p.pelangganNama || p.pelanggan || "-")}</td>
+                <td style="text-align:center">${(p.items || []).length}</td>
+                <td style="text-align:right">${fmtRupiah(Number(p.grandTotal) || 0)}</td>
+                <td style="text-align:right">${retur > 0 ? fmtRupiah(retur) : "-"}</td>
+                <td style="text-align:right">${fmtRupiah(p.pajak || 0)}</td>
+                <td style="text-align:right"><strong>${fmtRupiah(totalNet)}</strong></td>
+            </tr>
+        `;
+        }
+        return `
         <tr>
             <td><strong>${esc(p.nomor)}</strong></td>
             <td>${formatDate(p.tanggal)}</td>
             <td>${esc(p.pelangganNama || p.pelanggan || "-")}</td>
             <td style="text-align:center">${(p.items || []).length}</td>
-            <td style="text-align:right">${fmtRupiah(p.grandTotal)}</td>
+            <td style="text-align:right">${fmtRupiah(p.pajak || 0)}</td>
+            <td style="text-align:right">${retur > 0 ? fmtRupiah(retur) : "-"}</td>
+            <td style="text-align:right"><strong>${fmtRupiah(totalNet)}</strong></td>
             <td>${statusBadge(p.status)}</td>
         </tr>
-    `).join("");
+    `;
+    }).join("");
 
     const tableHTML = renderTableWrap(
-        [
-            { label: "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
-            { label: "Item", align: "center" }, { label: "Total", align: "right" }, { label: "Status" }
-        ],
+        isPos
+            ? [
+                { label: "Tanggal" }, { label: "No. Nota" }, { label: "Pelanggan" },
+                { label: "Item", align: "center" }, { label: "Penjualan", align: "right" },
+                { label: "Retur", align: "right" }, { label: "Pajak", align: "right" },
+                { label: "Net Sales", align: "right" }
+            ]
+            : [
+                { label: "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
+                { label: "Item", align: "center" }, { label: "Pajak", align: "right" },
+                { label: "Retur", align: "right" }, { label: "Total", align: "right" }, { label: "Status" }
+            ],
         rowsHTML,
         state.loading ? "Memuat..." : "Belum ada data penjualan"
     );
 
     return `
         ${renderToolbar({
-            searchId: "lpr-sales-search", searchValue: state.salesSearch, placeholder: "Cari no. SO/pelanggan...",
+            searchId: "lpr-sales-search", searchValue: state.salesSearch, placeholder: isPos ? "Cari no. nota/pelanggan..." : "Cari no. SO/pelanggan...",
             startId: "lpr-sales-start", startVal: state.salesStart,
             endId: "lpr-sales-end", endVal: state.salesEnd
         })}
@@ -612,10 +632,11 @@ function renderSupplierTab() {
 }
 
 function renderCustomerTab() {
+    const isPos = services.isPos === true;
     const s = state.customer;
     const summaryHTML = renderSummaryCards(s.summary, [
         { icon: "👤", label: "Customer Aktif", value: sum => fmtNum(sum.totalCustomer) },
-        { icon: "🧾", label: "Total SO", value: sum => fmtNum(sum.totalSO) },
+        { icon: "🧾", label: isPos ? "Total Nota" : "Total SO", value: sum => fmtNum(sum.totalSO) },
         { icon: "💰", label: "Total Penjualan", value: sum => fmtRupiah(sum.totalPenjualan), color: "primary" }
     ]);
 
@@ -631,7 +652,7 @@ function renderCustomerTab() {
 
     const tableHTML = renderTableWrap(
         [
-            { label: "Kode" }, { label: "Nama Pelanggan" }, { label: "Jumlah SO", align: "center" },
+            { label: "Kode" }, { label: "Nama Pelanggan" }, { label: isPos ? "Jumlah Nota" : "Jumlah SO", align: "center" },
             { label: "Total Penjualan", align: "right" }, { label: "Kontak" }
         ],
         rowsHTML,
@@ -661,6 +682,7 @@ function piutangBadge(item) {
 }
 
 function renderLabarugiTab() {
+    const isPos = services.isPos === true;
     const s = state.labarugi;
     const summaryHTML = renderSummaryCards(s.summary, [
         { icon: "🧾", label: "Total Transaksi", value: sum => fmtNum(sum.totalTransaksi) },
@@ -691,7 +713,7 @@ function renderLabarugiTab() {
         `).join("");
         tableHTML = renderTableWrap(
             [
-                { label: "Bulan" }, { label: "Jumlah SO", align: "center" },
+                { label: "Bulan" }, { label: isPos ? "Jumlah Nota" : "Jumlah SO", align: "center" },
                 { label: "Nilai Penjualan", align: "right" }, { label: "Harga Pokok", align: "right" },
                 { label: "Laba Kotor", align: "right" }, { label: "Margin", align: "right" }
             ],
@@ -713,7 +735,7 @@ function renderLabarugiTab() {
         `).join("");
         tableHTML = renderTableWrap(
             [
-                { label: "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" }, { label: "Item", align: "center" },
+                { label: isPos ? "No. Nota" : "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" }, { label: "Item", align: "center" },
                 { label: "Nilai Penjualan", align: "right" }, { label: "Harga Pokok", align: "right" },
                 { label: "Laba Kotor", align: "right" }, { label: "Status" }
             ],
@@ -728,7 +750,7 @@ function renderLabarugiTab() {
                 ${viewToggle}
                 <div class="lpr-search">
                     <span class="lpr-search-icon">🔍</span>
-                    <input type="text" id="lpr-labarugi-search" placeholder="Cari no. SO/pelanggan..." value="${esc(state.labarugiSearch)}" autocomplete="off" />
+                    <input type="text" id="lpr-labarugi-search" placeholder="${isPos ? "Cari no. nota/pelanggan..." : "Cari no. SO/pelanggan..."}" value="${esc(state.labarugiSearch)}" autocomplete="off" />
                 </div>
                 <div class="lpr-date-range">
                     <input type="date" id="lpr-labarugi-start" value="${esc(state.labarugiStart)}" title="Dari tanggal" />
@@ -751,6 +773,7 @@ function renderLabarugiTab() {
 // ═══════════════════════════════════════════════
 
 function renderPiutangTab() {
+    const isPos = services.isPos === true;
     const s = state.piutang;
     const summaryHTML = renderSummaryCards(s.summary, [
         { icon: "🧾", label: "Jumlah Tagihan", value: sum => fmtNum(sum.totalTransaksi) },
@@ -775,7 +798,7 @@ function renderPiutangTab() {
 
     const tableHTML = renderTableWrap(
         [
-            { label: "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
+            { label: isPos ? "No. Nota" : "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
             { label: "Sisa Tagihan", align: "right" }, { label: "Status" },
             { label: "Jatuh Tempo" }, { label: "Sisa Hari", align: "center" }, { label: "Status Piutang", align: "center" }
         ],
@@ -788,7 +811,7 @@ function renderPiutangTab() {
             <div class="lpr-toolbar-left">
                 <div class="lpr-search">
                     <span class="lpr-search-icon">🔍</span>
-                    <input type="text" id="lpr-piutang-search" placeholder="Cari no. SO/pelanggan..." value="${esc(state.piutangSearch)}" autocomplete="off" />
+                    <input type="text" id="lpr-piutang-search" placeholder="${isPos ? "Cari no. nota/pelanggan..." : "Cari no. SO/pelanggan..."}" value="${esc(state.piutangSearch)}" autocomplete="off" />
                 </div>
                 <div class="lpr-date-range">
                     <input type="date" id="lpr-piutang-start" value="${esc(state.piutangStart)}" title="Dari tanggal" />
@@ -1236,15 +1259,20 @@ async function printStock() {
 
 async function printPurchase() {
     const s = state.purchase;
-    const rows = (s.data || []).map(p => `
+    const rows = (s.data || []).map(p => {
+        const retur = Number(p.retur) || 0;
+        const totalNet = (Number(p.grandTotal) || 0) - retur;
+        return `
         <tr>
             <td>${esc(p.nomor)}</td>
             <td>${formatDate(p.tanggal)}</td>
             <td>${esc(p.supplierName || p.supplier || "-")}</td>
-            <td style="text-align:right">${fmtRupiah(p.grandTotal)}</td>
+            <td style="text-align:right">${fmtRupiah(retur)}</td>
+            <td style="text-align:right">${fmtRupiah(totalNet)}</td>
             <td>${esc(p.status)}</td>
         </tr>
-    `).join("");
+    `;
+    }).join("");
 
     const range = (state.purchaseStart || state.purchaseEnd)
         ? `${state.purchaseStart || "awal"} s/d ${state.purchaseEnd || "sekarang"}`
@@ -1254,29 +1282,52 @@ async function printPurchase() {
         range,
         [
             { label: "No. PO" }, { label: "Tanggal" }, { label: "Supplier" },
-            { label: "Total", align: "right" }, { label: "Status" }
+            { label: "Retur", align: "right" }, { label: "Total", align: "right" }, { label: "Status" }
         ],
         rows,
         [
             { label: "Total PO", value: fmtNum(s.summary?.totalTransaksi) },
             { label: "Total Item", value: fmtNum(s.summary?.totalItem) },
-            { label: "Total Pembelian", value: fmtRupiah(s.summary?.totalPembelian) }
+            { label: "Total Retur", value: fmtRupiah(s.summary?.totalRetur) },
+            { label: "Total Pembelian (Neto)", value: fmtRupiah(s.summary?.totalPembelian) }
         ]
     );
     printToWindow(html, "mencetak Laporan Pembelian", false);
 }
 
 async function printSales() {
+    const isPos = services.isPos === true;
     const s = state.sales;
-    const rows = (s.data || []).map(p => `
+    const rows = (s.data || []).map(p => {
+        const retur = Number(p.retur) || 0;
+        // Net Sales = grandTotal − retur − pajak (POS; grandTotal include pajak)
+        const totalNet = (Number(p.grandTotal) || 0) - retur - (isPos ? (Number(p.pajak) || 0) : 0);
+        if (isPos) {
+            return `
+            <tr>
+                <td>${formatDate(p.tanggal)}</td>
+                <td>${esc(p.nomor)}</td>
+                <td>${esc(p.pelangganNama || p.pelanggan || "-")}</td>
+                <td style="text-align:center">${(p.items || []).length}</td>
+                <td style="text-align:right">${fmtRupiah(Number(p.grandTotal) || 0)}</td>
+                <td style="text-align:right">${fmtRupiah(retur)}</td>
+                <td style="text-align:right">${fmtRupiah(p.pajak || 0)}</td>
+                <td style="text-align:right"><strong>${fmtRupiah(totalNet)}</strong></td>
+            </tr>
+        `;
+        }
+        return `
         <tr>
             <td>${esc(p.nomor)}</td>
             <td>${formatDate(p.tanggal)}</td>
             <td>${esc(p.pelangganNama || p.pelanggan || "-")}</td>
-            <td style="text-align:right">${fmtRupiah(p.grandTotal)}</td>
+            <td style="text-align:right">${fmtRupiah(p.pajak || 0)}</td>
+            <td style="text-align:right">${fmtRupiah(retur)}</td>
+            <td style="text-align:right">${fmtRupiah(totalNet)}</td>
             <td>${esc(p.status)}</td>
         </tr>
-    `).join("");
+    `;
+    }).join("");
 
     const range = (state.salesStart || state.salesEnd)
         ? `${state.salesStart || "awal"} s/d ${state.salesEnd || "sekarang"}`
@@ -1284,15 +1335,25 @@ async function printSales() {
     const html = await buildPrintHTML(
         "Laporan Penjualan",
         range,
-        [
-            { label: "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
-            { label: "Total", align: "right" }, { label: "Status" }
-        ],
+        isPos
+            ? [
+                { label: "Tanggal" }, { label: "No. Nota" }, { label: "Pelanggan" },
+                { label: "Item", align: "center" }, { label: "Penjualan", align: "right" },
+                { label: "Retur", align: "right" }, { label: "Pajak", align: "right" },
+                { label: "Net Sales", align: "right" }
+            ]
+            : [
+                { label: "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
+                { label: "Pajak", align: "right" }, { label: "Retur", align: "right" },
+                { label: "Total", align: "right" }, { label: "Status" }
+            ],
         rows,
         [
-            { label: "Total SO", value: fmtNum(s.summary?.totalTransaksi) },
+            { label: isPos ? "Total Nota" : "Total SO", value: fmtNum(s.summary?.totalTransaksi) },
             { label: "Total Item", value: fmtNum(s.summary?.totalItem) },
-            { label: "Total Penjualan", value: fmtRupiah(s.summary?.totalPenjualan) }
+            { label: "Total Pajak", value: fmtRupiah(s.summary?.totalPajak) },
+            { label: "Total Retur", value: fmtRupiah(s.summary?.totalRetur) },
+            { label: isPos ? "Net Sales" : "Total Penjualan (Neto)", value: fmtRupiah(s.summary?.totalPenjualan) }
         ]
     );
     printToWindow(html, "mencetak Laporan Penjualan", false);
@@ -1468,6 +1529,7 @@ async function printSupplier() {
 }
 
 async function printCustomer() {
+    const isPos = services.isPos === true;
     const s = state.customer;
     const rows = (s.data || []).map(x => `
         <tr>
@@ -1482,11 +1544,11 @@ async function printCustomer() {
         "Laporan Pelanggan",
         `${state.customerSearch ? `Pencarian: ${state.customerSearch}` : "Semua pelanggan"}`,
         [
-            { label: "Kode" }, { label: "Nama Pelanggan" }, { label: "Jumlah SO", align: "center" }, { label: "Total Penjualan", align: "right" }
+            { label: "Kode" }, { label: "Nama Pelanggan" }, { label: isPos ? "Jumlah Nota" : "Jumlah SO", align: "center" }, { label: "Total Penjualan", align: "right" }
         ],
         rows,
         [
-            { label: "Total SO", value: fmtNum(s.summary?.totalSO) },
+            { label: isPos ? "Total Nota" : "Total SO", value: fmtNum(s.summary?.totalSO) },
             { label: "Total Penjualan", value: fmtRupiah(s.summary?.totalPenjualan) }
         ]
     );
@@ -1494,6 +1556,7 @@ async function printCustomer() {
 }
 
 async function printLabarugi() {
+    const isPos = services.isPos === true;
     const s = state.labarugi;
     const range = (state.labarugiStart || state.labarugiEnd)
         ? `${state.labarugiStart || "awal"} s/d ${state.labarugiEnd || "sekarang"}`
@@ -1514,7 +1577,7 @@ async function printLabarugi() {
             "Laporan Laba-Rugi (Rekap)",
             range,
             [
-                { label: "Bulan" }, { label: "Jumlah SO", align: "center" },
+                { label: "Bulan" }, { label: isPos ? "Jumlah Nota" : "Jumlah SO", align: "center" },
                 { label: "Nilai Penjualan", align: "right" }, { label: "Harga Pokok", align: "right" },
                 { label: "Laba Kotor", align: "right" }, { label: "Margin", align: "right" }
             ],
@@ -1544,7 +1607,7 @@ async function printLabarugi() {
         "Laporan Laba-Rugi (Detail)",
         range,
         [
-            { label: "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
+            { label: isPos ? "No. Nota" : "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
             { label: "Nilai Penjualan", align: "right" }, { label: "Harga Pokok", align: "right" }, { label: "Laba Kotor", align: "right" }
         ],
         rows,
@@ -1559,6 +1622,7 @@ async function printLabarugi() {
 }
 
 async function printPiutang() {
+    const isPos = services.isPos === true;
     const s = state.piutang;
     const rows = (s.data || []).map(p => `
         <tr>
@@ -1580,7 +1644,7 @@ async function printPiutang() {
         "Laporan Piutang",
         `${range} • Jatuh tempo: ${state.piutangTermDays} hari`,
         [
-            { label: "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
+            { label: isPos ? "No. Nota" : "No. SO" }, { label: "Tanggal" }, { label: "Pelanggan" },
             { label: "Sisa Tagihan", align: "right" }, { label: "Status" },
             { label: "Jatuh Tempo" }, { label: "Sisa Hari", align: "center" }, { label: "Status Piutang", align: "center" }
         ],

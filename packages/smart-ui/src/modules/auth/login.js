@@ -10,6 +10,9 @@
  * @module @smart/ui/modules/auth/login
  */
 
+import { initPasswordToggle } from "./password-toggle.js";
+import { escHtml } from "@smart/core";
+
 /**
  * Render login page HTML.
  *
@@ -42,7 +45,10 @@ export function LoginPageComponent({ logo, title = "SMART Inventory", subtitle =
 
                 <div class="form-group">
                     <label for="login-password">Password</label>
-                    <input type="password" id="login-password" placeholder="Masukkan password" autocomplete="current-password" />
+                    <div class="password-wrapper">
+                        <input type="password" id="login-password" placeholder="Masukkan password" autocomplete="current-password" />
+                        <button type="button" id="login-password-toggle" class="password-toggle" title="Tampilkan password" aria-label="Tampilkan password">👁</button>
+                    </div>
                     <div class="login-forgot"><a id="login-forgot-link">Lupa Password?</a></div>
                 </div>
 
@@ -74,7 +80,23 @@ export function LoginPageComponent({ logo, title = "SMART Inventory", subtitle =
  * @param {Function} [options.googleConfig.onRegisterClick] - Callback ketika user dari Google harus daftar
  * @param {Function} [options.onRegisterClick] - Callback ketika link "Daftar" diklik
  * @param {Function} [options.onForgotPassword] - Callback untuk forgot password (default: showForgotPasswordModal)
+ *
+ * SP-027 M3: setelah login sukses, jika tersedia hook `window.__SMART_AUTH_TOKEN_HOOK__`
+ * (di-set oleh aplikasi), userData (berisi accessToken/refreshToken) diteruskan
+ * ke hook tersebut untuk disimpan. Hook dipakai agar framework tidak perlu
+ * dependensi ke @smart/api (layer independence).
  */
+
+/** Teruskan data login (termasuk JWT) ke hook aplikasi jika tersedia. */
+function notifyTokenHook(userData) {
+    try {
+        if (typeof window !== "undefined" && typeof window.__SMART_AUTH_TOKEN_HOOK__ === "function") {
+            window.__SMART_AUTH_TOKEN_HOOK__(userData || {});
+        }
+    } catch (err) {
+        console.warn("[Login] Token hook error:", err);
+    }
+}
 export function initLoginPageComponent({
     onSuccess,
     loginFn,
@@ -145,6 +167,9 @@ export function initLoginPageComponent({
                 role: userData.role
             };
 
+            // SP-027 M3: simpan JWT pair (access + refresh) via hook aplikasi
+            notifyTokenHook(userData);
+
             if (typeof onSuccess === "function") {
                 onSuccess();
             }
@@ -179,6 +204,9 @@ export function initLoginPageComponent({
             onRegisterClick();
         }
     });
+
+    // M3-FIX v28g — eye toggle via shared helper (@smart/ui/modules/auth/password-toggle)
+    initPasswordToggle("login-password", "login-password-toggle");
 
     // Enter key support
     password.addEventListener("keydown", (e) => {
@@ -238,6 +266,7 @@ function setupGoogleLogin({ showError, googleConfig, onSuccess, onRegisterClick 
                         // Kirim ke backend
                         const backendRes = await fetch("/api/auth/google", {
                             method: "POST",
+                            credentials: "include", // terima httpOnly cookie refresh token
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
                                 credential: response.access_token,
@@ -258,6 +287,8 @@ function setupGoogleLogin({ showError, googleConfig, onSuccess, onRegisterClick 
                                     institution: data.user.institution,
                                     role: data.user.role
                                 };
+                                // SP-027 M3: simpan JWT pair dari response Google login
+                                notifyTokenHook(data);
                                 if (typeof onSuccess === "function") onSuccess();
                             }
                         } else if (backendRes.status === 404) {
@@ -302,6 +333,7 @@ async function defaultLoginFn(username, password) {
     try {
         const res = await fetch("/api/auth/login", {
             method: "POST",
+            credentials: "include", // terima httpOnly cookie refresh token
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username, password })
         });
@@ -382,10 +414,16 @@ function getLoginStyles() {
 .login-card .login-register { text-align: center; margin-top: 18px; font-size: 0.85rem; color: #64748b; }
 .login-card .login-register a { color: #4f46e5; text-decoration: none; font-weight: 600; cursor: pointer; }
 .login-card .login-register a:hover { color: #4338ca; text-decoration: underline; }
+.login-card .password-wrapper { position: relative; }
+.login-card .password-wrapper input { padding-right: 44px; }
+.login-card .password-toggle {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: 0; cursor: pointer; font-size: 1.1rem;
+    padding: 5px; line-height: 1; opacity: 0.6; transition: opacity 0.15s, background 0.15s;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+}
+.login-card .password-toggle:hover { opacity: 1; background: #f1f5f9; }
 `;
 }
 
-function escHtml(str) {
-    if (!str) return "";
-    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+// Framework First: escHtml dari @smart/core (util global, bukan duplikat lokal)

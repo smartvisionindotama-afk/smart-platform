@@ -344,12 +344,6 @@ export function resetData() {
     nextId = "15";
 }
 
-/**
- * Helper: format number as Rupiah.
- * @param {number} value
- * @returns {string}
- */
-export function formatRupiah(value) {
-    if (value === null || value === undefined || isNaN(value)) return "0";
-    return new Intl.NumberFormat("id-ID").format(value);
-}
+// Framework First: formatRupiah adalah util global → dari @smart/core,
+// bukan didefinisikan ulang per aplikasi (pos & inventory re-export sama).
+export { formatRupiah } from "@smart/core";

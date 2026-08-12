@@ -44,39 +44,13 @@ export function statusBadge(active, activeText = "Aktif", inactiveText = "Nonakt
     return `<span class="${cls}">${active ? activeText : inactiveText}</span>`;
 }
 
-/**
- * Format timestamp ke string lokal.
- * @param {number|string|Date} ts
- * @returns {string}
- */
-export function formatDateTime(ts) {
-    if (!ts) return "—";
-    try {
-        const d = new Date(ts);
-        if (Number.isNaN(d.getTime())) return "—";
-        return d.toLocaleString("id-ID", {
-            day: "2-digit", month: "short", year: "numeric",
-            hour: "2-digit", minute: "2-digit"
-        });
-    } catch {
-        return "—";
-    }
-}
+// Framework First: formatDateTime adalah util global → dari @smart/core
+// (re-export agar pemakai lama `import { formatDateTime } from "./_shared.js"` tetap jalan).
+export { formatDateTime } from "@smart/core";
 
-/**
- * Escape string untuk aman dimasukkan ke innerHTML.
- * @param {*} value
- * @returns {string}
- */
-export function esc(value) {
-    if (value === null || value === undefined) return "";
-    return String(value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-}
+// Framework First: esc adalah util global → dari @smart/core
+// (re-export agar pemakai lama `import { esc } from "./_shared.js"` tetap jalan).
+export { esc } from "@smart/core";
 
 /**
  * Render baris pagination + info ke dalam elemen container.

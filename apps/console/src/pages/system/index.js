@@ -2,8 +2,8 @@
  * SMART Console — System Information Page.
  *
  * SP-027 M1: Platform Version, Build Version, Environment, API URL,
- * MongoDB Status (placeholder), Server Status (placeholder),
- * Node Version (placeholder).
+ * MongoDB Status, Server Status, Node Version — SP-027 M4: semua status
+ * diisi dari Monitoring API (bukan placeholder).
  *
  * @module console/pages/system
  */
@@ -35,9 +35,9 @@ export async function renderSystem(container) {
         infoCard("🏗️", "Build Version", esc(info.buildVersion)),
         infoCard("🌍", "Environment", esc(info.environment)),
         infoCard("🔗", "API URL", esc(info.apiUrl)),
-        infoCard("🗄️", "MongoDB Status", info.mongoStatus ? esc(info.mongoStatus) : "— (belum ada probe)", !info.mongoStatus),
-        infoCard("🖥️", "Server Status", info.serverStatus ? esc(info.serverStatus) : "— (belum ada probe)", !info.serverStatus),
-        infoCard("🟢", "Node Version", info.nodeVersion ? esc(info.nodeVersion) : "— (belum ada probe)", !info.nodeVersion)
+        infoCard("🗄️", "MongoDB Status", info.mongoStatus ? esc(info.mongoStatus) : "—", !info.mongoStatus),
+        infoCard("🖥️", "Server Status", info.serverStatus ? esc(info.serverStatus) : "—", !info.serverStatus),
+        infoCard("🟢", "Node Version", info.nodeVersion ? esc(info.nodeVersion) : "—", !info.nodeVersion)
     ];
 
     container.innerHTML = `
@@ -49,8 +49,8 @@ export async function renderSystem(container) {
             <div class="cn-card">
                 <div class="cn-card-body">
                     <p class="cn-muted cn-note">
-                        Status MongoDB, server, dan Node.js masih placeholder pada Milestone 1 —
-                        akan diisi pada milestone berikutnya (Observability & Monitoring, SP-020).
+                        Status MongoDB, server, dan Node.js diisi dari Monitoring API
+                        (SP-027 M4) — data waktu-nyata dari Monitoring Center.
                     </p>
                 </div>
             </div>

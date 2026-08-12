@@ -16,6 +16,7 @@
 import { Modal, Table, Pagination, EmptyState, Alert, showToast, UI, printToWindow } from "@smart/ui";
 import { scannerSectionHTML, scanButtonHTML } from "@smart/ui";
 import QRCode from "qrcode";
+import { esc, formatThousand, unformatThousand, formatDate, formatDateID } from "@smart/core";
 
 let services = {};
 
@@ -46,30 +47,7 @@ let _filteredBarangs = [];
 //  Helpers
 // ═══════════════════════════════════════════════
 
-function esc(str) {
-    if (str === null || str === undefined) return "";
-    return String(str)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;").replace(/\\\"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-function formatDate(iso) {
-    if (!iso) return "-";
-    try {
-        return new Date(iso).toLocaleDateString("id-ID", {
-            year: "numeric", month: "short", day: "numeric"
-        });
-    } catch { return "-"; }
-}
-
-function formatDateID(date) {
-    if (!date) return "-";
-    const d = new Date(date);
-    const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
-    const days = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
-    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-}
+// Framework First: formatDate/formatDateID dari @smart/core (util global, bukan duplikat lokal)
 
 function statusBadgeHTML(status) {
     const map = {
@@ -601,17 +579,8 @@ function buildFormHTML(data, isEdit) {
     `;
 }
 
-/** Format angka ribuan Indonesia: 15000 → "15.000" */
-function formatThousand(v) {
-    const n = Math.round(Number(v) || 0);
-    return n.toLocaleString("id-ID");
-}
-
-/** Parsing balik: "15.000" → 15000 (buang semua non-digit) */
-function unformatThousand(v) {
-    const cleaned = String(v ?? "").replace(/\D/g, "");
-    return parseInt(cleaned, 10) || 0;
-}
+// Framework First: formatThousand/unformatThousand dari @smart/core
+// (util global, bukan duplikat lokal)
 
 function buildItemRow(item, idx) {
     return `

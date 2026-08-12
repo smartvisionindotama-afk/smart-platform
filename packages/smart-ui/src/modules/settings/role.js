@@ -8,6 +8,7 @@
  */
 
 import { Modal, Toast, Table, Pagination, EmptyState, Alert, Skeleton } from "../../index.js";
+import { esc } from "@smart/core";
 
 /**
  * Role Settings Page component.
@@ -223,7 +224,7 @@ export function SettingsRoleModule({ listRoles, getRole, createRole, updateRole,
     return { render, init };
 }
 
-function esc(str) { if (!str) return ""; return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+// Framework First: esc dari @smart/core (util global, bukan duplikat lokal)
 function debounce(fn, ms) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); }; }
 
 function getStyles() { return `

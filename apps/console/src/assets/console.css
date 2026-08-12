@@ -748,6 +748,49 @@ body {
     margin-top: 8px;
 }
 
+/* ── Login As — Pilih Aplikasi (SP-027 PRE-M5 round 6) ── */
+.cn-login-as-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 4px;
+}
+.cn-login-as-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 10px;
+    background: var(--surface, #fff);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text, #111827);
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.cn-login-as-item:hover {
+    border-color: var(--primary, #2563eb);
+    box-shadow: 0 2px 10px rgba(37, 99, 235, 0.14);
+    transform: translateY(-1px);
+}
+.cn-login-as-item:active {
+    transform: scale(0.99);
+}
+.cn-login-as-item-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.cn-login-as-arrow {
+    color: var(--primary, #2563eb);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
 /* App cell (icon + name) */
 
 .cn-app-cell {
@@ -767,6 +810,22 @@ body {
     justify-content: center;
     font-size: 1.1rem;
     flex-shrink: 0;
+    overflow: hidden;
+}
+
+/* Logo aplikasi di list & modal edit */
+
+.cn-app-logo-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.cn-app-logo-row {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border, #e2e8f0);
 }
 
 .cn-muted {
@@ -918,4 +977,436 @@ body {
     .cn-detail-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* ═══════════════════════════════════════════════════════
+   SP-027 M5 — Deployment Center
+   ═══════════════════════════════════════════════════════ */
+.dp-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.dp-tab.active {
+    background: var(--primary, #2563eb) !important;
+    color: #fff !important;
+    border-color: var(--primary, #2563eb) !important;
+}
+.dp-grid {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.dp-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+.dp-stat {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary, #2563eb);
+}
+.dp-table-wrap {
+    overflow-x: auto;
+}
+.dp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.dp-table th,
+.dp-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border, #e5e7eb);
+    text-align: left;
+    white-space: nowrap;
+}
+.dp-table th {
+    color: var(--muted, #6b7280);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.4px;
+}
+.dp-detail {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0;
+}
+.dp-detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--border, #e5e7eb);
+    font-size: 13px;
+}
+.dp-detail-row span {
+    color: var(--muted, #6b7280);
+}
+.dp-logs {
+    margin-top: 12px;
+    background: #0f172a;
+    color: #cbd5e1;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 12px;
+    max-height: 300px;
+    overflow: auto;
+}
+.dp-logs pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.dp-db-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.dp-db-cols {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 16px;
+}
+.dp-db-list {
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 480px;
+    overflow: auto;
+}
+.dp-db-list h4 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted, #6b7280);
+}
+.dp-db-col {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 7px 9px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text, #111827);
+}
+.dp-db-col:hover {
+    background: var(--hover, #f3f4f6);
+}
+.dp-db-detail {
+    min-width: 0;
+}
+.dp-db-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.dp-doc-list {
+    display: grid;
+    gap: 8px;
+}
+.dp-doc {
+    margin: 0;
+    padding: 10px;
+    background: #f8fafc;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px;
+    font-size: 12px;
+    overflow: auto;
+    max-height: 260px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (max-width: 768px) {
+    .dp-grid-3 {
+        grid-template-columns: 1fr;
+    }
+    .dp-db-cols {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════
+   SP-027 M5-FIX — Database Explorer UI
+   ═══════════════════════════════════════════════════════ */
+.dp-db-side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.dp-db-section-title {
+    margin: 0 0 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted, #6b7280);
+}
+.dp-db-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+    margin-bottom: 2px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text, #111827);
+}
+.dp-db-item:hover {
+    background: var(--hover, #f3f4f6);
+}
+.dp-db-item.active {
+    background: var(--primary, #2563eb);
+    color: #fff;
+}
+.dp-db-item-icon {
+    opacity: 0.7;
+}
+.dp-db-col-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dp-db-col-count {
+    font-size: 11px;
+    background: var(--border, #e5e7eb);
+    border-radius: 999px;
+    padding: 1px 7px;
+    color: var(--muted, #6b7280);
+}
+.dp-db-refresh {
+    width: 100%;
+    margin-top: 10px;
+}
+.dp-db-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+.dp-db-toolbar-spacer {
+    flex: 1;
+}
+.dp-db-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    flex-wrap: wrap;
+}
+.dp-db-crumb {
+    cursor: pointer;
+    color: var(--primary, #2563eb);
+}
+.dp-db-crumb:hover {
+    text-decoration: underline;
+}
+.dp-db-crumb-current {
+    color: var(--text, #111827);
+    font-weight: 600;
+    cursor: default;
+}
+.dp-db-crumb-sep {
+    color: var(--muted, #9ca3af);
+}
+.dp-db-filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.dp-db-filter-bar .smart-input {
+    width: 180px;
+}
+.dp-doc-cell {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dp-doc-val {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+}
+.dp-type-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 4px;
+    padding: 1px 6px;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+.dp-type-string   { background: #e0f2fe; color: #0369a1; }
+.dp-type-number   { background: #fef3c7; color: #92400e; }
+.dp-type-boolean  { background: #dcfce7; color: #166534; }
+.dp-type-objectid { background: #f3e8ff; color: #6b21a8; }
+.dp-type-date     { background: #fce7f3; color: #9d174d; }
+.dp-type-object   { background: #f1f5f9; color: #334155; }
+.dp-type-array    { background: #f1f5f9; color: #334155; }
+.dp-type-null     { background: #f3f4f6; color: #6b7280; }
+
+/* Document tree (nested object/array explorer) */
+.dp-tree {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px;
+    max-height: 480px;
+    overflow: auto;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px;
+    padding: 10px;
+    background: #fcfcfd;
+}
+.dp-tree-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 3px 0;
+    white-space: nowrap;
+}
+.dp-tree-key {
+    font-weight: 600;
+    color: #0f172a;
+    min-width: 140px;
+    display: inline-block;
+}
+.dp-tree-value {
+    color: #334155;
+    word-break: break-all;
+    white-space: normal;
+}
+.dp-tree-node {
+    margin-left: 0;
+}
+.dp-tree-summary {
+    cursor: pointer;
+    padding: 3px 0;
+    color: #0f172a;
+    list-style: none;
+}
+.dp-tree-summary::-webkit-details-marker {
+    display: none;
+}
+.dp-tree-summary::before {
+    content: "▸";
+    display: inline-block;
+    margin-right: 6px;
+    color: var(--muted, #9ca3af);
+    transition: transform 0.15s;
+}
+.dp-tree-node[open] > .dp-tree-summary::before {
+    transform: rotate(90deg);
+}
+.dp-tree-children {
+    margin-left: 22px;
+    border-left: 1px dashed var(--border, #d1d5db);
+    padding-left: 10px;
+}
+.dp-error {
+    padding: 18px;
+    text-align: center;
+    border: 1px dashed #fca5a5;
+    border-radius: 8px;
+    background: #fef2f2;
+}
+@media (max-width: 900px) {
+    .dp-db-cols {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════
+   SP-029 M6 — Billing & Subscription Center UI
+   ═══════════════════════════════════════════════════════ */
+.bl-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.bl-form label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted, #6b7280);
+    margin-top: 4px;
+}
+.bl-form input.smart-input,
+.bl-form select.smart-input,
+.bl-form textarea.smart-input {
+    width: 100%;
+}
+.bl-form textarea.smart-input {
+    resize: vertical;
+    min-height: 56px;
+}
+.bl-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 2px 0;
+}
+.bl-features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 12px;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 6px;
+    padding: 8px;
+    background: var(--surface, #fff);
+}
+.bl-filter-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.dp-stat-warn {
+    color: #b45309 !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SP-029 M6-FIX — Billing Detail (halaman Companies)
+   ═══════════════════════════════════════════════════════ */
+.cn-billing-section-title {
+    margin: 18px 0 8px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--muted, #6b7280);
+    border-bottom: 1px solid var(--border, #e5e7eb);
+    padding-bottom: 6px;
+}
+.cn-billing-features {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.cn-billing-features th,
+.cn-billing-features td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border, #eef0f3);
+}
+.cn-billing-features th {
+    color: var(--muted, #6b7280);
+    font-weight: 600;
+    font-size: 12px;
 }

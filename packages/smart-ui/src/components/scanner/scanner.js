@@ -54,6 +54,15 @@ export class BarcodeScanner {
         this._decodeErrorCount = 0;
         /** @type {boolean} */
         this._running = false;
+        /** @type {boolean} */
+        this._startErrorLogged = false;
+        // Anti double-read (M6-FIX): kode yang sama ter-decode di beberapa frame
+        // beruntun (fps) sebelum kamera berhenti → tanpa dedupe produk masuk 2×.
+        // Berlaku untuk SEMUA pemakai BarcodeScanner (kasir, master barang,
+        // pembelian, penjualan/SO, transfer). Kode berbeda tetap diproses.
+        this._lastCode = "";
+        this._lastCodeAt = 0;
+        this._dedupeMs = 1500;
 
         if (options.autoStart) {
             this.start();
@@ -74,9 +83,72 @@ export class BarcodeScanner {
     }
 
     /**
+     * Pilih kamera belakang dari daftar hasil enumerasi (label back/rear/
+     * environment/belakang), fallback kamera terakhir.
+     * @returns {{ id: string, label: string }|null}
+     */
+    _findBackCamera() {
+        if (!this._cameras || this._cameras.length === 0) return null;
+        const back = this._cameras.find(c => /back|rear|environment|belakang/i.test(c.label || ""));
+        return back || this._cameras[this._cameras.length - 1] || null;
+    }
+
+    /**
+     * Enumerasi kamera via `enumerateDevices()` POLOS — TANPA membuka stream.
+     *
+     * M6-FIX v4b: `Html5Qrcode.getCameras()` memanggil `getUserMedia` (membuka
+     * lalu menutup stream kamera). Di Android, stream yang baru ditutup sering
+     * masih "terkunci" beberapa saat → `start()` berikutnya gagal
+     * NotReadableError → semua fallback ikut gagal. enumerateDevices() murni
+     * daftar device tanpa menyentuh kamera (label bisa kosong tanpa izin).
+     * @returns {Promise<Array<{id:string, label:string}>>}
+     */
+    async _enumerateCameras() {
+        try {
+            // window.navigator (bukan navigator) agar tidak kena no-undef
+            // di env lint paket (pola sama dengan compressImage di barang module)
+            const md = (typeof window !== "undefined" && window.navigator && window.navigator.mediaDevices) || null;
+            if (!md || typeof md.enumerateDevices !== "function") return [];
+            const devices = await md.enumerateDevices();
+            return devices
+                .filter(d => d.kind === "videoinput")
+                .map(d => ({ id: d.deviceId || "", label: d.label || "" }));
+        } catch {
+            return [];
+        }
+    }
+
+    /** @param {number} ms */
+    _sleep(ms) {
+        return new Promise(r => setTimeout(r, ms));
+    }
+
+    /**
+     * Reset instance Html5Qrcode — WAJIB setelah percobaan start gagal,
+     * karena html5-qrcode tidak bisa start ulang pada instance yang sama
+     * tanpa clear(). Tanpa reset ini, fallback kamera berikutnya di HP
+     * selalu gagal ("Cannot start, already started") — M6-FIX v4.
+     */
+    _resetInstance() {
+        if (!this._instance) return;
+        try { this._instance.clear(); } catch { /* ignore */ }
+        this._instance = null;
+        const container = document.getElementById(this.containerId);
+        if (container) container.innerHTML = "";
+    }
+
+    /**
      * Start scanning with device-appropriate camera.
-     * Camera priority: HP → environment (back) → user (front) → deviceId
-     *                 Laptop → user (front) → environment (back) → deviceId
+     *
+     * M6-FIX v4b (HP): urutan KAMERA BELAKANG paling andal:
+     *   1. facingMode "environment" — browser memilih kamera belakang secara
+     *      native (tanpa perlu enumerasi/label, tanpa membuka stream dulu)
+     *   2. deviceId kamera belakang dari enumerateDevices (label back/rear)
+     *   3. facingMode "user" (kamera depan)
+     *   4. semua deviceId hasil enumerasi
+     * Laptop: user (depan) → environment → semua deviceId.
+     * Setiap kegagalan → instance di-reset + jeda kecil (kamera butuh waktu
+     * dilepas sebelum dipakai ulang).
      */
     async start() {
         if (this._running) return;
@@ -86,39 +158,46 @@ export class BarcodeScanner {
 
         this._running = true;
         this._decodeErrorCount = 0;
+        this._startErrorLogged = false;
 
         try {
-            const html5QrCode = new Html5Qrcode(this.containerId, {});
-            this._instance = html5QrCode;
+            this._instance = new Html5Qrcode(this.containerId, {});
 
             const config = { fps: this.fps, qrbox: { width: 280, height: 180 } };
 
-            // Enumerate cameras
-            this._cameras = await Html5Qrcode.getCameras().catch(() => []);
+            // Enumerasi TANPA getUserMedia (tidak mengunci kamera)
+            this._cameras = await this._enumerateCameras();
 
             const isMobile = _isMobileDevice();
 
             if (isMobile) {
-                if (await this._tryStartCamera(config, { facingMode: "environment" })) {
-                    // back camera
-                } else if (await this._tryStartCamera(config, { facingMode: "user" })) {
-                    // front camera fallback
-                } else {
-                    await this._tryDeviceIdCameras(config);
+                if (await this._tryStartCamera(config, { facingMode: "environment" })) return;
+                await this._afterFail();
+                const backCam = this._findBackCamera();
+                if (backCam) {
+                    if (await this._tryStartCamera(config, { deviceId: backCam.id })) return;
+                    await this._afterFail();
                 }
+                if (await this._tryStartCamera(config, { facingMode: "user" })) return;
+                await this._afterFail();
+                await this._tryDeviceIdCameras(config);
             } else {
-                if (await this._tryStartCamera(config, { facingMode: "user" })) {
-                    // front camera
-                } else if (await this._tryStartCamera(config, { facingMode: "environment" })) {
-                    // back camera fallback
-                } else {
-                    await this._tryDeviceIdCameras(config);
-                }
+                if (await this._tryStartCamera(config, { facingMode: "user" })) return;
+                await this._afterFail();
+                if (await this._tryStartCamera(config, { facingMode: "environment" })) return;
+                await this._afterFail();
+                await this._tryDeviceIdCameras(config);
             }
         } catch (err) {
             this._running = false;
             throw err;
         }
+    }
+
+    /** Reset instance + jeda agar kamera dilepas sebelum percobaan berikutnya. */
+    async _afterFail() {
+        this._resetInstance();
+        await this._sleep(250);
     }
 
     /**
@@ -128,10 +207,20 @@ export class BarcodeScanner {
      * @returns {Promise<boolean>}
      */
     async _tryStartCamera(config, constraint) {
-        if (!this._instance) return false;
+        if (!this._instance) {
+            // Setelah reset, buat instance baru sebelum mencoba lagi
+            this._instance = new Html5Qrcode(this.containerId, {});
+        }
         try {
             await this._instance.start(constraint, config, (text) => {
-                this.onScan(text);
+                const code = String(text || "").trim();
+                const now = Date.now();
+                if (code && code === this._lastCode && now - this._lastCodeAt < this._dedupeMs) {
+                    return;
+                }
+                this._lastCode = code;
+                this._lastCodeAt = now;
+                this.onScan(code);
             }, (err) => {
                 this._decodeErrorCount++;
                 if (this._decodeErrorCount % 100 === 0) {
@@ -140,6 +229,13 @@ export class BarcodeScanner {
             });
             return true;
         } catch (err) {
+            // Log error asli SEKALI per start — supaya diagnosa jelas kalau
+            // kamera tetap tidak bisa diakses (izin ditolak / dipakai app lain).
+            if (!this._startErrorLogged) {
+                this._startErrorLogged = true;
+                const msg = typeof err === "string" ? err : (err && err.message) || String(err);
+                console.warn("[Scanner] Gagal mulai kamera", constraint, ":", msg);
+            }
             return false;
         }
     }
@@ -156,6 +252,8 @@ export class BarcodeScanner {
                 this._cameraIndex = i;
                 return;
             }
+            // Instance kotor setelah gagal — reset sebelum deviceId berikutnya
+            await this._afterFail();
         }
         throw new Error("No camera could be started");
     }

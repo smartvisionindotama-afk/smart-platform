@@ -124,6 +124,9 @@ router.get("/", async (req, res) => {
 
         const query = {};
         if (companyCode) query.companyCode = companyCode;
+        // STRICT (SP-029 M6-FIX): server POS hanya menampilkan retur transaksi
+        // kasir (sumber="pos"). Retur SO/admin tidak tampil di POS.
+        query.sumber = "pos";
         if (search) {
             query.$or = [
                 { nomor: { $regex: search, $options: "i" } },
@@ -155,6 +158,8 @@ router.get("/:id", async (req, res) => {
         const item = await ReturPenjualan.findById(req.params.id);
         if (!item) return res.status(404).json({ error: "Not found" });
         if (!checkCompany(item, req)) return res.status(404).json({ error: "Not found" });
+        // STRICT: detail hanya untuk retur domain POS (kasir).
+        if (item.sumber !== "pos") return res.status(404).json({ error: "Not found" });
         res.json(item);
     } catch (err) {
         res.status(500).json({ error: err.message });

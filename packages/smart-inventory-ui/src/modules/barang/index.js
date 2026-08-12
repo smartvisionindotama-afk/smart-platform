@@ -8,6 +8,7 @@
  */
 
 import { Modal, Table, Pagination, EmptyState, Alert, Skeleton, showToast, UI } from "@smart/ui";
+import { esc } from "@smart/core";
 
 /**
  * Create a Barang management module.
@@ -47,6 +48,9 @@ export function BarangModule(services) {
     let _warehouseData = [];
 
     let _scannerInstance = null;
+
+    // Foto produk (data URI hasil kompresi client-side) — SP-029 M3-FIX
+    let _fotoDataUri = "";
 
     // ── Page Shell ──
 
@@ -152,7 +156,13 @@ export function BarangModule(services) {
     function renderDesktopTable(container) {
         const columns = [
             { key: "kode", label: "Kode", width: "110px" },
-            { key: "nama", label: "Nama Barang" },
+            // PRD V1 — kode berfungsi sebagai barcode (barcode diisi di kolom Kode)
+            // SP-029 M3-FIX — kolom Gambar (foto produk, thumbnail)
+            { key: "foto", label: "Gambar", width: "76px", align: "center",
+                render: (val, row) => val
+                    ? `<img class="brg-thumb" src="${esc(val)}" alt="${esc(row.nama)}" loading="lazy" onerror="this.style.display='none'" />`
+                    : `<span class="brg-thumb-empty">—</span>` },
+            { key: "nama", label: "Nama Barang", render: (val, row) => `${esc(val)}${row?.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${row?.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}` },
             { key: "kategori", label: "Kategori", width: "140px" },
             { key: "satuan", label: "Satuan", width: "85px", align: "center" },
             { key: "rak", label: "Rak/Etalase", width: "100px" },
@@ -160,7 +170,7 @@ export function BarangModule(services) {
             { key: "harga_beli", label: "Harga Beli", width: "130px", align: "right",
                 render: (val) => `<span style="font-weight:500;color:#6b7280">${formatRupiah(val)}</span>` },
             { key: "harga_jual", label: "Harga Jual", width: "130px", align: "right",
-                render: (val) => `<span style="font-weight:600;color:#059669">${formatRupiah(val)}</span>` },
+                render: (val, row) => `<span style="font-weight:600;color:#059669">${formatRupiah(val)}</span>${(Number(row?.harga_khusus) || 0) > 0 ? `<br/><small class="brg-hk">Khusus: ${formatRupiah(row.harga_khusus)}</small>` : ""}` },
             { key: "stok", label: "Stok", width: "80px", align: "center",
                 render: (val, row) => `<span class="${val <= row.stok_minimum ? "stok-low" : "stok-ok"}">${val}</span>` },
             { key: "actions", label: "Aksi", width: "120px", align: "center",
@@ -175,8 +185,12 @@ export function BarangModule(services) {
     function renderBarangCards(container) {
         const list = UI.CardList(state.items, (item) => {
             const isLow = Number(item.stok) <= Number(item.stok_minimum);
+            const imgBlock = item.foto
+                ? `<div class="sm-card-thumb"><img src="${esc(item.foto)}" alt="${esc(item.nama)}" loading="lazy" onerror="this.style.display='none'" /></div>`
+                : "";
             return `
-                <div class="sm-card-name">${esc(item.nama)}</div>
+                ${imgBlock}
+                <div class="sm-card-name">${esc(item.nama)}${item.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${item.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}</div>
                 <div class="card-body">
                     <div class="card-row">
                         <span class="card-label">Gudang</span>
@@ -210,14 +224,17 @@ export function BarangModule(services) {
         const isLow = Number(item.stok) <= Number(item.stok_minimum);
         const contentHTML = `
             <div class="detail-grid">
+                ${item.foto ? `<div class="detail-row detail-row-full"><span class="detail-label">Foto</span><span class="detail-value"><img class="brg-thumb brg-thumb-lg" src="${esc(item.foto)}" alt="${esc(item.nama)}" /></span></div>` : ""}
                 ${renderDetailRow("Kode", esc(item.kode))}
-                ${renderDetailRow("Nama Barang", esc(item.nama))}
+                ${renderDetailRow("Nama Barang", `${esc(item.nama)}${item.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${item.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}`)}
+                ${renderDetailRow("Tipe", item.behavior === "service" ? "Jasa / Service" : (item.behavior === "recipe" ? "Resep / Menu (V1: tanpa stok)" : "Barang Dagangan"))}
                 ${renderDetailRow("Kategori", esc(item.kategori || "—"))}
                 ${renderDetailRow("Satuan", esc(item.satuan || "—"))}
                 ${renderDetailRow("Rak/Etalase", esc(item.rak || "—"))}
                 ${renderDetailRow("Gudang", esc(item.gudang || "—"))}
                 ${renderDetailRow("Harga Beli", formatRupiah(item.harga_beli), "#6b7280")}
                 ${renderDetailRow("Harga Jual", formatRupiah(item.harga_jual), "#059669;font-weight:600")}
+                ${(Number(item.harga_khusus) || 0) > 0 ? renderDetailRow("Harga Khusus", formatRupiah(item.harga_khusus), "#b45309;font-weight:600") : ""}
                 ${renderDetailRow("Stok", `<span class="${isLow ? "stok-low" : "stok-ok"}">${item.stok}</span>`)}
                 ${renderDetailRow("Stok Minimum", item.stok_minimum)}
                 ${item.deskripsi ? renderDetailRowFull("Deskripsi", esc(item.deskripsi)) : ""}
@@ -248,13 +265,23 @@ export function BarangModule(services) {
         state.editingId = id;
         const isEdit = mode === "edit";
         const title = isEdit ? "Edit Barang" : "Tambah Barang Baru";
-        let formData = { kode: "", nama: "", kategori: "", satuan: "", rak: "", gudang: "", harga_beli: "", harga_jual: "", stok: "", stok_minimum: "", deskripsi: "" };
+        // SP-029 M3 — behavior: "trading" (barang fisik) | "service" (jasa)
+        // PRD V1 — + "recipe" (resep: dijual tanpa kurangi stok di V1, engine
+        // penuh V2). Placeholder enum: manufactured/digital (V2/V3) tetap
+        // disimpan model — form cukup trading/service/recipe untuk V1.
+        // SP-029 M3-FIX — foto produk: direset dulu, lalu diisi ulang dari data
+        // item saat edit (agar foto lama TIDAK terhapus bila tidak diubah).
+        _fotoDataUri = "";
+        let formData = { kode: "", nama: "", behavior: "trading", kategori: "", satuan: "", rak: "", gudang: "", harga_beli: "", harga_jual: "", harga_khusus: "", stok: "", stok_minimum: "", deskripsi: "", foto: "" };
         if (isEdit && id) {
             try {
                 const item = await getBarang(id);
-                if (item) formData = { kode: item.kode, nama: item.nama, kategori: item.kategori, satuan: item.satuan, rak: item.rak || "", gudang: item.gudang || "", harga_beli: item.harga_beli, harga_jual: item.harga_jual, stok: item.stok, stok_minimum: item.stok_minimum, deskripsi: item.deskripsi };
+                if (item) formData = { kode: item.kode, nama: item.nama, behavior: item.behavior || "trading", kategori: item.kategori, satuan: item.satuan, rak: item.rak || "", gudang: item.gudang || "", harga_beli: item.harga_beli, harga_jual: item.harga_jual, harga_khusus: item.harga_khusus || 0, stok: item.stok, stok_minimum: item.stok_minimum, deskripsi: item.deskripsi, foto: item.foto || "" };
             } catch { showToast("danger", "Gagal memuat data"); return; }
         }
+        // Foto lama dipertahankan sebagai baseline — bila user tidak mengubahnya,
+        // foto tetap tersimpan saat submit (foto: _fotoDataUri).
+        _fotoDataUri = formData.foto || "";
         let kategoriOptions = [], satuanOptions = [], rakOptions = [], gudangOptions = [];
         _rakData = [];
         _warehouseData = [];
@@ -296,6 +323,12 @@ export function BarangModule(services) {
                 </div>
             </div>
             <div class="form-grid">
+                <!-- Gudang di PALING ATAS form (keputusan user — pilihan gudang
+                     utama saat tambah barang; tetap tersembunyi utk Jasa/Resep) -->
+                <div class="form-group" id="f-gudang-field" style="${data.behavior === "service" ? "display:none" : ""}">
+                    <label for="f-gudang">Gudang <span class="required">*</span></label>
+                    <select id="f-gudang"><option value="">— Pilih Gudang —</option>${gudangOptions.map(g => `<option value="${g}" ${data.gudang === g ? "selected" : ""}>${g}</option>`).join("")}</select>
+                </div>
                 <div class="form-group">
                     <label for="f-kode">Kode Barang <span class="required">*</span></label>
                     <div class="kode-wrapper">
@@ -309,6 +342,15 @@ export function BarangModule(services) {
                     <input type="text" id="f-nama" value="${esc(data.nama)}" placeholder="Nama barang" required />
                 </div>
                 <div class="form-group">
+                    <label for="f-behavior">Tipe Barang</label>
+                    <select id="f-behavior">
+                        <option value="trading" ${data.behavior === "service" || data.behavior === "recipe" ? "" : "selected"}>Barang Dagangan</option>
+                        <option value="service" ${data.behavior === "service" ? "selected" : ""}>Jasa / Service</option>
+                        <option value="recipe" ${data.behavior === "recipe" ? "selected" : ""}>Resep / Menu (V1: tanpa stok)</option>
+                    </select>
+                    <small>Jasa & Resep tidak memakai stok/gudang (V1); resep = fondasi engine BOM V2</small>
+                </div>
+                <div class="form-group">
                     <label for="f-kategori">Kategori</label>
                     <select id="f-kategori">${renderOpts(kategoriOptions, data.kategori, "__add_kategori__", "➕ Tambah Kategori")}</select>
                 </div>
@@ -320,25 +362,44 @@ export function BarangModule(services) {
                     <label for="f-rak">Rak / Etalase</label>
                     <select id="f-rak">${renderOpts(rakOptions, data.rak, "__add_rak__", "➕ Tambah Rak")}</select>
                 </div>
-                <div class="form-group">
-                    <label for="f-gudang">Gudang <span class="required">*</span></label>
-                    <select id="f-gudang"><option value="">— Pilih Gudang —</option>${gudangOptions.map(g => `<option value="${g}" ${data.gudang === g ? "selected" : ""}>${g}</option>`).join("")}</select>
-                </div>
-                <div class="form-group">
-                    <label for="f-harga-beli">Harga Beli</label>
-                    <input type="number" id="f-harga-beli" value="${data.harga_beli}" placeholder="0" min="0" />
+                <div class="form-grid" id="f-trading-fields" style="${data.behavior === "service" ? "display:none" : ""}">
+                    <div class="form-group">
+                        <label for="f-harga-beli">Harga Beli</label>
+                        <input type="number" id="f-harga-beli" value="${data.harga_beli}" placeholder="0" min="0" />
+                    </div>
+                    <div class="form-group">
+                        <label for="f-stok">Stok Awal</label>
+                        <input type="number" id="f-stok" value="${data.stok}" placeholder="0" min="0" />
+                    </div>
+                    <div class="form-group">
+                        <label for="f-stok-minimum">Stok Minimum</label>
+                        <input type="number" id="f-stok-minimum" value="${data.stok_minimum}" placeholder="0" min="0" />
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="f-harga-jual">Harga Jual</label>
                     <input type="number" id="f-harga-jual" value="${data.harga_jual}" placeholder="0" min="0" />
                 </div>
                 <div class="form-group">
-                    <label for="f-stok">Stok Awal</label>
-                    <input type="number" id="f-stok" value="${data.stok}" placeholder="0" min="0" />
+                    <label for="f-harga-khusus">Harga Khusus (multi price)</label>
+                    <input type="number" id="f-harga-khusus" value="${data.harga_khusus}" placeholder="0 (kosong = pakai harga jual)" min="0" />
+                    <small>Dipakai layar kasir bila > 0 (PRD V1, multi price minimal)</small>
                 </div>
-                <div class="form-group">
-                    <label for="f-stok-minimum">Stok Minimum</label>
-                    <input type="number" id="f-stok-minimum" value="${data.stok_minimum}" placeholder="0" min="0" />
+                <div class="form-group full-width">
+                    <label for="f-foto">Foto Produk</label>
+                    <div class="foto-upload">
+                        <div class="foto-preview" id="f-foto-preview">
+                            ${data.foto
+                                ? `<img src="${esc(data.foto)}" alt="Preview" />`
+                                : `<span class="foto-placeholder">📷</span>`}
+                        </div>
+                        <div class="foto-actions">
+                            <button type="button" class="foto-btn" id="f-foto-btn">📁 Pilih Gambar</button>
+                            ${data.foto ? `<button type="button" class="foto-btn foto-btn-danger" id="f-foto-clear">🗑 Hapus</button>` : ""}
+                            <input type="file" id="f-foto-file" accept="image/*" hidden />
+                            <small class="foto-hint">JPG/PNG/WebP maks 3MB — otomatis dikompres untuk layar kasir.</small>
+                        </div>
+                    </div>
                 </div>
                 <div class="form-group full-width">
                     <label for="f-deskripsi">Deskripsi</label>
@@ -383,6 +444,54 @@ export function BarangModule(services) {
         // Scanner
         document.getElementById("btn-scan-barcode")?.addEventListener("click", (e) => { e.preventDefault(); toggleScanner(); });
         document.getElementById("btn-switch-camera")?.addEventListener("click", switchCamera);
+
+        // SP-029 M3 + PRD V1 — Tipe non-trading (Jasa/Resep):
+        // sembunyikan field stok/gudang/harga beli
+        document.getElementById("f-behavior")?.addEventListener("change", (e) => {
+            const isNonTrading = (e.target.value === "service" || e.target.value === "recipe");
+            const tradingFields = document.getElementById("f-trading-fields");
+            if (tradingFields) tradingFields.style.display = isNonTrading ? "none" : "";
+            // Gudang (pindah ke atas form) ikut tersembunyi saat Jasa/Resep
+            const gudangField = document.getElementById("f-gudang-field");
+            if (gudangField) gudangField.style.display = isNonTrading ? "none" : "";
+        });
+
+        // SP-029 M3-FIX — Foto produk: pilih file → kompres client-side → data URI
+        const fotoBtn = document.getElementById("f-foto-btn");
+        const fotoFile = document.getElementById("f-foto-file");
+        if (fotoBtn && fotoFile) {
+            fotoBtn.addEventListener("click", (e) => { e.preventDefault(); fotoFile.click(); });
+            fotoFile.addEventListener("change", async () => {
+                const file = fotoFile.files && fotoFile.files[0];
+                if (!file) return;
+                if (!/^image\//.test(file.type)) { showToast("warning", "File harus berupa gambar"); return; }
+                if (file.size > 3 * 1024 * 1024) { showToast("warning", "Ukuran gambar maksimal 3MB"); return; }
+                try {
+                    _fotoDataUri = await compressImage(file);
+                    const preview = document.getElementById("f-foto-preview");
+                    if (preview) preview.innerHTML = `<img src="${_fotoDataUri}" alt="Preview" />`;
+                    // Reset value agar file yang sama bisa dipilih ulang (change tetap terpicu)
+                    fotoFile.value = "";
+                    // Tampilkan tombol Hapus (belum ada saat barang baru / tanpa foto)
+                    if (!document.getElementById("f-foto-clear")) {
+                        const actions = document.querySelector(".foto-actions");
+                        if (actions) {
+                            const btn = document.createElement("button");
+                            btn.type = "button";
+                            btn.className = "foto-btn foto-btn-danger";
+                            btn.id = "f-foto-clear";
+                            btn.innerHTML = "🗑 Hapus";
+                            btn.addEventListener("click", (ev) => { ev.preventDefault(); clearFoto(); });
+                            actions.insertBefore(btn, actions.querySelector("input"));
+                        }
+                    }
+                    showToast("success", "Foto produk diunggah");
+                } catch (err) {
+                    showToast("danger", err.message || "Gagal memproses gambar");
+                }
+            });
+        }
+        document.getElementById("f-foto-clear")?.addEventListener("click", (e) => { e.preventDefault(); clearFoto(); });
 
         // Quick-add
         document.getElementById("f-kategori")?.addEventListener("change", async (e) => { if (e.target.value === "__add_kategori__") { e.target.value = ""; await showQuickAdd("kategori", e.target); } });
@@ -477,20 +586,25 @@ export function BarangModule(services) {
         if (!kode) { showToast("warning", "Kode barang wajib diisi (scan barcode/QR atau ketik manual)"); document.getElementById("f-kode")?.focus(); return; }
         const nama = document.getElementById("f-nama")?.value?.trim();
         if (!nama) { showToast("warning", "Nama barang wajib diisi"); document.getElementById("f-nama")?.focus(); return; }
+        // SP-029 M3 — Gudang wajib hanya untuk barang dagangan (trading)
+        const behavior = document.getElementById("f-behavior")?.value || "trading";
         const gudang = document.getElementById("f-gudang")?.value?.trim() || "";
-        if (!gudang) { showToast("warning", "Gudang wajib dipilih"); document.getElementById("f-gudang")?.focus(); return; }
+        if (behavior !== "service" && !gudang) { showToast("warning", "Gudang wajib dipilih"); document.getElementById("f-gudang")?.focus(); return; }
 
         const data = {
             kode, nama,
+            behavior,
             kategori: document.getElementById("f-kategori")?.value || "",
             satuan: document.getElementById("f-satuan")?.value || "",
             rak: document.getElementById("f-rak")?.value?.trim() || "",
             gudang,
             harga_beli: Number(document.getElementById("f-harga-beli")?.value) || 0,
             harga_jual: Number(document.getElementById("f-harga-jual")?.value) || 0,
+            harga_khusus: Number(document.getElementById("f-harga-khusus")?.value) || 0,
             stok: Number(document.getElementById("f-stok")?.value) || 0,
             stok_minimum: Number(document.getElementById("f-stok-minimum")?.value) || 0,
-            deskripsi: document.getElementById("f-deskripsi")?.value?.trim() || ""
+            deskripsi: document.getElementById("f-deskripsi")?.value?.trim() || "",
+            foto: _fotoDataUri
         };
         try {
             if (isEdit && editId) { await updateBarang(editId, data); showToast("success", "Barang berhasil diperbarui"); }
@@ -648,13 +762,61 @@ export function BarangModule(services) {
 
     // ── Utilities ──
 
+    function clearFoto() {
+        _fotoDataUri = "";
+        const preview = document.getElementById("f-foto-preview");
+        if (preview) preview.innerHTML = `<span class="foto-placeholder">📷</span>`;
+        const clearBtn = document.getElementById("f-foto-clear");
+        if (clearBtn) clearBtn.remove();
+        const fotoFile = document.getElementById("f-foto-file");
+        if (fotoFile) fotoFile.value = "";
+    }
+
+    /**
+     * Kompresi gambar client-side (canvas) → data URI JPEG.
+     * Maks dimensi maxSize px, kualitas quality — ringan untuk layar kasir
+     * & tidak membludaki payload API (data URI tersimpan di field `foto`).
+     * @param {File} file
+     * @param {number} [maxSize=500]
+     * @param {number} [quality=0.75]
+     * @returns {Promise<string>}
+     */
+    function compressImage(file, maxSize = 500, quality = 0.75) {
+        return new Promise((resolve, reject) => {
+            // window.* agar tidak kena no-undef (lint config paket tanpa browser env)
+            const reader = new window.FileReader();
+            reader.onload = (e) => {
+                const img = new window.Image();
+                img.onload = () => {
+                    const ratio = Math.min(1, maxSize / Math.max(img.width, img.height));
+                    const w = Math.max(1, Math.round(img.width * ratio));
+                    const h = Math.max(1, Math.round(img.height * ratio));
+                    const canvas = document.createElement("canvas");
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) { reject(new Error("Canvas tidak didukung browser ini")); return; }
+                    // Latar putih dulu — JPEG tidak punya alpha (hindari hitam utk PNG transparan)
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL("image/jpeg", quality));
+                };
+                img.onerror = () => reject(new Error("File bukan gambar yang valid"));
+                img.src = e.target.result;
+            };
+            reader.onerror = () => reject(new Error("Gagal membaca file"));
+            reader.readAsDataURL(file);
+        });
+    }
+
     function removeModal() {
         stopScanner();
         const overlay = document.querySelector(".smart-modal-overlay");
         if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
         state.formMode = null; state.editingId = null;
     }
-    function esc(str) { if (!str) return ""; return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+    // Framework First: esc dari @smart/core (util global, bukan duplikat lokal)
     function debounce(fn, ms) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); }; }
 
     function getStyles() { return `
@@ -677,6 +839,25 @@ export function BarangModule(services) {
 .barang-page .action-btn-delete:hover { background:#fee2e2; }
 .barang-page .stok-low { color:#dc2626; font-weight:600; }
 .barang-page .stok-ok { color:#16a34a; }
+.barang-page .badge-jasa { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; background:#dcfce7; color:#166534; font-size:0.7rem; font-weight:600; vertical-align:middle; }
+.barang-page .badge-recipe { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; background:#fef3c7; color:#92400e; font-size:0.7rem; font-weight:600; vertical-align:middle; }
+.barang-page .brg-hk { font-size:0.68rem; color:#b45309; font-weight:500; }
+.barang-page .brg-thumb { width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid #e5e7eb; background:#f8fafc; }
+.barang-page .brg-thumb-lg { width:96px; height:96px; }
+.barang-page .brg-thumb-empty { color:#d1d5db; }
+.barang-page .foto-upload { display:flex; gap:14px; align-items:flex-start; }
+.barang-page .foto-preview { width:100px; height:100px; border:1px dashed #cbd5e1; border-radius:10px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#f8fafc; flex-shrink:0; }
+.barang-page .foto-preview img { width:100%; height:100%; object-fit:cover; display:block; }
+.barang-page .foto-placeholder { font-size:1.8rem; opacity:0.45; }
+.barang-page .foto-actions { display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
+.barang-page .foto-btn { padding:0.45rem 0.9rem; border:1px solid var(--smart-border,#d1d5db); border-radius:6px; background:#fff; color:var(--smart-text-primary,#1a1a2e); cursor:pointer; font-size:0.82rem; font-weight:500; transition:all 0.15s; }
+.barang-page .foto-btn:hover { background:#f1f5f9; border-color:#94a3b8; }
+.barang-page .foto-btn-danger { color:#dc2626; border-color:#fecaca; background:#fef2f2; }
+.barang-page .foto-btn-danger:hover { background:#fee2e2; }
+.barang-page .foto-hint { font-size:0.72rem; color:#94a3b8; line-height:1.4; }
+.sm-card .sm-card-thumb { width:100%; height:110px; overflow:hidden; background:#f1f5f9; border-radius:8px; margin-bottom:0.5rem; }
+.sm-card .sm-card-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.barang-page #f-trading-fields { grid-column: 1 / -1; }
 .barang-page .skeleton-wrapper { padding:1rem; }
 .barang-page .delete-confirm { text-align:center; padding:1rem 0; }
 .barang-page .delete-confirm p { font-size:1rem; margin-bottom:1.5rem; color:var(--smart-text-secondary,#6b7280); }

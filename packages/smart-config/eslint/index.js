@@ -4,6 +4,8 @@
 // Usage in app/package.json:
 //   "eslintConfig": { "extends": ["@smart/config/eslint"] }
 
+import globals from "globals";
+
 const config = [
     {
         rules: {
@@ -35,21 +37,9 @@ const config = [
             ecmaVersion: "latest",
             sourceType: "module",
             globals: {
-                window: "readonly",
-                document: "readonly",
-                console: "readonly",
-                setTimeout: "readonly",
-                clearTimeout: "readonly",
-                setInterval: "readonly",
-                clearInterval: "readonly",
-                fetch: "readonly",
-                localStorage: "readonly",
-                sessionStorage: "readonly",
-                URL: "readonly",
-                IntersectionObserver: "readonly",
-                AbortController: "readonly",
-                URLSearchParams: "readonly",
-                global: "readonly"
+                ...globals.browser,
+                ...globals.node,
+                google: "readonly"
             }
         }
     }

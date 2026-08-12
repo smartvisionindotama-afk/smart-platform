@@ -27,6 +27,16 @@
 export { SMART, default } from "./facade.js";
 
 // ═══════════════════════════════════════════════════════════════
+//  Public Utils (Framework First)
+//  Util global yang dipakai lintas aplikasi — WAJIB dari framework,
+//  bukan di-copy ke masing-masing aplikasi.
+// ═══════════════════════════════════════════════════════════════
+
+export { formatRupiah, formatRupiahID, formatNumber, formatDecimal, formatThousand, unformatThousand, parseIdNumber } from "./utils/format.js";
+export { esc, escHtml, escAttr } from "./utils/escape.js";
+export { formatDate, formatDateID, formatDateTime, timeAgo } from "./utils/date.js";
+
+// ═══════════════════════════════════════════════════════════════
 //  @deprecated — Backward Compatible Exports
 //  Aplikasi baru HARUS menggunakan SMART.*
 // ═══════════════════════════════════════════════════════════════

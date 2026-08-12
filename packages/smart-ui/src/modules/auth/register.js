@@ -11,6 +11,7 @@
  */
 
 import { UI } from "../../index.js";
+import { initPasswordToggle } from "./password-toggle.js";
 
 /**
  * Render registration page HTML.
@@ -112,11 +113,17 @@ export function RegisterPageComponent(prefill = {}, { companyTypes } = {}) {
                     ${!isGoogle ? `
                     <div class="form-group">
                         <label for="reg-password">Password <span class="required">*</span></label>
-                        <input type="password" id="reg-password" placeholder="Minimal 6 karakter" required />
+                        <div class="password-wrapper">
+                            <input type="password" id="reg-password" placeholder="Minimal 6 karakter" required autocomplete="new-password" />
+                            <button type="button" id="reg-password-toggle" class="password-toggle" title="Tampilkan password" aria-label="Tampilkan password">👁</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="reg-password-confirm">Konfirmasi Password <span class="required">*</span></label>
-                        <input type="password" id="reg-password-confirm" placeholder="Ulangi password" required />
+                        <div class="password-wrapper">
+                            <input type="password" id="reg-password-confirm" placeholder="Ulangi password" required autocomplete="new-password" />
+                            <button type="button" id="reg-password-confirm-toggle" class="password-toggle" title="Tampilkan password" aria-label="Tampilkan password">👁</button>
+                        </div>
                     </div>
                     ` : ''}
                     <div class="form-group full-width">
@@ -184,6 +191,11 @@ export function initRegisterPageComponent({
     } else {
         if (!btn || !jenis || !name || !email || !admin) return;
     }
+
+    // M3-FIX v28g — eye toggle via shared helper. Tombol hanya ada saat
+    // !isGoogle — guard null di helper aman.
+    initPasswordToggle("reg-password", "reg-password-toggle");
+    initPasswordToggle("reg-password-confirm", "reg-password-confirm-toggle");
 
     // ── Helper functions ──
     function showError(msg) {
@@ -536,5 +548,14 @@ function getRegisterStyles() {
 .wilayah-section .wilayah-title { font-size: 0.82rem; font-weight: 700; color: #166534; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
 .wilayah-section .wilayah-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 @media (max-width: 480px) { .register-card .form-grid { grid-template-columns: 1fr; } .register-card { padding: 24px 18px; } .wilayah-section .wilayah-grid { grid-template-columns: 1fr; } }
+.register-card .password-wrapper { position: relative; }
+.register-card .form-group .password-wrapper input { padding-right: 44px; }
+.register-card .password-toggle {
+    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: 0; cursor: pointer; font-size: 1.1rem;
+    padding: 5px; line-height: 1; opacity: 0.6; transition: opacity 0.15s, background 0.15s;
+    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+}
+.register-card .password-toggle:hover { opacity: 1; background: #f1f5f9; }
 `;
 }

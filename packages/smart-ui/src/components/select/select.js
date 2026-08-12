@@ -74,6 +74,24 @@ export function Select({
     select.disabled = disabled;
 
 
+    // Helper: tandai option terpilih via CONTENT ATTRIBUTE (`selected`)
+    // agar pilihan tidak hilang saat select di-serialisasi outerHTML lalu
+    // di-parse ulang (mis. dalam Modal yang memakai body.innerHTML).
+    const markSelected = (optionEl) => {
+
+        if (optionEl.selected) {
+
+            optionEl.setAttribute("selected", "");
+
+        } else {
+
+            optionEl.removeAttribute("selected");
+
+        }
+
+    };
+
+
     if (placeholder) {
 
         const placeholderOpt =
@@ -89,6 +107,8 @@ export function Select({
 
         placeholderOpt.selected =
             value === "";
+
+        markSelected(placeholderOpt);
 
 
         select.appendChild(
@@ -115,6 +135,8 @@ export function Select({
 
         optionEl.selected =
             (opt.value || "") === value;
+
+        markSelected(optionEl);
 
 
         select.appendChild(

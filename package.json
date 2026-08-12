@@ -14,13 +14,17 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run lint && npm test && npm run build:inventory",
-    "build:inventory": "npm run build --workspace=inventory"
+    "verify": "npm run lint && npm test && npm run build:console && npm run build:inventory && npm run build:pos",
+    "build:console": "npm run build --workspace=console",
+    "build:inventory": "npm run build --workspace=inventory",
+    "build:pos": "npm run build --workspace=pos"
   },
   "devDependencies": {
     "eslint": "^10.7.0",
+    "globals": "^17.11.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.9.5",
     "vitest": "^4.1.10"
-  }
+  },
+  "type": "module"
 }

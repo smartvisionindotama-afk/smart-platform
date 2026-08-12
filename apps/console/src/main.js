@@ -15,11 +15,13 @@ import "./assets/console.css";
 
 import { AppConfig, Auth, SMART } from "@smart/core";
 import { loadUI } from "@smart/ui";
+import { configureAuthTokens, setAuthTokens, clearAuthTokens } from "@smart/api";
 
 import { SuperAdminLoginPage, initSuperAdminLoginPage } from "./pages/login";
 import { ConsoleShell, attachConsoleShell } from "./layouts";
 import { resolvePage } from "./router";
 import { MENU_ITEMS, SESSION_KEY } from "./config/index.js";
+import { getSuperAdminMe, superadminLogout } from "./services/superadmins.js";
 
 const CONSOLE_TITLE = "SMART Console";
 
@@ -57,6 +59,8 @@ function setFavicon(url) {
 }
 
 // ── Session (console-only, localStorage) ──
+// SP-027 M3: sesi divalidasi server (GET /api/superadmins/me) — tidak lagi
+// hanya mempercayai role di localStorage.
 
 function persistSession() {
     try {
@@ -64,17 +68,25 @@ function persistSession() {
     } catch { /* ignore */ }
 }
 
-function restoreSession() {
-    try {
-        const raw = localStorage.getItem(SESSION_KEY);
-        if (!raw) return false;
-        const user = JSON.parse(raw);
-        if (user && user.role === "superadmin") {
-            Auth.currentUser = user;
-            return true;
-        }
-    } catch { /* ignore */ }
-    return false;
+/**
+ * Restore sesi dari token — verifikasi ke server via /me.
+ * @returns {Promise<boolean>}
+ */
+async function restoreSession() {
+    const me = await getSuperAdminMe();
+    if (!me) {
+        clearAuthTokens();
+        return false;
+    }
+    Auth.currentUser = {
+        id: String(me.id),
+        name: me.name,
+        email: me.email || "",
+        institution: me.institution || "PLATFORM",
+        role: "superadmin"
+    };
+    persistSession();
+    return true;
 }
 
 function clearSession() {
@@ -106,6 +118,12 @@ async function navigate(page) {
     mount.innerHTML = "";
     try {
         switch (key) {
+            case "monitoring": {
+                // renderMonitoring menghentikan timer auto-refresh lama di awal
+                const { renderMonitoring } = await import("./pages/monitoring/index.js");
+                await renderMonitoring(mount);
+                break;
+            }
             case "applications": {
                 const { renderApplications } = await import("./pages/applications/index.js");
                 await renderApplications(mount);
@@ -139,6 +157,26 @@ async function navigate(page) {
             case "documentation": {
                 const { renderDocumentation } = await import("./pages/documentation/index.js");
                 await renderDocumentation(mount);
+                break;
+            }
+            case "deployment": {
+                const { renderDeployment } = await import("./pages/deployment/index.js");
+                await renderDeployment(mount);
+                break;
+            }
+            case "security": {
+                const { renderSecurity } = await import("./pages/security/index.js");
+                await renderSecurity(mount);
+                break;
+            }
+            case "database": {
+                const { renderDatabasePage } = await import("./pages/database/index.js");
+                await renderDatabasePage(mount);
+                break;
+            }
+            case "billing": {
+                const { renderBilling } = await import("./pages/billing/index.js");
+                await renderBilling(mount);
                 break;
             }
             default: {
@@ -188,6 +226,8 @@ async function showConsole() {
 }
 
 function handleLogout() {
+    // SP-027 M3: revoke refresh token di server (fire-and-forget)
+    superadminLogout();
     clearSession();
     Auth.logout();
     showSuperAdminLogin();
@@ -216,7 +256,18 @@ async function start() {
     document.title = CONSOLE_TITLE;
     console.log(`${AppConfig.name} v${AppConfig.version} — ${CONSOLE_TITLE}`);
 
-    const hasSession = restoreSession();
+    // SP-027 M3: token store & hook login
+    configureAuthTokens({
+        refreshPath: "/api/superadmins/refresh",
+        onSessionExpired: () => {
+            clearSession();
+            Auth.logout();
+            showSuperAdminLogin();
+        }
+    });
+    window.__SMART_AUTH_TOKEN_HOOK__ = (userData) => setAuthTokens(userData);
+
+    const hasSession = await restoreSession();
     if (hasSession || isSuperAdminLoggedIn()) {
         await showConsole();
     } else {
@@ -227,3 +278,7 @@ async function start() {
 start();
 
 window.__app = { Auth, SMART };
+
+// Navigasi ekspos untuk halaman yang butuh cross-navigation (mis. tombol
+// "Buka Billing Center" dari modal Billing di halaman Companies).
+window.__consoleNav = { navigate };

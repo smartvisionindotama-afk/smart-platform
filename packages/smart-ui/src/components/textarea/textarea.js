@@ -80,6 +80,15 @@ export function Textarea({
 
     textarea.value = value;
 
+    // Serialisasi: nilai textarea di-serialisasi sebagai CHILD TEXT node.
+    // Property .value tidak mengubah child node → outerHTML kehilangan isi
+    // saat di-parse ulang (mis. dalam Modal via body.innerHTML).
+    if (value !== "" && value !== undefined && value !== null) {
+
+        textarea.textContent = value;
+
+    }
+
     textarea.rows = rows;
 
     textarea.disabled = disabled;

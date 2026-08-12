@@ -7,6 +7,9 @@
  * @module @smart/ui/modules/auth/reset-password
  */
 
+import { initPasswordToggle } from "./password-toggle.js";
+import { escHtml } from "@smart/core";
+
 /**
  * Render Reset Password page.
  * @param {string} token - Reset token from URL
@@ -55,6 +58,15 @@ export function ResetPasswordPage(token, email) {
                 .reset-card .rp-msg.success { display: block; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
                 .reset-card .rp-msg.error { display: block; background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
                 .reset-card .rp-email-display { text-align: center; font-size: 0.82rem; color: #64748b; margin-bottom: 20px; padding: 8px; background: #f1f5f9; border-radius: 6px; }
+                .reset-card .password-wrapper { position: relative; }
+                .reset-card .form-group .password-wrapper input { padding-right: 44px; }
+                .reset-card .password-toggle {
+                    position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+                    background: transparent; border: 0; cursor: pointer; font-size: 1.1rem;
+                    padding: 5px; line-height: 1; opacity: 0.6; transition: opacity 0.15s, background 0.15s;
+                    border-radius: 6px; display: flex; align-items: center; justify-content: center;
+                }
+                .reset-card .password-toggle:hover { opacity: 1; background: #f1f5f9; }
             </style>
             <div class="reset-card">
                 <div class="rp-logo">🔐</div>
@@ -64,11 +76,17 @@ export function ResetPasswordPage(token, email) {
                 <div class="rp-email-display">📧 ${email ? escHtml(email) : 'Email tidak diketahui'}</div>
                 <div class="form-group">
                     <label for="rp-password">Password Baru</label>
-                    <input type="password" id="rp-password" placeholder="Minimal 6 karakter" autocomplete="new-password" autofocus />
+                    <div class="password-wrapper">
+                        <input type="password" id="rp-password" placeholder="Minimal 6 karakter" autocomplete="new-password" autofocus />
+                        <button type="button" id="rp-password-toggle" class="password-toggle" title="Tampilkan password" aria-label="Tampilkan password">👁</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="rp-confirm">Konfirmasi Password</label>
-                    <input type="password" id="rp-confirm" placeholder="Ulangi password baru" autocomplete="new-password" />
+                    <div class="password-wrapper">
+                        <input type="password" id="rp-confirm" placeholder="Ulangi password baru" autocomplete="new-password" />
+                        <button type="button" id="rp-confirm-toggle" class="password-toggle" title="Tampilkan password" aria-label="Tampilkan password">👁</button>
+                    </div>
                 </div>
                 <button id="rp-btn" class="rp-btn">Simpan Password Baru</button>
                 <p style="text-align:center;margin-top:16px"><a href="/" style="color:#4f46e5;font-size:0.82rem;text-decoration:none">← Kembali ke Login</a></p>
@@ -89,6 +107,10 @@ export function initResetPasswordPage(token, email) {
     const msgEl = document.getElementById("rp-msg");
 
     if (!btn || !password || !confirm) return;
+
+    // M3-FIX v28g — eye toggle via shared helper
+    initPasswordToggle("rp-password", "rp-password-toggle");
+    initPasswordToggle("rp-confirm", "rp-confirm-toggle");
 
     async function handleReset() {
         const pass = password.value;
@@ -149,7 +171,4 @@ export function initResetPasswordPage(token, email) {
     });
 }
 
-function escHtml(str) {
-    if (!str) return "";
-    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+// Framework First: escHtml dari @smart/core (util global, bukan duplikat lokal)

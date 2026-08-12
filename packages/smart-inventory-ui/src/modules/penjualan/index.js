@@ -21,6 +21,7 @@
 import { Modal, Table, Pagination, EmptyState, Alert, showToast, UI, printToWindow } from "@smart/ui";
 import { scannerSectionHTML, scanButtonHTML, attachScanner } from "@smart/ui";
 import QRCode from "qrcode";
+import { esc, formatThousand, unformatThousand, formatDate, formatDateID } from "@smart/core";
 
 // ═══════════════════════════════════════════════
 //  State
@@ -41,54 +42,30 @@ let _barangStockMap = {};
 //  Helpers
 // ═══════════════════════════════════════════════
 
-function esc(str) {
-    if (str === null || str === undefined) return "";
-    return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-/** Format angka ribuan Indonesia: 15000 → "15.000" */
-function formatThousand(v) {
-    const n = Math.round(Number(v) || 0);
-    return n.toLocaleString("id-ID");
-}
-
-/** Parsing balik: "15.000" → 15000 (buang semua non-digit) */
-function unformatThousand(v) {
-    const cleaned = String(v ?? "").replace(/\D/g, "");
-    return parseInt(cleaned, 10) || 0;
-}
-
-function formatDate(iso) {
-    if (!iso) return "-";
-    try {
-        return new Date(iso).toLocaleDateString("id-ID", {
-            year: "numeric", month: "short", day: "numeric"
-        });
-    } catch { return "-"; }
-}
-
-function formatDateID(date) {
-    if (!date) return "-";
-    const d = new Date(date);
-    const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-    const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-    return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-}
+// Framework First: formatThousand/unformatThousand/formatDate/formatDateID
+// dari @smart/core (util global, bukan duplikat lokal)
 
 function statusBadgeHTML(status) {
     const map = {
         "order":      { label: "Pesanan",      cls: "ps-status-order" },
         "delivered":  { label: "Dikirim",       cls: "ps-status-delivered" },
         "invoiced":   { label: "Invoice",       cls: "ps-status-invoiced" },
-        "paid":       { label: "Lunas",         cls: "ps-status-paid" }
+        "paid":       { label: "Lunas",         cls: "ps-status-paid" },
+        // PRD V1 — void transaksi POS (permission pos.transaction.void)
+        "void":       { label: "Void",           cls: "ps-status-void" }
     };
     const s = map[status] || { label: status, cls: "" };
     return `<span class="ps-status-badge ${s.cls}">${s.label}</span>`;
+}
+
+// PRD V1 — hanya transaksi POS lunas yang bisa di-void (permission gate server).
+function canVoid(item) {
+    return Boolean(
+        typeof services.voidPenjualan === "function"
+        && item
+        && item.sumber === "pos"
+        && item.status === "paid"
+    );
 }
 
 function canEdit(status) { return status === "order"; }
@@ -123,17 +100,18 @@ function PenjualanPage() {
             <div class="ps-tabs">
                 <button class="ps-tab active" data-ps-tab="list">💰 Penjualan</button>
                 <button class="ps-tab" data-ps-tab="retur">↩️ Retur Penjualan</button>
+                ${services.isPos ? `<button class="ps-tab" data-ps-tab="pengaturan">⚙️ Pengaturan</button>` : ""}
             </div>
             <div id="ps-tab-list">
                 <div class="page-header">
                     <div>
                         <h1>💰 Penjualan</h1>
-                        <div class="header-subtitle">Kelola Sales Order, Surat Jalan, Invoice & Kwitansi</div>
+                        <div class="header-subtitle">Kelola transaksi penjualan & cetak dokumen — transaksi kasir otomatis terbit Nota (DDMMYYYY-XXXX)</div>
                     </div>
                     <div class="page-actions">
                         <div class="search-wrapper">
                             <span class="search-icon">🔍</span>
-                            <input type="text" id="ps-search-input" placeholder="Cari no. SO, pelanggan, status..." autocomplete="off" />
+                            <input type="text" id="ps-search-input" placeholder="Cari no. nota/SO, pelanggan, status..." autocomplete="off" />
                         </div>
                     </div>
                 </div>
@@ -141,7 +119,7 @@ function PenjualanPage() {
                     <table class="ps-table">
                         <thead>
                             <tr>
-                                <th>No. SO</th>
+                                <th>${services.isPos ? "No. Nota" : "No. SO"}</th>
                                 <th>Tanggal</th>
                                 <th>Pelanggan</th>
                                 <th>Total</th>
@@ -166,7 +144,7 @@ function PenjualanPage() {
                     <div class="page-actions">
                         <div class="search-wrapper">
                             <span class="search-icon">🔍</span>
-                            <input type="text" id="prj-search-input" placeholder="Cari no. retur, SO, pelanggan..." autocomplete="off" />
+                            <input type="text" id="prj-search-input" placeholder="Cari no. retur, ${services.isPos ? "nota" : "SO"}, pelanggan..." autocomplete="off" />
                         </div>
                     </div>
                 </div>
@@ -176,7 +154,7 @@ function PenjualanPage() {
                             <tr>
                                 <th>No. Retur</th>
                                 <th>Tanggal</th>
-                                <th>No. SO</th>
+                                <th>${services.isPos ? "No. Nota" : "No. SO"}</th>
                                 <th>Pelanggan</th>
                                 <th>Total</th>
                                 <th>Status</th>
@@ -191,6 +169,20 @@ function PenjualanPage() {
                 <div id="prj-empty-state"></div>
                 <div id="prj-loading" class="ps-loading" style="display:none">Memuat...</div>
             </div>
+            ${services.isPos ? `
+            <div id="ps-tab-pengaturan" style="display:none">
+                <div class="page-header">
+                    <div>
+                        <h1>⚙️ Pengaturan</h1>
+                        <div class="header-subtitle">Pajak transaksi &amp; mapping gudang-kasir — berlaku untuk transaksi kasir berikutnya</div>
+                    </div>
+                </div>
+                <!-- M3-FIX v19 — pengaturan pajak transaksi (diprovide POS app) -->
+                <div id="ps-tax-setting"></div>
+                <!-- M3-FIX v21 — pengaturan Gudang-Kasir (POS app only) -->
+                <div id="ps-gudang-setting"></div>
+            </div>
+            ` : ""}
         </div>
     `;
 }
@@ -216,7 +208,9 @@ function initPenjualanPage() {
     }
 
     const pageActions = document.querySelector(`.${pageId} .page-actions`);
-    if (pageActions) {
+    // M3-FIX v21 — mode POS: semua penjualan dibuat di layar Kasir,
+    // tombol "Buat SO Baru" disembunyikan.
+    if (pageActions && !services.isPos) {
         const addBtn = document.createElement("button");
         addBtn.className = "smart-btn smart-btn-primary";
         addBtn.innerHTML = "➕ Buat SO Baru";
@@ -237,10 +231,193 @@ function initPenjualanPage() {
             btn.classList.add("active");
             const listEl = document.getElementById("ps-tab-list");
             const returEl = document.getElementById("ps-tab-retur");
+            const pengaturanEl = document.getElementById("ps-tab-pengaturan");
             if (listEl) listEl.style.display = tab === "list" ? "" : "none";
             if (returEl) returEl.style.display = tab === "retur" ? "" : "none";
+            if (pengaturanEl) pengaturanEl.style.display = tab === "pengaturan" ? "" : "none";
             if (tab === "retur") initReturTab();
+            // Pengaturan pajak & gudang-kasir di-init saat tab dibuka — data
+            // fresh dari server; innerHTML diganti tiap kali, listener tidak menumpuk.
+            if (tab === "pengaturan") {
+                initTaxSetting();
+                initGudangKasirSetting();
+            }
         });
+    });
+}
+
+// ═══════════════════════════════════════════════
+//  Pengaturan Pajak (M3-FIX v19) — diatur Admin, dipakai layar kasir
+// ═══════════════════════════════════════════════
+
+async function initTaxSetting() {
+    const host = document.getElementById("ps-tax-setting");
+    if (!host || typeof services.getPosSettings !== "function") return;
+
+    let taxEnabled = true;
+    try {
+        const s = await services.getPosSettings();
+        if (s && typeof s.taxEnabled === "boolean") taxEnabled = s.taxEnabled;
+    } catch (err) {
+        console.warn("[Penjualan] Gagal baca pengaturan pajak:", err?.message);
+    }
+
+    host.style.display = "";
+    host.innerHTML = `
+        <div class="ps-tax-box">
+            <span class="ps-tax-label">🧾 Pajak Transaksi (layar kasir)</span>
+            <label class="ps-tax-radio"><input type="radio" name="ps-tax-radio" value="1" ${taxEnabled ? "checked" : ""} /> <span>Aktif</span></label>
+            <label class="ps-tax-radio"><input type="radio" name="ps-tax-radio" value="0" ${taxEnabled ? "" : "checked"} /> <span>Off</span></label>
+            <span class="ps-tax-hint">Pajak 11% — kasir tidak bisa mengubah; berlaku untuk transaksi kasir berikutnya.</span>
+        </div>
+    `;
+
+    host.querySelectorAll('input[name="ps-tax-radio"]').forEach(input => {
+        input.addEventListener("change", async () => {
+            const next = input.value === "1";
+            try {
+                await services.setPosSettings({ taxEnabled: next });
+                showToast("success", `Pajak transaksi ${next ? "AKTIF" : "OFF"} — berlaku untuk transaksi kasir berikutnya`);
+            } catch (err) {
+                showToast("danger", err.message || "Gagal menyimpan pengaturan pajak");
+                input.checked = !next;
+            }
+        });
+    });
+}
+
+/**
+ * M3-FIX v21 — Pengaturan Gudang-Kasir (mode POS, PRD V1 §X).
+ *
+ * Tiga mode (berdasarkan data nyata gudang & user kasir):
+ *   gudang == 1            → info single lokasi (tanpa kontrol)
+ *   gudang > 1, kasir == 1 → pilih gudang yang terhubung (multi-select)
+ *   gudang > 1, kasir > 1  → mapping per kasir (setiap kasir 1 gudang)
+ *
+ * Additive: hanya dirender di POS app (services.isPos) yang menyediakan
+ * getPosSettings/setPosSettings — inventory tidak terpengaruh.
+ */
+async function initGudangKasirSetting() {
+    const host = document.getElementById("ps-gudang-setting");
+    if (!host || !services.isPos || typeof services.getPosSettings !== "function") return;
+
+    let s = null;
+    try {
+        s = await services.getPosSettings();
+    } catch (err) {
+        console.warn("[Penjualan] Gagal baca pengaturan gudang:", err?.message);
+        return;
+    }
+    const warehouses = Array.isArray(s.warehouses) ? s.warehouses : [];
+    const kasirUsers = Array.isArray(s.kasirUsers) ? s.kasirUsers : [];
+    const gudangTerkoneksi = Array.isArray(s.gudangTerkoneksi) ? s.gudangTerkoneksi : [];
+    const gudangKasir = Array.isArray(s.gudangKasir) ? s.gudangKasir : [];
+
+    host.style.display = "";
+
+    // M3-FIX v24 — mapping FLEKSIBEL: baris [gudang][kasir]. Satu gudang boleh
+    // dipakai banyak kasir (mis. Store Kebohoran 3 kasir, Gudang Utama 2 kasir),
+    // komposisi bisa diubah (tambah/hapus baris) kapan saja.
+    const rowHTML = (r) => `
+        <div class="ps-gudang-row ps-gudang-map-row">
+            <select class="ps-gudang-select ps-gudang-w smart-input" data-field="kodeGudang">
+                <option value="">— pilih gudang —</option>
+                ${warehouses.map(w => `<option value="${esc(w.kode)}" ${w.kode === r?.kodeGudang ? "selected" : ""}>${esc(w.nama)} (${esc(w.kode)})</option>`).join("")}
+            </select>
+            <select class="ps-gudang-select ps-gudang-k smart-input" data-field="kasir">
+                <option value="">— pilih kasir —</option>
+                ${kasirUsers.map(u => `<option value="${esc(u.username)}" ${u?.username === r?.kasir ? "selected" : ""}>${esc(u.nama || u.username)} (${esc(u.username)})</option>`).join("")}
+            </select>
+            <button type="button" class="ps-gudang-del" title="Hapus baris">🗑️</button>
+        </div>
+    `;
+
+    let inner = "";
+    if (warehouses.length <= 1) {
+        const nama = warehouses[0] ? warehouses[0].nama : "Gudang Utama";
+        inner = `
+            <div class="ps-gudang-box">
+                <span class="ps-gudang-title">🏬 Gudang Kasir</span>
+                <span class="ps-gudang-info">Single lokasi — seluruh kasir terhubung ke <strong>${esc(nama)}</strong>. Pengaturan gudang muncul otomatis saat jumlah gudang &gt; 1 (Master Platform → Edit Perusahaan).</span>
+            </div>
+        `;
+    } else if (!kasirUsers.length) {
+        // Belum ada user kasir — mapping tidak bisa diisi; jangan tampilkan
+        // tombol simpan (mencegah gudangTerkoneksi legacy ter-wipe percuma).
+        inner = `
+            <div class="ps-gudang-box">
+                <span class="ps-gudang-title">🏬 Mapping Gudang — Kasir</span>
+                <span class="ps-gudang-info">Belum ada user ber-role <strong>kasir</strong>. Buat user kasir dulu di Pengaturan → User, lalu atur mapping gudang-kasir di sini.</span>
+            </div>
+        `;
+    } else {
+        // Seed baris: mapping tersimpan (gudangKasir) — fallback migrasi
+        // gudangTerkoneksi legacy (tiap kasir × tiap gudang tercentang) —
+        // fallback 1 baris kosong siap diisi.
+        let seed = (gudangKasir || [])
+            .filter(e => e && String(e.kasir || "").trim() && String(e.kodeGudang || "").trim())
+            .map(e => ({ kasir: String(e.kasir).trim(), kodeGudang: String(e.kodeGudang).trim() }));
+        if (!seed.length && gudangTerkoneksi.length) {
+            seed = [];
+            for (const u of kasirUsers) {
+                for (const k of gudangTerkoneksi) seed.push({ kasir: u.username, kodeGudang: k });
+            }
+        }
+        if (!seed.length) seed = [{ kasir: "", kodeGudang: "" }];
+
+        inner = `
+            <div class="ps-gudang-box">
+                <span class="ps-gudang-title">🏬 Mapping Gudang — Kasir</span>
+                <span class="ps-gudang-hint">Atur gudang mana yang terhubung dengan kasir mana. Satu gudang boleh dipakai banyak kasir — komposisi bisa diubah kapan saja. Kasir tanpa baris akan melihat seluruh stok.</span>
+                <div class="ps-gudang-grid" id="ps-gudang-map">${seed.map(rowHTML).join("")}</div>
+                <div class="ps-gudang-actions">
+                    <button type="button" class="smart-btn smart-btn-secondary smart-btn-sm" id="ps-gudang-add">➕ Tambah Baris</button>
+                    <button class="smart-btn smart-btn-primary smart-btn-sm" id="ps-gudang-save">💾 Simpan Mapping</button>
+                </div>
+            </div>
+        `;
+    }
+    host.innerHTML = inner;
+
+    const mapHost = host.querySelector("#ps-gudang-map");
+    if (mapHost) {
+        const addBtn = host.querySelector("#ps-gudang-add");
+        if (addBtn) {
+            addBtn.addEventListener("click", () => mapHost.insertAdjacentHTML("beforeend", rowHTML({ kasir: "", kodeGudang: "" })));
+        }
+        mapHost.addEventListener("click", (ev) => {
+            const del = ev.target.closest(".ps-gudang-del");
+            if (!del) return;
+            const rows = mapHost.querySelectorAll(".ps-gudang-map-row");
+            if (rows.length > 1) del.closest(".ps-gudang-map-row").remove();
+            else showToast("danger", "Minimal satu baris mapping");
+        });
+    }
+
+    const saveBtn = host.querySelector("#ps-gudang-save");
+    if (!saveBtn) return;
+    saveBtn.addEventListener("click", async () => {
+        // Jangan menimpa pajak — kirim nilai radio saat ini bersama mapping;
+        // fallback ke pengaturan yang baru dibaca bila radio tidak tersedia.
+        const radio = document.querySelector('input[name="ps-tax-radio"]:checked');
+        const nextTax = radio ? radio.value === "1" : (typeof s?.taxEnabled === "boolean" ? s.taxEnabled : true);
+        const body = { taxEnabled: nextTax };
+        if (warehouses.length > 1) {
+            // Mapping kini eksplisit — gudangTerkoneksi (legacy) dikosongkan.
+            body.gudangKasir = [...host.querySelectorAll(".ps-gudang-map-row")]
+                .map(r => ({
+                    kasir: r.querySelector('[data-field="kasir"]')?.value || "",
+                    kodeGudang: r.querySelector('[data-field="kodeGudang"]')?.value || ""
+                }))
+                .filter(e => e.kasir && e.kodeGudang);
+            body.gudangTerkoneksi = [];
+        }
+        try {
+            await services.setPosSettings(body);
+            showToast("success", "Pengaturan gudang kasir disimpan — berlaku untuk transaksi berikutnya");
+        } catch (err) {
+            showToast("danger", err.message || "Gagal menyimpan pengaturan gudang");
+        }
     });
 }
 
@@ -275,13 +452,23 @@ async function loadData() {
             if (tableArea) tableArea.style.display = "none";
             if (cardArea) cardArea.style.display = "none";
             if (emptyEl) {
-                emptyEl.appendChild(EmptyState({
+                const emptyProps = {
                     icon: "💰",
                     title: state.search ? "Pencarian tidak ditemukan" : "Belum ada Penjualan",
-                    description: state.search ? "Coba kata kunci lain" : "Buat Sales Order pertama untuk mulai mencatat penjualan",
-                    actionText: state.search ? "Reset Pencarian" : "Buat SO Baru",
-                    onAction: state.search ? () => { state.search = ""; const inp = document.getElementById("ps-search-input"); if (inp) inp.value = ""; loadData(); } : () => openForm("create")
-                }));
+                    description: state.search
+                        ? "Coba kata kunci lain"
+                        : (services.isPos
+                            ? "Transaksi kasir otomatis tercatat di sini. Buat transaksi baru dari layar Kasir."
+                            : "Buat Sales Order pertama untuk mulai mencatat penjualan")
+                };
+                if (state.search) {
+                    emptyProps.actionText = "Reset Pencarian";
+                    emptyProps.onAction = () => { state.search = ""; const inp = document.getElementById("ps-search-input"); if (inp) inp.value = ""; loadData(); };
+                } else if (!services.isPos) {
+                    emptyProps.actionText = "Buat SO Baru";
+                    emptyProps.onAction = () => openForm("create");
+                }
+                emptyEl.appendChild(EmptyState(emptyProps));
             }
             if (paginationEl) paginationEl.innerHTML = "";
             return;
@@ -317,16 +504,23 @@ function renderTable() {
                 <td>${statusBadgeHTML(item.status)}</td>
                 <td>
                     <div class="ps-mgmt-actions">
-                        <button class="ps-action-btn ps-action-invoice" data-action="print-so" data-id="${item._id || item.id}" title="Cetak SO">🖨️ SO</button>
-                        ${canEdit(item.status) ? `<button class="ps-action-btn ps-action-edit" data-action="edit" data-id="${item._id || item.id}" title="Edit SO">✏️</button>` : ""}
-                        ${canDeliver(item.status) ? `<button class="ps-action-btn ps-action-deliver" data-action="deliver" data-id="${item._id || item.id}" title="Terbitkan Surat Jalan">🚚 SJ</button>` : ""}
-                        ${item.status === "delivered" || item.status === "invoiced" || item.status === "paid" ? `<button class="ps-action-btn ps-action-sj" data-action="print-sj" data-id="${item._id || item.id}" title="Cetak Surat Jalan">📄 SJ</button>` : ""}
-                        ${canInvoice(item.status) ? `<button class="ps-action-btn ps-action-invoice" data-action="invoice" data-id="${item._id || item.id}" title="Terbitkan Invoice">🧾 Invoice</button>` : ""}
-                        ${item.status === "invoiced" || item.status === "paid" ? `<button class="ps-action-btn ps-action-invoice" data-action="print-inv" data-id="${item._id || item.id}" title="Cetak Invoice">🧾 Inv</button>` : ""}
-                        ${item.status === "invoiced" || item.status === "paid" ? `<button class="ps-action-btn ps-action-nota" data-action="print-nota" data-id="${item._id || item.id}" title="Cetak Nota">📋 Nota</button>` : ""}
-                        ${canPay(item.status) ? `<button class="ps-action-btn ps-action-pay" data-action="pay" data-id="${item._id || item.id}" title="Terbitkan Kwitansi">💵 Kwitansi</button>` : ""}
-                        ${item.status === "paid" ? `<button class="ps-action-btn ps-action-pay" data-action="print-kwt" data-id="${item._id || item.id}" title="Cetak Kwitansi">💵 Kwitansi</button>` : ""}
-                        <button class="ps-action-btn ps-action-delete" data-action="delete" data-id="${item._id || item.id}" title="Hapus">🗑️</button>
+                        ${services.isPos ? `
+                            ${item.status === "invoiced" || item.status === "paid" ? `<button class="ps-action-btn ps-action-nota" data-action="print-nota" data-id="${item._id || item.id}" title="Cetak Nota">📋 Nota</button>` : ""}
+                            ${canVoid(item) ? `<button class="ps-action-btn ps-action-void" data-action="void" data-id="${item._id || item.id}" title="Void transaksi (kembalikan stok)">🚫 Void</button>` : ""}
+                            <button class="ps-action-btn ps-action-delete" data-action="delete" data-id="${item._id || item.id}" title="Hapus">🗑️</button>
+                        ` : `
+                            <button class="ps-action-btn ps-action-invoice" data-action="print-so" data-id="${item._id || item.id}" title="Cetak SO">🖨️ SO</button>
+                            ${canEdit(item.status) ? `<button class="ps-action-btn ps-action-edit" data-action="edit" data-id="${item._id || item.id}" title="Edit SO">✏️</button>` : ""}
+                            ${canDeliver(item.status) ? `<button class="ps-action-btn ps-action-deliver" data-action="deliver" data-id="${item._id || item.id}" title="Terbitkan Surat Jalan">🚚 SJ</button>` : ""}
+                            ${item.status === "delivered" || item.status === "invoiced" || item.status === "paid" ? `<button class="ps-action-btn ps-action-sj" data-action="print-sj" data-id="${item._id || item.id}" title="Cetak Surat Jalan">📄 SJ</button>` : ""}
+                            ${canInvoice(item.status) ? `<button class="ps-action-btn ps-action-invoice" data-action="invoice" data-id="${item._id || item.id}" title="Terbitkan Invoice">🧾 Invoice</button>` : ""}
+                            ${item.status === "invoiced" || item.status === "paid" ? `<button class="ps-action-btn ps-action-invoice" data-action="print-inv" data-id="${item._id || item.id}" title="Cetak Invoice">🧾 Inv</button>` : ""}
+                            ${item.status === "invoiced" || item.status === "paid" ? `<button class="ps-action-btn ps-action-nota" data-action="print-nota" data-id="${item._id || item.id}" title="Cetak Nota">📋 Nota</button>` : ""}
+                            ${canPay(item.status) ? `<button class="ps-action-btn ps-action-pay" data-action="pay" data-id="${item._id || item.id}" title="Terbitkan Kwitansi">💵 Kwitansi</button>` : ""}
+                            ${item.status === "paid" && item.sumber !== "pos" ? `<button class="ps-action-btn ps-action-pay" data-action="print-kwt" data-id="${item._id || item.id}" title="Cetak Kwitansi">💵 Kwitansi</button>` : ""}
+                            ${canVoid(item) ? `<button class="ps-action-btn ps-action-void" data-action="void" data-id="${item._id || item.id}" title="Void transaksi (kembalikan stok)">🚫 Void</button>` : ""}
+                            <button class="ps-action-btn ps-action-delete" data-action="delete" data-id="${item._id || item.id}" title="Hapus">🗑️</button>
+                        `}
                     </div>
                 </td>
             </tr>
@@ -348,6 +542,7 @@ function renderTable() {
             else if (action === "print-nota") printNota(id);
             else if (action === "pay") updateStatus(id, "paid");
             else if (action === "print-kwt") printKwitansi(id);
+            else if (action === "void") confirmVoid(id);
         });
     });
 }
@@ -385,16 +580,23 @@ function renderCards() {
         </div>
         <div class="sm-card-footer-row">
             <div class="sm-card-actions">
-                ${canEdit(item.status) ? `<button class="sm-card-btn sm-card-btn-edit" data-ps-edit="${item._id || item.id}">✏️ Edit</button>` : ""}
-                ${canDeliver(item.status) ? `<button class="sm-card-btn sm-card-btn-primary" data-ps-deliver="${item._id || item.id}">🚚 SJ</button>` : ""}
-                ${canInvoice(item.status) ? `<button class="sm-card-btn sm-card-btn-primary" data-ps-invoice="${item._id || item.id}">🧾 Invoice</button>` : ""}
-                ${canPay(item.status) ? `<button class="sm-card-btn sm-card-btn-primary" data-ps-pay="${item._id || item.id}">💵 Kwitansi</button>` : ""}
-                <button class="sm-card-btn sm-card-btn-invoice" data-ps-so="${item._id || item.id}">🖨️ SO</button>
-                ${item.status !== "order" ? `<button class="sm-card-btn sm-card-btn-sj" data-ps-sj="${item._id || item.id}">📄 SJ</button>` : ""}
-                ${item.status === "invoiced" || item.status === "paid" ? `<button class="sm-card-btn sm-card-btn-inv" data-ps-inv="${item._id || item.id}">🧾 Inv</button>` : ""}
-                ${item.status === "invoiced" || item.status === "paid" ? `<button class="sm-card-btn sm-card-btn-nota" data-ps-nota="${item._id || item.id}">📋 Nota</button>` : ""}
-                ${item.status === "paid" ? `<button class="sm-card-btn sm-card-btn-kwt" data-ps-kwt="${item._id || item.id}">💵 KWT</button>` : ""}
-                <button class="sm-card-btn sm-card-btn-delete" data-ps-delete="${item._id || item.id}">🗑️</button>
+                ${services.isPos ? `
+                    ${item.status === "invoiced" || item.status === "paid" ? `<button class="sm-card-btn sm-card-btn-nota" data-ps-nota="${item._id || item.id}">📋 Nota</button>` : ""}
+                    ${canVoid(item) ? `<button class="sm-card-btn sm-card-btn-void" data-ps-void="${item._id || item.id}">🚫 Void</button>` : ""}
+                    <button class="sm-card-btn sm-card-btn-delete" data-ps-delete="${item._id || item.id}">🗑️</button>
+                ` : `
+                    ${canEdit(item.status) ? `<button class="sm-card-btn sm-card-btn-edit" data-ps-edit="${item._id || item.id}">✏️ Edit</button>` : ""}
+                    ${canDeliver(item.status) ? `<button class="sm-card-btn sm-card-btn-primary" data-ps-deliver="${item._id || item.id}">🚚 SJ</button>` : ""}
+                    ${canInvoice(item.status) ? `<button class="sm-card-btn sm-card-btn-primary" data-ps-invoice="${item._id || item.id}">🧾 Invoice</button>` : ""}
+                    ${canPay(item.status) ? `<button class="sm-card-btn sm-card-btn-primary" data-ps-pay="${item._id || item.id}">💵 Kwitansi</button>` : ""}
+                    <button class="sm-card-btn sm-card-btn-invoice" data-ps-so="${item._id || item.id}">🖨️ SO</button>
+                    ${item.status !== "order" ? `<button class="sm-card-btn sm-card-btn-sj" data-ps-sj="${item._id || item.id}">📄 SJ</button>` : ""}
+                    ${item.status === "invoiced" || item.status === "paid" ? `<button class="sm-card-btn sm-card-btn-inv" data-ps-inv="${item._id || item.id}">🧾 Inv</button>` : ""}
+                    ${item.status === "invoiced" || item.status === "paid" ? `<button class="sm-card-btn sm-card-btn-nota" data-ps-nota="${item._id || item.id}">📋 Nota</button>` : ""}
+                    ${item.status === "paid" && item.sumber !== "pos" ? `<button class="sm-card-btn sm-card-btn-kwt" data-ps-kwt="${item._id || item.id}">💵 KWT</button>` : ""}
+                    ${canVoid(item) ? `<button class="sm-card-btn sm-card-btn-void" data-ps-void="${item._id || item.id}">🚫 Void</button>` : ""}
+                    <button class="sm-card-btn sm-card-btn-delete" data-ps-delete="${item._id || item.id}">🗑️</button>
+                `}
             </div>
         </div>
     `);
@@ -429,6 +631,9 @@ function renderCards() {
     });
     cardArea.querySelectorAll("[data-ps-kwt]").forEach(btn => {
         btn.addEventListener("click", () => printKwitansi(btn.dataset.psKwt));
+    });
+    cardArea.querySelectorAll("[data-ps-void]").forEach(btn => {
+        btn.addEventListener("click", () => confirmVoid(btn.dataset.psVoid));
     });
 }
 
@@ -684,7 +889,7 @@ function buildFormHTML(data, isEdit) {
         <div class="ps-form">
             ${isEdit ? `<div class="ps-nomor-row">
                 <div class="form-group" style="max-width:280px">
-                    <label>No. SO</label>
+                    <label>${services.isPos ? "No. Nota" : "No. SO"}</label>
                     <input type="text" value="${esc(data.nomor)}" disabled />
                 </div>
             </div>` : ""}
@@ -1482,7 +1687,7 @@ async function printNotaHTML(item, isThermal) {
 
     const html = buildPrintDocument({
         title: "NOTA PENJUALAN",
-        nomor: item.noInvoice || item.nomor,
+        nomor: "No. " + (item.noInvoice || item.nomor),
         companyName, companyAddress, companyPhone, companyEmail, logoUrl,
         infoGrid: `
             <div class="invoice-info-item"><div class="invoice-info-label">Kepada</div><div class="invoice-info-value">${esc(item.pelangganNama || item.pelanggan)}</div></div>
@@ -1493,6 +1698,7 @@ async function printNotaHTML(item, isThermal) {
         itemsHTML,
         total: item.total,
         diskon: item.diskon,
+        pajak: Number(item.pajak) || 0,
         grandTotal: item.grandTotal || item.total,
         catatan: item.catatan,
         nomorLabel: "No. Nota",
@@ -1513,26 +1719,40 @@ async function printNotaThermalHTML(item, company) {
     const companyAddress = company.address || "";
     const companyPhone = company.phone || "";
     const logoUrl = company.logo || "";
+    const rp = (v) => services.formatRupiah ? services.formatRupiah(v) : (Number(v) || 0).toLocaleString();
+    // M3-FIX v21 — struk PERSIS kasir (judul "Nota Penjualan") HANYA untuk
+    // transaksi kasir (sumber "pos"); dokumen SO (inventory) tetap memakai
+    // layout nota lama agar tidak merusak alur SO/SJ/Invoice.
+    const isKasirStruk = services.isPos || String(item.sumber || "") === "pos";
 
     const itemsHTML = (item.items || []).map(i => `
         <tr>
             <td style="padding:2px 0;font-size:9px;">${esc(i.nama)}</td>
             <td style="text-align:center;padding:2px 0;font-size:9px;">${i.qty}</td>
-            <td style="text-align:right;padding:2px 0;font-size:9px;">${services.formatRupiah ? services.formatRupiah(i.harga) : i.harga.toLocaleString()}</td>
-            <td style="text-align:right;padding:2px 0;font-size:9px;">${services.formatRupiah ? services.formatRupiah(i.subtotal) : i.subtotal.toLocaleString()}</td>
+            <td style="text-align:right;padding:2px 0;font-size:9px;">${rp(i.harga)}</td>
+            <td style="text-align:right;padding:2px 0;font-size:9px;">${rp(i.subtotal)}</td>
         </tr>
     `).join("");
 
+    // M3-FIX v21 — struk admin dibuat PERSIS dengan struk kasir (printNotaThermal
+    // di halaman kasir): nama perusahaan kecil, judul "Nota Penjualan" besar,
+    // field No. Nota/Tgl/Kasir/Gudang/Pelanggan-Member + Subtotal/Diskon/Pajak/
+    // TOTAL/Dibayar/Kembali/Metode + footer Terima Kasih.
+    const memberLine = String(item.tipePelanggan || "").toLowerCase() === "member"
+        ? `<div class="info">Member: ${esc(item.pelangganNama || item.pelanggan || "-")}</div>`
+        : `<div class="info">Pelanggan: Umum</div>`;
+    const metodeLabel = ({ cash: "Tunai", transfer: "Transfer", qris: "QRIS", card: "Kartu" })[item.metode_bayar] || "Tunai";
+
     const html = `<!DOCTYPE html>
 <html lang="id">
-<head><meta charset="UTF-8"><title>Nota - ${esc(item.noInvoice || item.nomor)}</title>
+<head><meta charset="UTF-8"><title>Nota - ${esc(item.noKwitansi || item.nomor)}</title>
 <style>
     @page { margin:0; size:80mm auto; }
     body { font-family:'Courier New',Courier,monospace; margin:0; padding:4mm; width:72mm; color:#000; font-size:9px; line-height:1.3; }
     .header { text-align:center; margin-bottom:4px; }
-    .header img { max-width:60px; max-height:40px; }
-    .header .name { font-size:11px; font-weight:bold; }
-    .header .addr { font-size:8px; color:#333; }
+    .header img { max-width:${isKasirStruk ? "50px" : "60px"}; max-height:${isKasirStruk ? "30px" : "40px"}; }
+    .header .name { font-size:${isKasirStruk ? "8px" : "11px"}; ${isKasirStruk ? "" : "font-weight:bold;"} }
+    .header .addr { font-size:${isKasirStruk ? "13px" : "8px"}; ${isKasirStruk ? "font-weight:bold;" : "color:#333;"} }
     .divider { border-top:1px dashed #000; margin:3px 0; }
     .info { font-size:8px; margin-bottom:3px; }
     table { width:100%; border-collapse:collapse; }
@@ -1546,25 +1766,43 @@ async function printNotaThermalHTML(item, company) {
     <div class="header">
         ${logoUrl ? `<img src="${esc(logoUrl)}" />` : ""}
         <div class="name">${esc(companyName)}</div>
-        ${companyAddress ? `<div class="addr">${esc(companyAddress)}</div>` : ""}
-        ${companyPhone ? `<div class="addr">Telp: ${esc(companyPhone)}</div>` : ""}
+        ${isKasirStruk ? `<div class="addr">Nota Penjualan</div>` : (companyAddress ? `<div class="addr">${esc(companyAddress)}</div>` : "")}
+        ${!isKasirStruk && companyPhone ? `<div class="addr">Telp: ${esc(companyPhone)}</div>` : ""}
     </div>
     <div class="divider"></div>
+    ${isKasirStruk ? `
+    <div class="info">No. Nota: ${esc(item.noKwitansi || item.nomor)}</div>
+    <div class="info">Tgl: ${new Date(item.tanggal || Date.now()).toLocaleString("id-ID")}</div>
+    <div class="info">Kasir: ${esc(item.kasir || "-")}</div>
+    ${item.gudang ? `<div class="info">Gudang: ${esc(item.gudang)}</div>` : ""}
+    ${memberLine}
+    ` : `
     <div class="info">
         Nota: ${esc(item.noInvoice || item.nomor)}<br/>
         Tanggal: ${formatDate(item.tanggal)}<br/>
         Pelanggan: ${esc(item.pelangganNama || item.pelanggan)}<br/>
         SJ: ${esc(item.noSuratJalan || '-')}
     </div>
+    `}
     <div class="divider"></div>
     <table>
-        <thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Harga</th><th style="text-align:right">Subtotal</th></tr></thead>
+        <thead><tr><th>${isKasirStruk ? "Nama" : "Item"}</th><th style="text-align:center">Qty</th>${isKasirStruk ? "" : `<th style="text-align:right">Harga</th>`}<th style="text-align:right">Subtotal</th></tr></thead>
         <tbody>${itemsHTML}</tbody>
     </table>
     <div class="divider"></div>
+    ${isKasirStruk ? `
+    <div style="text-align:right;font-size:9px;">Subtotal: ${rp(item.total)}</div>
+    ${item.diskon ? `<div style="text-align:right;font-size:9px;">Diskon: -${rp(item.diskon)}</div>` : ""}
+    ${item.pajak ? `<div style="text-align:right;font-size:9px;">Pajak: ${rp(item.pajak)}</div>` : ""}
+    <div class="total">TOTAL: ${rp(item.grandTotal || item.total)}</div>
+    <div style="text-align:right;font-size:9px;">Dibayar: ${rp(item.bayar)}</div>
+    <div style="text-align:right;font-size:9px;">Kembali: ${rp(item.kembalian)}</div>
+    <div style="text-align:right;font-size:9px;">Metode: ${metodeLabel}</div>
+    ` : `
     ${item.diskon > 0 ? `<div style="text-align:right;font-size:9px;">Diskon: -${services.formatRupiah ? services.formatRupiah(item.diskon) : item.diskon.toLocaleString()}</div>` : ""}
     <div class="total">Grand Total: Rp ${services.formatRupiah ? services.formatRupiah(item.grandTotal || item.total) : (item.grandTotal || item.total).toLocaleString()}</div>
     ${item.catatan ? `<div style="font-size:8px;margin-top:3px;">Catatan: ${esc(item.catatan)}</div>` : ""}
+    `}
     <div class="divider"></div>
     <div class="footer">Terima Kasih</div>
     <script>window.print();window.close();<\\/script>
@@ -1580,7 +1818,12 @@ async function printKwitansi(id) {
     if (!item) { showToast("danger", "Data tidak ditemukan"); return; }
     if (!item.noKwitansi) { showToast("warning", "Kwitansi belum diterbitkan"); return; }
 
-    await printKwitansiNormal(item);
+    // Transaksi kasir (sumber=pos) hanya punya NOTA — cetak ukuran thermal 72mm
+    if (item.sumber === "pos") {
+        await printKwitansiThermal(item);
+    } else {
+        await printKwitansiNormal(item);
+    }
 }
 
 async function printKwitansiNormal(item) {
@@ -1641,7 +1884,7 @@ async function printKwitansiHTML(item) {
 
     const html = `<!DOCTYPE html>
 <html lang="id">
-<head><meta charset="UTF-8"><title>Kwitansi - ${esc(item.noKwitansi)}</title>
+<head><meta charset="UTF-8"><title>${item.sumber === "pos" ? "Nota" : "Kwitansi"} - ${esc(item.noKwitansi)}</title>
 <style>
     @page { margin:0; }
     body { font-family:'Segoe UI',system-ui,sans-serif; margin:0; padding:0; color:${textColor}; background:#fff; }
@@ -1693,10 +1936,10 @@ async function printKwitansiHTML(item) {
                     <div class="contact">${companyPhone ? `Telp: ${esc(companyPhone)}` : ""}${companyEmail ? ` | Email: ${esc(companyEmail)}` : ""}</div>
                 </div>
             </div>
-            <div class="title">KWITANSI</div>
+            <div class="title">${item.sumber === "pos" ? "NOTA" : "KWITANSI"}</div>
         </div>
 
-        <div class="doc-no">No. ${esc(item.noKwitansi)}</div>
+        <div class="doc-no">${item.sumber === "pos" ? "No. Nota: " : "No. "}${esc(item.noKwitansi)}</div>
 
         <table class="info-table">
             <tr><td class="label-cell">Sudah terima dari</td><td class="value-cell"><span class="col-label">:</span><span class="col-value"><strong>${customerInfo}</strong></span></td></tr>
@@ -1748,7 +1991,7 @@ async function printKwitansiThermalHTML(item) {
 
     const html = `<!DOCTYPE html>
 <html lang="id">
-<head><meta charset="UTF-8"><title>Kwitansi - ${esc(item.noKwitansi)}</title>
+<head><meta charset="UTF-8"><title>${item.sumber === "pos" ? "Nota" : "Kwitansi"} - ${esc(item.noKwitansi)}</title>
 <style>
     @page { margin:0; size:80mm auto; }
     body { font-family:'Courier New',Courier,monospace; margin:0; padding:4mm; width:72mm; color:#000; font-size:9px; line-height:1.3; }
@@ -1829,7 +2072,7 @@ function numberToWords(n) {
 function buildPrintDocument(opts) {
     const {
         title, nomor, companyName, companyAddress, companyPhone, companyEmail, logoUrl,
-        infoGrid, itemsHTML, total, diskon, grandTotal, catatan,
+        infoGrid, itemsHTML, total, diskon, pajak = 0, grandTotal, catatan,
         nomorLabel = "No. Dokumen",
         showQr = false, showSignatures = false, singleSignature = false, company = {},
         extraContent = "",
@@ -1975,6 +2218,11 @@ function buildPrintDocument(opts) {
                         <span>Diskon</span>
                         <span>-${services.formatRupiah ? services.formatRupiah(diskon) : diskon.toLocaleString()}</span>
                     </div>` : ""}
+                    ${Number(pajak) > 0 ? `
+                    <div class="invoice-total-row">
+                        <span>Pajak</span>
+                        <span>${services.formatRupiah ? services.formatRupiah(pajak) : pajak.toLocaleString()}</span>
+                    </div>` : ""}
                     <div class="invoice-total-row total">
                         <span>Grand Total</span>
                         <span>Rp ${services.formatRupiah ? services.formatRupiah(grandTotal) : grandTotal.toLocaleString()}</span>
@@ -1994,6 +2242,48 @@ function buildPrintDocument(opts) {
 // ═══════════════════════════════════════════════
 //  Delete Confirmation
 // ═══════════════════════════════════════════════
+
+// PRD V1 — Void transaksi POS (keputusan PO: hanya Admin/Owner via
+// permission pos.transaction.void). Konfirmasi + alasan wajib (audit trail).
+function confirmVoid(id) {
+    const item = state.items.find(i => (i._id || i.id) === id);
+    const name = item ? item.nomor : "#" + id;
+
+    const footerHTML = `
+        <button class="smart-btn smart-btn-secondary" id="f-cancel-void">Batal</button>
+        <button class="smart-btn smart-db-primary" id="f-confirm-void" style="background:#b45309">🚫 Ya, Void</button>
+    `;
+    const overlay = Modal({
+        open: true,
+        title: "🚫 Void Transaksi",
+        content: `
+            <p>Batalkan transaksi POS <strong>${esc(name)}</strong>?</p>
+            <p style="font-size:0.85rem;color:#6b7280">Stok item trading akan dikembalikan. Tindakan dicatat (audit trail).</p>
+            <div class="form-group" style="margin-top:0.75rem">
+                <label for="f-void-reason">Alasan Void <span class="required">*</span></label>
+                <textarea id="f-void-reason" rows="2" placeholder="Contoh: transaksi salah / pembatalan pelanggan" style="width:100%;padding:0.5rem;border:1px solid #d1d5db;border-radius:6px;box-sizing:border-box"></textarea>
+            </div>
+        `,
+        footer: footerHTML,
+        closable: true,
+        onClose: () => overlay?.parentNode?.removeChild(overlay)
+    });
+    document.body.appendChild(overlay);
+    document.getElementById("f-cancel-void")?.addEventListener("click", () => overlay?.parentNode?.removeChild(overlay));
+    overlay.querySelector(".smart-modal-close")?.addEventListener("click", () => overlay?.parentNode?.removeChild(overlay));
+    document.getElementById("f-confirm-void")?.addEventListener("click", async () => {
+        const reason = document.getElementById("f-void-reason")?.value?.trim() || "";
+        if (!reason) { showToast("warning", "Alasan void wajib diisi"); document.getElementById("f-void-reason")?.focus(); return; }
+        try {
+            await services.voidPenjualan(id, reason);
+            showToast("success", `Transaksi ${esc(name)} di-void`);
+            overlay?.parentNode?.removeChild(overlay);
+            loadData();
+        } catch (err) {
+            showToast("danger", `Void gagal: ${err.message || "coba lagi"}`);
+        }
+    });
+}
 
 function confirmDelete(id) {
     const item = state.items.find(i => (i._id || i.id) === id);
@@ -2234,7 +2524,7 @@ function renderReturCards() {
         </div>
         <div class="sm-card-details">
             <div class="sm-card-detail-row">
-                <span class="sm-card-label">No. SO</span>
+                <span class="sm-card-label">${services.isPos ? "No. Nota" : "No. SO"}</span>
                 <span class="sm-card-value">${esc(item.nomorSO || '-')}</span>
             </div>
             <div class="sm-card-detail-row">
@@ -2449,8 +2739,8 @@ async function openReturForm(mode, id) {
             if (soSection) soSection.style.display = "";
             if (addItemSection) addItemSection.style.display = "none";
             if (pelangganSection) pelangganSection.style.display = "none";
-            if (modeHint) modeHint.textContent = "Pilih SO untuk memuat item otomatis, atau Manual untuk input item satu per satu.";
-            if (modeHintItems) modeHintItems.textContent = "(qty retur diisi manual, max = qty SO)";
+            if (modeHint) modeHint.textContent = `Pilih ${services.isPos ? "Nota" : "SO"} untuk memuat item otomatis, atau Manual untuk input item satu per satu.`;
+            if (modeHintItems) modeHintItems.textContent = `(qty retur diisi manual, max = qty ${services.isPos ? "nota" : "SO"})`;
             const pk = document.getElementById("prj-pelanggan");
             const pn = document.getElementById("prj-pelanggan-nama");
             if (pk) pk.disabled = true;
@@ -2653,20 +2943,20 @@ function buildReturFormHTML(data, isEdit) {
                 <div class="form-group" style="grid-column:span 2">
                     <label for="prj-mode">Mode Input <span class="required">*</span></label>
                     <select id="prj-mode" ${isEdit ? "disabled" : ""}>
-                        <option value="so">📋 Berdasarkan SO</option>
+                        <option value="so">📋 Berdasarkan ${services.isPos ? "Nota" : "SO"}</option>
                         <option value="manual">✏️ Input Manual</option>
                     </select>
-                    <div id="prj-mode-hint" style="font-size:0.72rem;color:#9ca3af;margin-top:0.2rem">Pilih SO untuk memuat item otomatis, atau Manual untuk input item satu per satu.</div>
+                    <div id="prj-mode-hint" style="font-size:0.72rem;color:#9ca3af;margin-top:0.2rem">Pilih ${services.isPos ? "Nota" : "SO"} untuk memuat item otomatis, atau Manual untuk input item satu per satu.</div>
                 </div>
             </div>
             <div id="prj-so-section">
             <div class="ps-form-row">
                 <div class="form-group" style="grid-column:span 2">
-                    <label for="prj-so-select">Pilih SO (Dikirim/Invoice/Lunas) <span class="required">*</span></label>
+                    <label for="prj-so-select">Pilih ${services.isPos ? "Nota" : "SO (Dikirim/Invoice/Lunas)"} <span class="required">*</span></label>
                     <select id="prj-so-select">
-                        <option value="">— Pilih Sales Order —</option>
+                        <option value="">— Pilih ${services.isPos ? "Nota" : "Sales Order"} —</option>
                     </select>
-                    <div style="font-size:0.72rem;color:#9ca3af;margin-top:0.2rem">Item barang akan dimuat otomatis dari SO yang dipilih.</div>
+                    <div style="font-size:0.72rem;color:#9ca3af;margin-top:0.2rem">Item barang akan dimuat otomatis dari ${services.isPos ? "nota" : "SO"} yang dipilih.</div>
                 </div>
             </div>
             </div>
@@ -2683,11 +2973,11 @@ function buildReturFormHTML(data, isEdit) {
             </div>
             </div>
 
-            <div class="ps-section-title">📦 Item Retur <span id="prj-mode-hint-items" style="font-weight:normal;color:#9ca3af;font-size:0.75rem">(qty retur diisi manual, max = qty SO)</span></div>
+            <div class="ps-section-title">📦 Item Retur <span id="prj-mode-hint-items" style="font-weight:normal;color:#9ca3af;font-size:0.75rem">(qty retur diisi manual, max = qty ${services.isPos ? "nota" : "SO"})</span></div>
             <div class="prj-items-header">
                 <span class="ps-col-code">Kode</span>
                 <span class="ps-col-name">Nama Barang</span>
-                <span class="ps-col-qty">Qty SO</span>
+                <span class="ps-col-qty">Qty ${services.isPos ? "Nota" : "SO"}</span>
                 <span class="ps-col-satuan">Satuan</span>
                 <span class="ps-col-price">Harga</span>
                 <span class="ps-col-qty">Qty Retur</span>
@@ -2733,7 +3023,7 @@ function buildReturItemRow(item, idx) {
         ? `<button type="button" class="ps-item-remove" data-index="${idx}" title="Hapus item">Tutup</button>`
         : "";
     const qtySoVal = isEditable ? (item.stok !== undefined ? item.stok : (item.qty || 0)) : (item.qtySo !== undefined ? item.qtySo : (item.qty || 0));
-    const qtySoLabel = isEditable ? "Qty Stok" : "Qty SO";
+    const qtySoLabel = isEditable ? "Qty Stok" : (services.isPos ? "Qty Nota" : "Qty SO");
 
     return `
         <div class="ps-item-row" data-index="${idx}">
@@ -2766,7 +3056,7 @@ function buildReturItemRow(item, idx) {
 function populateReturSoDropdown(soList, selected) {
     const sel = document.getElementById("prj-so-select");
     if (!sel) return;
-    sel.innerHTML = `<option value="">— Pilih Sales Order —</option>`;
+    sel.innerHTML = `<option value="">— Pilih ${services.isPos ? "Nota" : "Sales Order"} —</option>`;
     for (const s of soList) {
         const sid = s._id || s.id || "";
         const name = s.nomor || sid;
@@ -2780,7 +3070,7 @@ function renderReturItemRows(rows) {
     if (!body) return;
     body.innerHTML = rows.length > 0
         ? rows.map((item, idx) => buildReturItemRow(item, idx)).join("")
-        : '<div class="ps-empty-items">Pilih SO terlebih dahulu untuk memuat item barang.</div>';
+        : `<div class="ps-empty-items">Pilih ${services.isPos ? "Nota" : "SO"} terlebih dahulu untuk memuat item barang.</div>`;
     initReturItemEvents();
     calcReturTotals();
 }
@@ -2859,7 +3149,7 @@ async function handleReturSubmit(overlay, existingData, editId) {
     const catatan = document.getElementById("prj-catatan")?.value || "";
 
     if (!isManual && !soId) {
-        showToast("danger", "Pilih SO terlebih dahulu");
+        showToast("danger", `Pilih ${services.isPos ? "Nota" : "SO"} terlebih dahulu`);
         return;
     }
 
@@ -3038,7 +3328,7 @@ async function printReturNormal(item) {
         infoGrid: `
             <div class="invoice-info-item"><div class="invoice-info-label">Pelanggan</div><div class="invoice-info-value">${esc(item.pelangganNama || item.pelanggan)}</div></div>
             <div class="invoice-info-item"><div class="invoice-info-label">Tanggal</div><div class="invoice-info-value">${formatDate(item.tanggal)}</div></div>
-            <div class="invoice-info-item"><div class="invoice-info-label">No. SO</div><div class="invoice-info-value">${esc(item.nomorSO || '-')}</div></div>
+            <div class="invoice-info-item"><div class="invoice-info-label">${services.isPos ? "No. Nota" : "No. SO"}</div><div class="invoice-info-value">${esc(item.nomorSO || '-')}</div></div>
             <div class="invoice-info-item"><div class="invoice-info-label">Status</div><div class="invoice-info-value">${item.status === 'returned' ? 'Dikembalikan' : 'Draft'}</div></div>
         `,
         itemsHTML,
@@ -3102,7 +3392,7 @@ async function printReturThermal(item) {
     <div class="info">
         No: ${esc(item.nomor)}<br/>
         Tanggal: ${formatDate(item.tanggal)}<br/>
-        SO: ${esc(item.nomorSO || '-')}<br/>
+        ${services.isPos ? "Nota" : "SO"}: ${esc(item.nomorSO || '-')}<br/>
         Pelanggan: ${esc(item.pelangganNama || item.pelanggan || '-')}
     </div>
     <div class="divider"></div>
@@ -3144,6 +3434,31 @@ function getStyles() {
 
         /* Tabs */
         .ps-tabs { display:flex; gap:0; margin-bottom:1.25rem; border-bottom:2px solid #e5e7eb; }
+        /* M3-FIX v19 — radio pajak transaksi (POS app) */
+        .ps-tax-box {
+            display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+            margin:0 0 1rem; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px;
+            background:#f8fafc; font-size:0.85rem;
+        }
+        .ps-tax-label { font-weight:700; color:#0f172a; }
+        .ps-tax-radio { display:inline-flex; align-items:center; gap:5px; cursor:pointer; color:#334155; }
+        .ps-tax-radio input { accent-color:#10b981; }
+        .ps-tax-hint { color:#94a3b8; font-size:0.75rem; }
+        /* M3-FIX v21 — Gudang-Kasir settings */
+        .ps-gudang-box { display:flex; flex-direction:column; gap:10px; margin:0 0 1rem; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; font-size:0.85rem; }
+        .ps-gudang-title { font-weight:700; color:#0f172a; }
+        .ps-gudang-info { color:#334155; }
+        .ps-gudang-hint { color:#94a3b8; font-size:0.75rem; }
+        .ps-gudang-grid { display:flex; flex-direction:column; gap:8px; }
+        .ps-gudang-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+        .ps-gudang-select { flex:1; min-width:200px; }
+        /* M3-FIX v24 — mapping fleksibel baris [gudang][kasir] */
+        .ps-gudang-map-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        .ps-gudang-w { flex:1.2; }
+        .ps-gudang-k { flex:1; }
+        .ps-gudang-del { flex-shrink:0; width:34px; height:34px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; color:#b45309; cursor:pointer; font-size:0.9rem; transition:all 0.15s; }
+        .ps-gudang-del:hover { background:#fef2f2; border-color:#fca5a5; color:#b91c1c; }
+        .ps-gudang-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .ps-tab { padding:0.65rem 1.25rem; cursor:pointer; border:none; background:none; font-size:0.92rem; font-weight:600; color:#6b7280; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.2s; }
         .ps-tab:hover { color:#059669; }
         .ps-tab.active { color:#059669; border-bottom-color:#059669; }
@@ -3184,6 +3499,11 @@ function getStyles() {
         .ps-status-delivered { background:#dbeafe; color:#1e40af; }
         .ps-status-invoiced { background:#d1fae5; color:#065f46; }
         .ps-status-paid { background:#ede9fe; color:#5b21b6; }
+        .ps-status-void { background:#fef3c7; color:#92400e; }
+        .ps-action-void { background:#fffbeb; color:#b45309; border-color:#fcd34d; }
+        .ps-action-void:hover { background:#fef3c7; }
+        .sm-card-btn-void { background:#fffbeb; color:#b45309; border-color:#fcd34d; }
+        .sm-card-btn-void:hover { background:#fef3c7; }
 
         /* Form */
         .ps-form { }
@@ -3286,6 +3606,7 @@ export function PenjualanModule(deps = {}) {
         createPenjualan: deps.createPenjualan || (async () => { throw new Error("createPenjualan not configured"); }),
         updatePenjualan: deps.updatePenjualan || (async () => { throw new Error("updatePenjualan not configured"); }),
         deletePenjualan: deps.deletePenjualan || (async () => { throw new Error("deletePenjualan not configured"); }),
+        voidPenjualan: deps.voidPenjualan || (async () => { throw new Error("voidPenjualan not configured"); }),
         updatePenjualanStatus: deps.updatePenjualanStatus || (async () => { throw new Error("updatePenjualanStatus not configured"); }),
         listCustomer: deps.listCustomer || (async () => ({ data: [] })),
         listBarang: deps.listBarang || (async () => ({ data: [] })),
@@ -3298,7 +3619,16 @@ export function PenjualanModule(deps = {}) {
         deleteReturPenjualan: deps.deleteReturPenjualan || (async () => { throw new Error("deleteReturPenjualan not configured"); }),
         updateReturPenjualanStatus: deps.updateReturPenjualanStatus || (async () => { throw new Error("updateReturPenjualanStatus not configured"); }),
         formatRupiah: deps.formatRupiah || ((v) => v?.toLocaleString?.() || "0"),
-        getCompanyInfo: deps.getCompanyInfo || null
+        getCompanyInfo: deps.getCompanyInfo || null,
+        // M3-FIX v19 — pengaturan pajak transaksi kasir (radio di halaman ini).
+        // Additive: hanya diaktifkan bila deps disediakan (POS app); inventory
+        // tidak mengirim → radio tidak dirender.
+        getPosSettings: deps.getPosSettings || null,
+        setPosSettings: deps.setPosSettings || null,
+        // M3-FIX v21 — mode POS (kasir): aksi hanya Nota/Void/Hapus, kolom
+        // "No. Nota", tanpa tombol "Buat SO Baru". Additive: inventory tidak
+        // mengirim flag ini → perilaku inventory tidak berubah.
+        isPos: deps.isPos === true
     };
 
     return { PenjualanPage, initPenjualanPage };

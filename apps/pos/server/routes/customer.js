@@ -23,6 +23,7 @@ router.get("/", async (req, res) => {
         if (search) {
             query.$or = [
                 { kode: { $regex: search, $options: "i" } },
+                { kodeNfc: { $regex: search, $options: "i" } },
                 { nama: { $regex: search, $options: "i" } },
                 { kontak: { $regex: search, $options: "i" } }
             ];
@@ -45,14 +46,17 @@ router.get("/check-kode/:kode", async (req, res) => {
     try {
         const kode = req.params.kode;
         const companyCode = req.headers["x-company-code"];
-        const query = { kode: { $regex: new RegExp("^" + kode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$", "i") } };
+        const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const rx = new RegExp("^" + esc(kode) + "$", "i");
+        const query = { $or: [{ kode: rx }, { kodeNfc: rx }] };
         if (companyCode) query.companyCode = companyCode;
         // M3-FIX v20 — konsisten dgn validasi POST penjualan: hanya member AKTIF
         // yang valid (non-aktif/archived → exists:false agar kasir langsung ditolak).
+        // M6-FIX — kode NFC member ikut dicocokkan (kartu NFC dibaca kasir).
         query.active = true;
         query.status = { $ne: "archived" };
         const item = await Customer.findOne(query);
-        if (item) return res.json({ exists: true, nama: item.nama, id: item._id.toString() });
+        if (item) return res.json({ exists: true, nama: item.nama, id: item._id.toString(), kode: item.kode });
         res.json({ exists: false });
     } catch (err) {
         res.status(500).json({ error: err.message });

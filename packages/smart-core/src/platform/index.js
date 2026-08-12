@@ -34,7 +34,7 @@
 const BUILTIN_APPS = [
     { id: "1", slug: "inventory", name: "Inventory", description: "Manajemen inventori gudang dan stok barang", icon: "📦", workspace: "warehouse", active: true, version: "1.0.0" },
     { id: "2", slug: "accounting", name: "Accounting", description: "Akuntansi dan pembukuan keuangan", icon: "💰", workspace: "corporate", active: false, version: "1.0.0" },
-    { id: "3", slug: "pos", name: "POS", description: "Point of Sale untuk kasir dan transaksi", icon: "🛒", workspace: "default", active: false, version: "1.0.0" },
+    { id: "3", slug: "pos", name: "SMART Kasir", description: "Point of Sale untuk kasir dan transaksi", icon: "🛒", workspace: "default", active: false, version: "1.0.0" },
     { id: "4", slug: "wms", name: "WMS", description: "Warehouse Management System lanjutan", icon: "🏭", workspace: "warehouse", active: false, version: "1.0.0" },
     { id: "5", slug: "sitampan", name: "SITAMPAN", description: "Sistem Informasi Tata Kelola Pemerintahan Desa", icon: "🏘️", workspace: "default", active: false, version: "1.0.0" },
     { id: "6", slug: "santri-pintar", name: "Santri Pintar", description: "Manajemen pondok pesantren", icon: "📚", workspace: "default", active: false, version: "1.0.0" },

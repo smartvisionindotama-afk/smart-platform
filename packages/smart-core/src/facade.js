@@ -16,6 +16,9 @@ import { impersonation as _Impersonation } from "./impersonation/index.js";
 import Permission from "./permission/permission.js";
 import { COMPANY_TYPES as _Types, getCompanyTypeOptions as _TypesOptions } from "./company/company-types.js";
 import { validateCompanyData as _Validate } from "./company/company-validator.js";
+import { formatRupiah as _formatRupiah, formatRupiahID as _formatRupiahID, formatNumber as _formatNumber, formatDecimal as _formatDecimal, formatThousand as _formatThousand, unformatThousand as _unformatThousand, parseIdNumber as _parseIdNumber } from "./utils/format.js";
+import { esc as _esc, escHtml as _escHtml, escAttr as _escAttr } from "./utils/escape.js";
+import { formatDate as _formatDate, formatDateID as _formatDateID, formatDateTime as _formatDateTime, timeAgo as _timeAgo } from "./utils/date.js";
 
 /** @type {object|null} Internal DB SDK reference */
 let _DB = null;
@@ -284,6 +287,28 @@ const SMART = {
         getSession: () => _Impersonation.getSession(),
         getSuperAdmin: () => _Impersonation.getSuperAdmin(),
         onChange: (cb) => _Impersonation.onChange(cb)
+    },
+
+    // ═══════════════════════════════════════════
+    //  Utils Facade (Framework First)
+    //  Util global lintas aplikasi — jangan di-copy ke aplikasi.
+    // ═══════════════════════════════════════════
+
+    Utils: {
+        formatRupiah: _formatRupiah,
+        formatRupiahID: _formatRupiahID,
+        formatNumber: _formatNumber,
+        formatDecimal: _formatDecimal,
+        formatThousand: _formatThousand,
+        unformatThousand: _unformatThousand,
+        parseIdNumber: _parseIdNumber,
+        formatDate: _formatDate,
+        formatDateID: _formatDateID,
+        formatDateTime: _formatDateTime,
+        timeAgo: _timeAgo,
+        esc: _esc,
+        escHtml: _escHtml,
+        escAttr: _escAttr
     }
 };
 

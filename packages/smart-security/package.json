@@ -1,0 +1,20 @@
+{
+  "name": "@smart/security",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SMART Platform — Server Security Foundation (SP-027 M3). bcrypt password hashing, JWT access/refresh tokens, authorization middleware, rate limiting, security headers, audit logging.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "vitest run --dir __tests__"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

@@ -9,6 +9,7 @@
 
 import { Modal } from "@smart/ui";
 import { showToast } from "@smart/ui";
+import { esc, formatNumber as fmt, formatRupiahID as fmtRupiah, formatDate as fmtDate, formatDateTime as fmtDateTime, timeAgo } from "@smart/core";
 import {
     getInventoryStats, getStockByWarehouse,
     getLowStockItems, getOutOfStockItems,
@@ -46,46 +47,8 @@ const state = {
 //  Format helpers
 // ═══════════════════════════════════════════════
 
-function fmt(n) {
-    if (n === null || n === undefined || isNaN(n)) return "0";
-    return new Intl.NumberFormat("id-ID").format(n);
-}
-
-function fmtRupiah(n) {
-    if (n === null || n === undefined || isNaN(n)) return "Rp0";
-    return "Rp" + new Intl.NumberFormat("id-ID").format(n);
-}
-
-function fmtDate(d) {
-    if (!d) return "-";
-    const date = new Date(d);
-    return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function fmtDateTime(d) {
-    if (!d) return "-";
-    const date = new Date(d);
-    return date.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-}
-
-function timeAgo(d) {
-    if (!d) return "";
-    const now = Date.now();
-    const diff = now - new Date(d).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "baru saja";
-    if (mins < 60) return `${mins}m lalu`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}j lalu`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}h lalu`;
-    return fmtDate(d);
-}
-
-function esc(s) {
-    if (s === null || s === undefined) return "";
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+// Framework First: fmt/fmtRupiah/fmtDate/fmtDateTime/timeAgo dari
+// @smart/core (util global, bukan duplikat lokal)
 
 // ═══════════════════════════════════════════════
 //  HTML Builders

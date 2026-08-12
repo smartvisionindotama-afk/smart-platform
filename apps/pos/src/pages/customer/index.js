@@ -19,14 +19,16 @@ const { CrudPage, initCrudPage } = CrudModule({
     columns: [
         { key: "kode", label: "Kode", width: "110px" },
         { key: "nama", label: "Nama Member" },
+        { key: "kodeNfc", label: "No. Kartu", width: "110px", render: (val) => val ? `<span style="font-family:monospace">${String(val).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</span>` : "—" },
         { key: "kontak", label: "Kontak", width: "120px" },
         { key: "telepon", label: "Telepon", width: "130px" },
         { key: "email", label: "Email", width: "180px" }
     ],
-    formDataDefaults: { kode: "", nama: "", kontak: "", telepon: "", email: "", alamat: "", deskripsi: "" },
-    mapFormData: (item) => ({ kode: item.kode, nama: item.nama, kontak: item.kontak || "", telepon: item.telepon || "", email: item.email || "", alamat: item.alamat || "", deskripsi: item.deskripsi || "" }),
+    formDataDefaults: { kode: "", kodeNfc: "", nama: "", kontak: "", telepon: "", email: "", alamat: "", deskripsi: "" },
+    mapFormData: (item) => ({ kode: item.kode, kodeNfc: item.kodeNfc || "", nama: item.nama, kontak: item.kontak || "", telepon: item.telepon || "", email: item.email || "", alamat: item.alamat || "", deskripsi: item.deskripsi || "" }),
     getPayload: () => ({
         kode: document.getElementById("f-kode")?.value?.trim() || "",
+        kodeNfc: document.getElementById("f-kode-nfc")?.value?.trim() || "",
         nama: document.getElementById("f-nama")?.value?.trim() || "",
         kontak: document.getElementById("f-kontak")?.value?.trim() || "",
         telepon: document.getElementById("f-telepon")?.value?.trim() || "",
@@ -43,6 +45,11 @@ const { CrudPage, initCrudPage } = CrudModule({
             <div class="form-group">
                 <label for="f-nama">Nama Member <span class="required">*</span></label>
                 <input type="text" id="f-nama" value="${e(d.nama)}" placeholder="Nama member" required />
+            </div>
+            <div class="form-group">
+                <label for="f-kode-nfc">Kode Kartu NFC</label>
+                <input type="text" id="f-kode-nfc" value="${e(d.kodeNfc)}" placeholder="Isi kode NFC pada kartu member (opsional)" />
+                <small style="font-size:0.72rem;color:#94a3b8">Kasir bisa men-tap kartu NFC / ketik kode ini untuk verifikasi member</small>
             </div>
             <div class="form-group">
                 <label for="f-kontak">Kontak Person</label>

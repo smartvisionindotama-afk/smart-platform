@@ -58,6 +58,21 @@ describe("Input", () => {
         expect(input.value).toBe("test");
     });
 
+    it("outerHTML mempertahankan value (regresi: Modal pakai innerHTML)", () => {
+        const el = Input({ value: "PT-001" });
+        const html = el.outerHTML;
+        expect(html).toContain('value="PT-001"');
+        // Simulasikan Modal(body.innerHTML = content): parse ulang → nilai tetap
+        const container = dom.window.document.createElement("div");
+        container.innerHTML = html;
+        expect(container.querySelector(".smart-input").value).toBe("PT-001");
+    });
+
+    it("outerHTML tanpa value tidak menambah attribute kosong", () => {
+        const el = Input({ placeholder: "x" });
+        expect(el.outerHTML).not.toContain('value=""');
+    });
+
     it("should disable input", () => {
         const el = Input({ disabled: true });
         const input = el.querySelector(".smart-input");
@@ -138,6 +153,14 @@ describe("Select", () => {
         expect(select.value).toBe("b");
     });
 
+    it("outerHTML mempertahankan selected (regresi: Modal pakai innerHTML)", () => {
+        const el = Select({ options, value: "b" });
+        const html = el.outerHTML;
+        const container = dom.window.document.createElement("div");
+        container.innerHTML = html;
+        expect(container.querySelector(".smart-select").value).toBe("b");
+    });
+
     it("should disable select", () => {
         const el = Select({ options, disabled: true });
         const select = el.querySelector(".smart-select");
@@ -195,6 +218,14 @@ describe("Textarea", () => {
         const el = Textarea({ value: "content" });
         const textarea = el.querySelector(".smart-textarea");
         expect(textarea.value).toBe("content");
+    });
+
+    it("outerHTML mempertahankan isi textarea (regresi: Modal pakai innerHTML)", () => {
+        const el = Textarea({ value: "isi panjang" });
+        const html = el.outerHTML;
+        const container = dom.window.document.createElement("div");
+        container.innerHTML = html;
+        expect(container.querySelector(".smart-textarea").value).toBe("isi panjang");
     });
 
     it("should disable textarea", () => {
@@ -261,6 +292,14 @@ describe("Checkbox", () => {
         expect(input.checked).toBe(true);
     });
 
+    it("outerHTML mempertahankan checked (regresi: Modal pakai innerHTML)", () => {
+        const el = Checkbox({ checked: true });
+        const html = el.outerHTML;
+        const container = dom.window.document.createElement("div");
+        container.innerHTML = html;
+        expect(container.querySelector(".smart-checkbox-input").checked).toBe(true);
+    });
+
     it("should default to unchecked", () => {
         const el = Checkbox({});
         const input = el.querySelector(".smart-checkbox-input");
@@ -323,6 +362,14 @@ describe("Switch", () => {
         const el = Switch({ checked: true });
         const input = el.querySelector(".smart-switch-input");
         expect(input.checked).toBe(true);
+    });
+
+    it("outerHTML mempertahankan checked (regresi: Modal pakai innerHTML)", () => {
+        const el = Switch({ checked: true });
+        const html = el.outerHTML;
+        const container = dom.window.document.createElement("div");
+        container.innerHTML = html;
+        expect(container.querySelector(".smart-switch-input").checked).toBe(true);
     });
 
     it("should disable switch", () => {

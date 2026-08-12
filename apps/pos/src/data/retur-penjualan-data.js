@@ -9,7 +9,8 @@ import {
     apiCreateFallback,
     apiUpdateFallback,
     apiDeleteFallback,
-    apiGetFallback
+    apiGetFallback,
+    apiCall
 } from "./api.js";
 
 import { currentCompanyCode, filterData, tagData, delay } from "./helpers.js";
@@ -27,9 +28,12 @@ function createSeedData() {
             id: "1", companyCode: C,
             nomor: `RPJ-${String(today.getDate()).padStart(2,"0")}${String(today.getMonth()+1).padStart(2,"0")}${today.getFullYear()}-0001`,
             tanggal: today.toISOString(),
-            nomorSO: `SO-${String(today.getDate()).padStart(2,"0")}${String(today.getMonth()+1).padStart(2,"0")}${today.getFullYear()}-0001`,
+            // STRICT (SP-029 M6-FIX): POS = retur transaksi kasir (sumber=pos,
+            // referensi nota tanpa prefix). Retur SO bukan domain POS.
+            nomorSO: `${String(today.getDate()).padStart(2,"0")}${String(today.getMonth()+1).padStart(2,"0")}${today.getFullYear()}-0001`,
             idSO: "",
-            pelanggan: "CST-001", pelangganNama: "Toko Maju Jaya",
+            sumber: "pos",
+            pelanggan: "UMUM", pelangganNama: "Pelanggan Umum",
             items: [
                 { kode: "BRG-001", nama: "Air Mineral 600ml", satuan: "Karton", qty: 1, harga: 32000, subtotal: 32000 }
             ],
@@ -76,6 +80,8 @@ async function listReturPenjualanLocal(params = {}) {
     const search = (params.search || "").toLowerCase().trim();
 
     let filtered = filterData(items);
+    // STRICT (SP-029 M6-FIX): POS hanya retur transaksi kasir (sumber=pos).
+    filtered = filtered.filter(item => item.sumber === "pos");
     if (search) {
         filtered = filtered.filter(item =>
             item.nomor.toLowerCase().includes(search) ||
@@ -123,6 +129,9 @@ async function createReturPenjualanLocal(data) {
         tanggal: data.tanggal || new Date().toISOString(),
         nomorSO: data.nomorSO || "",
         idSO: data.idSO || "",
+        // STRICT: retur POS = transaksi kasir; tanpa sumber item tidak akan
+        // tampil di list POS (fallback lokal memfilter sumber === "pos").
+        sumber: "pos",
         pelanggan: data.pelanggan || "",
         pelangganNama: data.pelangganNama || "",
         items: validatedItems,
@@ -214,36 +223,18 @@ export async function deleteReturPenjualan(id) {
 /**
  * Update retur status (draft → returned).
  * PATCH /api/retur-penjualan/:id/status  body: { status }
+ *
+ * M6-FIX v2: pakai apiCall (authorizedFetch) — sebelumnya fetch polos TANPA
+ * header Authorization → 401 Unauthorized saat akses token tidak disertakan.
  */
 export async function updateReturPenjualanStatus(id, status) {
     try {
-        const companyCode = currentCompanyCode();
-        const headers = { "Content-Type": "application/json" };
-        if (companyCode) headers["x-company-code"] = companyCode;
-        try {
-            let userName = null;
-            if (typeof globalThis !== 'undefined' && globalThis.SMART?.Session) {
-                const sessionUser = globalThis.SMART.Session.get("user");
-                if (sessionUser?.name) userName = sessionUser.name;
-            }
-            if (!userName) {
-                const authUser = (await import("@smart/core")).Auth.user();
-                if (authUser?.name) userName = authUser.name;
-            }
-            if (userName) headers["x-user-name"] = userName;
-        } catch {}
-        const res = await fetch(`/api/retur-penjualan/${id}/status`, {
-            method: "PATCH",
-            headers,
-            body: JSON.stringify({ status })
-        });
-        if (res.ok) return res.json();
-        const err = await res.json().catch(() => ({ error: "Gagal update status" }));
-        throw new Error(err.error || "Gagal update status");
+        const res = await apiCall("PATCH", `/retur-penjualan/${id}/status`, { status });
+        if (res !== null) return res;
     } catch (e) {
-        if (e.message && !e.message.includes("Failed to fetch")) throw e;
-        return updateStatusLocal(id, status);
+        if (e && e.message && !e.message.includes("Failed to fetch")) throw e;
     }
+    return updateStatusLocal(id, status);
 }
 
 /** Reset seed data */

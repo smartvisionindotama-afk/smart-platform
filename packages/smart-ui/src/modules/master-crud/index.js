@@ -10,6 +10,7 @@
  */
 
 import { Modal, Table, Pagination, EmptyState, Alert, Skeleton, showToast, UI } from "../../index.js";
+import { esc } from "@smart/core";
 
 /**
  * Create a CRUD page module.
@@ -34,6 +35,9 @@ import { Modal, Table, Pagination, EmptyState, Alert, Skeleton, showToast, UI } 
  * @param {Function} config.getPayload     — () => data object from DOM
  * @param {Function} [config.loadFormDependencies] — Async () => extra data passed to renderFormFields as 3rd param
  * @param {Function} [config.validateForm] — (getPayload) => string|null error message; return null if valid
+ * @param {Function} [config.createGuard] — Async (state) => { allowed:boolean, message?:string } —
+ *        opsional; saat allowed=false tombol Tambah dinonaktifkan & banner info ditampilkan
+ *        (dipakai enforcement kuota, mis. jumlahGudang dari Master Platform). Additive.
  * @returns {{ CrudPage: Function, initCrudPage: Function }}
  */
 export function CrudModule(config) {
@@ -55,7 +59,8 @@ export function CrudModule(config) {
         mapFormData,
         getPayload,
         loadFormDependencies,
-        validateForm
+        validateForm,
+        createGuard
     } = config;
 
     const checkKodeExists = services.checkKodeExists;
@@ -69,7 +74,8 @@ export function CrudModule(config) {
         search: "",
         loading: false,
         formMode: null,
-        editingId: null
+        editingId: null,
+        guard: null
     };
 
     const searchId = `${entityId}-search`;
@@ -77,6 +83,45 @@ export function CrudModule(config) {
     const tableAreaId = `${entityId}-table-area`;
     const paginationAreaId = `${entityId}-pagination-area`;
     const pageInfoId = `${entityId}-page-info`;
+    const guardId = `${entityId}-guard-banner`;
+
+    // ── Create Guard (opsional — enforcement kuota, SP-029 M2-FIX) ──
+    // createGuard: async (state) => ({ allowed, message }). Saat allowed=false:
+    //   - tombol Tambah dinonaktifkan + title berisi pesan
+    //   - banner info tampil di atas tabel
+    //   - EmptyState action tidak memunculkan form
+    let addBtnRef = null;
+
+    async function refreshCreateGuard() {
+        if (typeof createGuard !== "function") { state.guard = null; return; }
+        try {
+            state.guard = (await createGuard(state)) || { allowed: true };
+        } catch (err) {
+            console.warn(`[${singularName}] createGuard gagal — izinkan default:`, err?.message);
+            state.guard = { allowed: true };
+        }
+        updateGuardUI();
+    }
+
+    function updateGuardUI() {
+        const blocked = state.guard && state.guard.allowed === false;
+        if (addBtnRef) {
+            addBtnRef.disabled = blocked;
+            addBtnRef.title = blocked ? (state.guard.message || "") : "";
+            addBtnRef.style.opacity = blocked ? "0.6" : "";
+            addBtnRef.style.cursor = blocked ? "not-allowed" : "";
+        }
+        const guardEl = document.getElementById(guardId);
+        if (guardEl) {
+            if (blocked && state.guard.message) {
+                guardEl.textContent = `⚠️ ${state.guard.message}`;
+                guardEl.style.display = "block";
+            } else {
+                guardEl.textContent = "";
+                guardEl.style.display = "none";
+            }
+        }
+    }
 
     // ── Page Render ──
 
@@ -96,6 +141,7 @@ export function CrudModule(config) {
                         </div>
                     </div>
                 </div>
+                <div id="${guardId}" class="create-guard-banner" style="display:none"></div>
                 <div class="table-container">
                     <div id="${tableAreaId}"></div>
                 </div>
@@ -118,11 +164,17 @@ export function CrudModule(config) {
         }
         const pageActions = document.querySelector(`#${pageId} .page-actions`);
         if (pageActions) {
-            const addBtn = document.createElement("button");
-            addBtn.className = "smart-btn smart-btn-primary";
-            addBtn.innerHTML = `➕ ${tambahLabel}`;
-            addBtn.addEventListener("click", () => openForm("create"));
-            pageActions.appendChild(addBtn);
+            addBtnRef = document.createElement("button");
+            addBtnRef.className = "smart-btn smart-btn-primary";
+            addBtnRef.innerHTML = `➕ ${tambahLabel}`;
+            addBtnRef.addEventListener("click", () => {
+                if (state.guard && state.guard.allowed === false) {
+                    showToast("warning", state.guard.message || "Kuota penuh — tambahan tidak diizinkan");
+                    return;
+                }
+                openForm("create");
+            });
+            pageActions.appendChild(addBtnRef);
         }
         loadData();
     }
@@ -149,14 +201,16 @@ export function CrudModule(config) {
             state.total = result.pagination.total;
             state.totalPages = result.pagination.totalPages;
 
+            await refreshCreateGuard();
             tableArea.innerHTML = "";
             if (state.items.length === 0) {
+                const blocked = state.guard && state.guard.allowed === false;
                 tableArea.appendChild(EmptyState({
                     icon,
                     title: `Belum ada ${pluralName}`,
-                    description: state.search ? `Tidak ditemukan "${state.search}"` : `Klik ${tambahLabel}`,
-                    actionText: state.search ? "" : tambahLabel,
-                    onAction: state.search ? null : () => openForm("create")
+                    description: state.search ? `Tidak ditemukan "${state.search}"` : (blocked ? (state.guard.message || `Klik ${tambahLabel}`) : `Klik ${tambahLabel}`),
+                    actionText: (state.search || blocked) ? "" : tambahLabel,
+                    onAction: (state.search || blocked) ? null : () => openForm("create")
                 }));
             } else if (window.innerWidth < 768) {
                 renderCrudCards(tableArea);
@@ -451,15 +505,7 @@ export function CrudModule(config) {
 
     // ── Utilities ──
 
-    function esc(str) {
-        if (!str) return "";
-        return String(str)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
+    // Framework First: esc dari @smart/core (util global, bukan duplikat lokal)
 
     function debounce(fn, ms) {
         let timer;
@@ -501,6 +547,7 @@ export function CrudModule(config) {
 .crud-page .form-group textarea { resize:vertical; min-height:60px; }
 .crud-page .page-info { text-align:center; font-size:0.85rem; color:var(--smart-text-secondary,#6b7280); padding:0.5rem 0 1rem; }
 .crud-page .required { color:#dc2626; }
+.crud-page .create-guard-banner { padding:0.6rem 1rem; margin:0 0 1rem; border-radius:6px; background:#fef3c7; border:1px solid #fcd34d; color:#92400e; font-size:0.85rem; }
 .crud-page .kode-error-container { grid-column:1/-1; margin-top:0.5rem; }
 .crud-page .kode-error-container .smart-alert { margin:0; padding:0.5rem 0.75rem; font-size:0.8rem; }
 .crud-page #f-kode.is-duplicate { border-color:#dc2626 !important; background:#fef2f2 !important; box-shadow:0 0 0 3px rgba(220,38,38,0.1) !important; }

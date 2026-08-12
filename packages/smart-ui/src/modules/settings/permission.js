@@ -8,6 +8,7 @@
  */
 
 import { Modal, Toast, Table, EmptyState, Alert, Skeleton } from "../../index.js";
+import { esc } from "@smart/core";
 
 /**
  * Permission Settings Page component.
@@ -195,7 +196,7 @@ export function SettingsPermissionModule({ getRolesWithPermissions, getRolePermi
     return { render, init };
 }
 
-function esc(str) { if (!str) return ""; return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+// Framework First: esc dari @smart/core (util global, bukan duplikat lokal)
 
 function getStyles() { return `
 .crud-page { padding: 1.5rem; }

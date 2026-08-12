@@ -34,6 +34,37 @@ Jika TIDAK:
 
 Implementasikan di Inventory.
 
+### Status Implementasi (2026-08-13, M6-FIX v7)
+
+Refactor Framework First pertama telah diterapkan penuh di seluruh platform
+(POS, Inventory, Console) — perilaku identik, murni struktural:
+
+1. **Util global → `@smart/core` Utils** (satu sumber kebenaran, via facade
+   `SMART.Utils`):
+   - Format angka: `formatRupiah` (tanpa simbol), `formatRupiahID` (Rp…),
+     `formatNumber`, `formatDecimal`, `formatThousand`/`unformatThousand`,
+     `parseIdNumber`
+   - Format tanggal: `formatDate` ("13 Agu 2026"), `formatDateID`
+     ("Kamis, 13 Agustus 2026"), `formatDateTime`, `timeAgo`
+   - Escape HTML: `esc`/`escHtml`/`escAttr` (anti-XSS)
+2. **~20 definisi duplikat dihapus** — `esc`/`escHtml` (settings, auth,
+   master-crud, smart-inventory-ui, halaman POS/Inventory/Console),
+   `formatRupiah` (barang-data pos & inv), `formatDate`/`formatDateID`/
+   `formatDateTime` (penjualan, transfer, pembelian, laporan, inventory page),
+   `fmtNum`/`fmtRupiah`/`formatThousand`/`unformatThousand`/`timeAgo` —
+   semuanya kini import/re-export dari `@smart/core`.
+3. **Anti double-read scan kamera di `BarcodeScanner`** (class scanner
+   framework) — berlaku otomatis untuk SEMUA pemakai: kasir, member,
+   master barang (pos & inv), pembelian, penjualan/SO, transfer.
+4. **Verifikasi**: test 864/864, build pos+inventory+console ✓, 0 duplikat
+   fungsi tersisa, lint bersih (hanya baseline pre-existing), bundle live
+   byte-identik dengan dist di 3 domain.
+
+Aturan bagi pengembang: jika menemukan fungsi utilitas/komponen UI yang
+mulai di-copy ke lebih dari satu aplikasi/modul — HENTIKAN copy-paste,
+pindahkan ke framework (smart-core Utils / smart-ui components), lalu
+import dari sana.
+
 ---
 
 ## Thin Application
@@ -101,6 +132,19 @@ smart-config
 Setiap package hanya memiliki SATU Public SDK.
 
 Implementasi internal bersifat private.
+
+### smart-core Utils (Public SDK — Framework First)
+
+Util lintas aplikasi diekspor dari `@smart/core` (`packages/smart-core/src/utils/`)
+dan di-agregasi di facade `SMART.Utils`:
+
+- `format.js` — `formatRupiah`, `formatRupiahID`, `formatNumber`,
+  `formatDecimal`, `formatThousand`, `unformatThousand`, `parseIdNumber`
+- `escape.js` — `esc`, `escHtml`, `escAttr`
+- `date.js` — `formatDate`, `formatDateID`, `formatDateTime`, `timeAgo`
+
+Aplikasi TIDAK BOLEH mendefinisikan ulang util ini — selalu import dari
+`@smart/core` (pola: `import { esc, formatDate } from "@smart/core";`).
 
 ---
 

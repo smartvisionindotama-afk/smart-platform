@@ -23,7 +23,8 @@ export const CONSOLE_CONFIG = {
 // Bisa dioverride untuk dev/staging via window.__APP_URLS__.
 
 export const APP_URLS = {
-    inventory: "https://inv.e-profit.id/"
+    inventory: "https://inv.e-profit.id/",
+    pos: "https://pos.e-profit.id/"
 };
 
 /**
@@ -65,8 +66,8 @@ export const APPS_REGISTRY = [
         description: "Akuntansi dan pembukuan keuangan"
     },
     {
-        slug: "pos", name: "POS", code: "POS", icon: "🛒",
-        active: false, domain: "", version: "0.1.0",
+        slug: "pos", name: "SMART Kasir", code: "POS", icon: "🛒",
+        active: true, domain: "https://pos.e-profit.id/", version: "0.1.0",
         description: "Point of Sale untuk kasir dan transaksi"
     },
     {
@@ -97,16 +98,63 @@ export const APPS_REGISTRY = [
 ];
 
 // ── Sidebar Menu (SP-027 M1) ──
+// Group collapsible didukung Sidebar (@smart/ui/layouts): item dengan
+// `children` dirender sebagai group <details>/<summary> (SP-027 M5-FIX).
 
 export const MENU_ITEMS = [
+    // Dashboard selalu flat (halaman default)
     { title: "Dashboard", icon: "📊", page: "dashboard" },
-    { title: "Applications", icon: "📦", page: "applications" },
-    { title: "Companies", icon: "🏢", page: "companies" },
-    { title: "Super Admin", icon: "🛡️", page: "superadmins" },
-    { title: "Platform Settings", icon: "⚙️", page: "settings" },
-    { title: "System Information", icon: "🖥️", page: "system" },
-    { title: "Activity Log", icon: "📋", page: "activity" },
-    { title: "Documentation", icon: "📚", page: "documentation" }
+    {
+        title: "Administration",
+        icon: "🏛️",
+        children: [
+            { title: "Monitoring Center", icon: "📡", page: "monitoring" },
+            { title: "Applications", icon: "📦", page: "applications" },
+            { title: "Companies", icon: "🏢", page: "companies" },
+            { title: "Super Admin", icon: "🛡️", page: "superadmins" },
+            { title: "Platform Settings", icon: "⚙️", page: "settings" },
+            { title: "System Information", icon: "🖥️", page: "system" },
+            { title: "Activity Log", icon: "📋", page: "activity" },
+            { title: "Documentation", icon: "📚", page: "documentation" }
+        ]
+    },
+    {
+        title: "Platform Ops",
+        icon: "🛠️",
+        children: [
+            { title: "Deployment Center", icon: "🚀", page: "deployment" },
+            { title: "Database Explorer", icon: "🗄️", page: "database" },
+            { title: "Ganti Password Server", icon: "🔑", page: "security" }
+        ]
+    },
+    {
+        title: "Billing",
+        icon: "💳",
+        children: [
+            { title: "Billing Center", icon: "💳", page: "billing" }
+        ]
+    }
+];
+
+// ── Business Type (SP-029 M2 [USULAN]) ──
+// Katalog jenis usaha untuk konfigurasi POS (Master Platform).
+// Sumber kebenaran: SERVER (apps/console/server/config/business-types.js) —
+// daftar ini fallback client bila GET /api/companies/business-types gagal.
+// WAJIB dijaga sinkron dengan server.
+
+export const BUSINESS_TYPES = [
+    "Retail",
+    "Minimarket",
+    "Toko Kelontong",
+    "Cafe",
+    "Coffee Shop",
+    "Restoran",
+    "Bakery",
+    "Pharmacy",
+    "Distributor",
+    "Manufacturing",
+    "Jasa",
+    "Lainnya"
 ];
 
 // ── Session Storage Key ──

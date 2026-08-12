@@ -227,15 +227,15 @@ async function repairRolePermissions() {
 
 // ── F&B Kategori ──
 const KATEGORI_SEED = [
-    { companyCode: "PT-001", kode: "KAT-001", nama: "Minuman",       deskripsi: "Minuman ringan, jus, soda, dan minuman kemasan" },
-    { companyCode: "PT-001", kode: "KAT-002", nama: "Makanan Ringan", deskripsi: "Cemilan, snack, keripik, dan kue kering" },
-    { companyCode: "PT-001", kode: "KAT-003", nama: "Bumbu & Saus",  deskripsi: "Bumbu masak, saus sambal, kecap, dan bumbu instan" },
-    { companyCode: "PT-001", kode: "KAT-004", nama: "Bahan Baku",    deskripsi: "Bahan mentah untuk produksi makanan dan minuman" },
-    { companyCode: "PT-001", kode: "KAT-005", nama: "Frozen Food",   deskripsi: "Makanan beku, daging beku, dan produk olahan beku" },
-    { companyCode: "PT-001", kode: "KAT-006", nama: "Susu & Olahan", deskripsi: "Susu segar, susu UHT, yoghurt, dan keju" },
-    { companyCode: "PT-001", kode: "KAT-007", nama: "Roti & Kue",    deskripsi: "Roti tawar, roti manis, dan aneka kue" },
-    { companyCode: "PT-001", kode: "KAT-008", nama: "Kemasan",       deskripsi: "Kemasan gelas, botol, mika, dan kertas" },
-    { companyCode: "PT-001", kode: "KAT-009", nama: "Lainnya",       deskripsi: "Kategori lainnya" }
+    { companyCode: "PT-001", kode: "KAT-001", nama: "Minuman",       icon: "🥤", deskripsi: "Minuman ringan, jus, soda, dan minuman kemasan" },
+    { companyCode: "PT-001", kode: "KAT-002", nama: "Makanan Ringan", icon: "🍫", deskripsi: "Cemilan, snack, keripik, dan kue kering" },
+    { companyCode: "PT-001", kode: "KAT-003", nama: "Bumbu & Saus",  icon: "🧂", deskripsi: "Bumbu masak, saus sambal, kecap, dan bumbu instan" },
+    { companyCode: "PT-001", kode: "KAT-004", nama: "Bahan Baku",    icon: "🍚", deskripsi: "Bahan mentah untuk produksi makanan dan minuman" },
+    { companyCode: "PT-001", kode: "KAT-005", nama: "Frozen Food",   icon: "🧊", deskripsi: "Makanan beku, daging beku, dan produk olahan beku" },
+    { companyCode: "PT-001", kode: "KAT-006", nama: "Susu & Olahan", icon: "🥛", deskripsi: "Susu segar, susu UHT, yoghurt, dan keju" },
+    { companyCode: "PT-001", kode: "KAT-007", nama: "Roti & Kue",    icon: "🍞", deskripsi: "Roti tawar, roti manis, dan aneka kue" },
+    { companyCode: "PT-001", kode: "KAT-008", nama: "Kemasan",       icon: "📦", deskripsi: "Kemasan gelas, botol, mika, dan kertas" },
+    { companyCode: "PT-001", kode: "KAT-009", nama: "Lainnya",       icon: "🏷️", deskripsi: "Kategori lainnya" }
 ];
 
 // ── F&B Satuan ──

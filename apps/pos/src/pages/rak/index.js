@@ -4,11 +4,7 @@
 import { CrudModule } from "@smart/ui";
 import { listRak, getRak, createRak, updateRak, deleteRak, listWarehouse } from "../../data/index.js";
 import { checkKodeExists } from "../../data/rak-data.js";
-
-function escAttr(str) {
-    if (!str) return "";
-    return String(str).replace(/"/g, "&quot;").replace(/'/g, "&#039;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+import { escAttr } from "@smart/core";
 
 const { CrudPage, initCrudPage } = CrudModule({
     entityId: "rak",

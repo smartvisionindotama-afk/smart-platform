@@ -14,13 +14,15 @@ import { AppConfig } from "@smart/core";
 import { listCompanies } from "../../services/companies.js";
 import { listSuperadmins } from "../../services/superadmins.js";
 import { countApplications } from "../../services/applications.js";
+import { getMonitoringOverview } from "../../services/monitoring.js";
 import { pageHeader, loadingHTML } from "../_shared.js";
 
 async function loadDashboardStats() {
-    const [companiesResult, superadmins, totalApps] = await Promise.all([
+    const [companiesResult, superadmins, totalApps, monitoring] = await Promise.all([
         listCompanies({ page: 1, limit: 999 }),
         listSuperadmins(),
-        countApplications()
+        countApplications(),
+        getMonitoringOverview().catch(() => null)
     ]);
 
     const companies = companiesResult?.data || [];
@@ -32,7 +34,10 @@ async function loadDashboardStats() {
         totalCompanies,
         activeCompanies,
         totalSuperadmins: (superadmins || []).length,
-        version: AppConfig.version || "1.0.0"
+        version: AppConfig.version || "1.0.0",
+        // SP-027 M4: status nyata dari Monitoring API (bukan placeholder)
+        serverStatus: monitoring?.infrastructure?.status || "—",
+        databaseStatus: monitoring?.database?.status || monitoring?.services?.mongodb?.status || "—"
     };
 }
 
@@ -45,8 +50,8 @@ function statGrid(stats) {
         { title: "Total Companies", value: String(stats.totalCompanies) },
         { title: "Total Super Admin", value: String(stats.totalSuperadmins) },
         { title: "Platform Version", value: stats.version },
-        { title: "Server Status", value: "— (placeholder)" },
-        { title: "Database Status", value: "— (placeholder)" },
+        { title: "Server Status", value: stats.serverStatus || "—" },
+        { title: "Database Status", value: stats.databaseStatus || "—" },
         { title: "Active Companies", value: String(stats.activeCompanies) },
         { title: "Registered Companies", value: String(stats.totalCompanies) }
     ];

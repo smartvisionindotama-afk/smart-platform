@@ -4,6 +4,8 @@ const kategoriSchema = new mongoose.Schema({
     companyCode: { type: String, required: true },
     kode: { type: String, required: true },
     nama: { type: String, required: true },
+    // Icon kategori (emoji) — ditampilkan di sidebar layar kasir.
+    icon: { type: String, default: "" },
     deskripsi: { type: String, default: "" },
     active: { type: Boolean, default: true },
     status: { type: String, default: "active", enum: ["active", "inactive", "archived"] },

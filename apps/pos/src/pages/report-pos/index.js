@@ -15,13 +15,9 @@
 
 import { getSalesBreakdown, formatRupiah } from "../../data/index.js";
 import { posDashboardCSS } from "../pos-styles.js";
+import { esc } from "@smart/core";
 
 const PAYMENT_LABELS = { cash: "Tunai", transfer: "Transfer", qris: "QRIS", card: "Kartu" };
-
-function esc(str) {
-    if (str === null || str === undefined) return "";
-    return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
 
 function today() {
     return new Date().toISOString().split("T")[0];

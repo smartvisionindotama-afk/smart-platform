@@ -40,6 +40,14 @@ export function Checkbox({
 
     input.checked = checked;
 
+    // Serialisasi: set CONTENT ATTRIBUTE `checked` agar status tidak hilang
+    // saat outerHTML di-parse ulang (mis. dalam Modal via body.innerHTML).
+    if (checked) {
+
+        input.setAttribute("checked", "");
+
+    }
+
     input.disabled = disabled;
 
 

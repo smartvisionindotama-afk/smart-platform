@@ -46,7 +46,8 @@ const { LaporanPage, initLaporanPage } = LaporanModule({
     getInventoryValueReport, getStockMutationReport,
     getSupplierReport, getCustomerReport,
     getLaporanLabarugi, getLaporanPiutang,
-    getCompanyInfo
+    getCompanyInfo,
+    isPos: true // M6-FIX — mode POS: label "No. Nota" / "Total Nota" (bukan SO)
 });
 
 export { LaporanPage, initLaporanPage };

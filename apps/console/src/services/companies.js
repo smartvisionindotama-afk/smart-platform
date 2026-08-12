@@ -14,6 +14,7 @@ import {
     apiDeleteFallback,
     apiGetFallback
 } from "@smart/api";
+import { BUSINESS_TYPES } from "../config/index.js";
 
 // ── Local fallback ──
 
@@ -136,6 +137,22 @@ export async function updateCompany(id, data) {
 
 export async function deleteCompany(id) {
     return apiDeleteFallback("/api/companies", id, () => deleteCompanyLocal(id));
+}
+
+/**
+ * Ambil katalog Business Type dari server (fallback konstanta client).
+ * SP-029 M2 [USULAN] — dropdown konfigurasi POS di Edit Perusahaan.
+ * @returns {Promise<string[]>}
+ */
+export async function listBusinessTypes() {
+    try {
+        const res = await fetch("/api/companies/business-types");
+        if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data?.data) && data.data.length > 0) return data.data;
+        }
+    } catch { /* fall through */ }
+    return BUSINESS_TYPES;
 }
 
 /**

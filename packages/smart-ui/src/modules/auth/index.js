@@ -5,3 +5,4 @@ export { showForgotPasswordModal } from "./forgot-password.js";
 export { ResetPasswordPage, initResetPasswordPage } from "./reset-password.js";
 export { LoginPageComponent, initLoginPageComponent } from "./login.js";
 export { RegisterPageComponent, initRegisterPageComponent } from "./register.js";
+export { initPasswordToggle } from "./password-toggle.js";

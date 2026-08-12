@@ -1,0 +1,15 @@
+{
+    "name": "pos",
+    "label": "SMART Kasir",
+    "appTitle": "SMART Kasir",
+    "topbarTitle": "SMART Kasir",
+    "variables": "pos/variables.css",
+    "layout": {
+        "sidebarPosition": "left",
+        "topbarFixed": true
+    },
+    "branding": {
+        "primaryColor": "--emerald-600",
+        "logo": null
+    }
+}

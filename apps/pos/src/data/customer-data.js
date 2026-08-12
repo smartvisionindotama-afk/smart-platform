@@ -14,7 +14,9 @@ function createSeedData() {
         { id: "1", companyCode: C, kode: "CUS-001", nama: "PT Maju Bersama",      kontak: "Hendra", telepon: "021-4444444", email: "hendra@majubersama.com",     alamat: "Jl. Sudirman No. 50, Jakarta", deskripsi: "Pelanggan tetap material bangunan", active: true, createdAt: now, updatedAt: now },
         { id: "2", companyCode: C, kode: "CUS-002", nama: "CV Indah Jaya",        kontak: "Indah",  telepon: "031-5555555", email: "indah@indahjaya.co.id",       alamat: "Jl. Tunjungan No. 20, Surabaya", deskripsi: "Distributor cat dan finishing", active: true, createdAt: now, updatedAt: now },
         { id: "3", companyCode: C, kode: "CUS-003", nama: "Toko Bangunan Subur",  kontak: "Subur",   telepon: "022-6666666", email: "subur@tokosubur.com",         alamat: "Jl. Merdeka No. 15, Bandung", deskripsi: "Toko retail bangunan", active: true, createdAt: now, updatedAt: now },
-        { id: "4", companyCode: C, kode: "CUS-004", nama: "PT Karya Cipta Utama", kontak: "Cipto",   telepon: "061-7777777", email: "cipto@karyacipta.co.id",       alamat: "Jl. Ahmad Yani No. 5, Medan", deskripsi: "Kontraktor proyek perumahan", active: true, createdAt: now, updatedAt: now }
+        { id: "4", companyCode: C, kode: "CUS-004", nama: "PT Karya Cipta Utama", kontak: "Cipto",   telepon: "061-7777777", email: "cipto@karyacipta.co.id",       alamat: "Jl. Ahmad Yani No. 5, Medan", deskripsi: "Kontraktor proyek perumahan", active: true, createdAt: now, updatedAt: now },
+        // M6-FIX — contoh member dengan kartu NFC (kodeNfc diisi admin)
+        { id: "5", companyCode: C, kode: "MBR-001", kodeNfc: "NFC-1001", nama: "Member Utama (NFC)", kontak: "Budi", telepon: "0812-0000-0001", email: "budi@member.com", alamat: "Jl. Kasir No. 1, Jakarta", deskripsi: "Member pemegang kartu NFC", active: true, createdAt: now, updatedAt: now }
     ];
 }
 
@@ -59,7 +61,7 @@ async function createCustomerLocal(data) {
     if (existing) {
         throw new Error(`Kode "${newKode}" sudah digunakan untuk ${existing.nama}. Silakan gunakan kode lain.`);
     }
-    const newItem = { id: nextStringId(), ...tagData({}), kode: newKode, nama: data.nama, kontak: data.kontak || "", telepon: data.telepon || "", email: data.email || "", alamat: data.alamat || "", deskripsi: data.deskripsi || "", active: data.active !== false, createdAt: now, updatedAt: now };
+    const newItem = { id: nextStringId(), ...tagData({}), kode: newKode, kodeNfc: data.kodeNfc || "", nama: data.nama, kontak: data.kontak || "", telepon: data.telepon || "", email: data.email || "", alamat: data.alamat || "", deskripsi: data.deskripsi || "", active: data.active !== false, createdAt: now, updatedAt: now };
     items.unshift(newItem);
     return { ...newItem };
 }
@@ -130,12 +132,17 @@ export async function getMemberByKode(kode) {
     try {
         const res = await apiCall("GET", `/customer/check-kode/${encodeURIComponent(key)}`);
         if (res !== null) {
-            if (res.exists) return { kode: key, nama: res.nama || key, id: res.id || "" };
+            // M6-FIX — server cocokkan kode ATAU kodeNfc; kode member asli
+            // (res.kode) dikembalikan agar transaksi menyimpan kode member, bukan kodeNfc.
+            if (res.exists) return { kode: res.kode || key, nama: res.nama || key, id: res.id || "" };
             return null;
         }
     } catch {
         // jaringan down → fall through ke lokal
     }
-    const local = items.find(i => String(i.kode).toLowerCase() === key.toLowerCase());
+    const local = items.find(i =>
+        String(i.kode).toLowerCase() === key.toLowerCase() ||
+        (i.kodeNfc && String(i.kodeNfc).toLowerCase() === key.toLowerCase())
+    );
     return local ? { kode: local.kode, nama: local.nama, id: local.id } : null;
 }

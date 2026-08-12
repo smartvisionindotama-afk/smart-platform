@@ -81,6 +81,18 @@ export function Input({
 
     input.value = value;
 
+    // Serialisasi: set juga CONTENT ATTRIBUTE agar nilai tidak hilang saat
+    // komponen di-serialisasi lewat outerHTML lalu di-parse ulang (mis. dalam
+    // Modal yang memakai body.innerHTML). Property .value tidak di-serialisasi
+    // oleh outerHTML (lihat test form-inputs).
+    // KECUALI type=password: jangan pernah serialisasi password ke attribute
+    // HTML (terlihat di devtools DOM).
+    if (type !== "password" && value !== "" && value !== undefined && value !== null) {
+
+        input.setAttribute("value", value);
+
+    }
+
     input.disabled = disabled;
 
     input.required = required;
