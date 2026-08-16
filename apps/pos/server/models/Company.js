@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { DEFAULT_TRANSACTION_TYPES } from "../../../../packages/smart-core/src/transaction-types/transaction-types.js";
 
 const companySchema = new mongoose.Schema({
     // Tenant identity
@@ -16,6 +17,10 @@ const companySchema = new mongoose.Schema({
     address: { type: String, default: "" },
     phone: { type: String, default: "" },
     email: { type: String, default: "" },
+    // F&B QR Menu — nomor WhatsApp resto (diisi di Settings → Company).
+    // Dipakai halaman /m/:identifier utk mengarahkan customer ke wa.me
+    // (chat kasir). Kosong = alur QR Menu web normal (tanpa redirect WA).
+    whatsapp: { type: String, default: "" },
 
     // Legal
     taxId: { type: String, default: "" },
@@ -62,6 +67,22 @@ const companySchema = new mongoose.Schema({
     jumlahKasir: { type: Number, default: 1, min: 0 },
     lisensiStatus: { type: String, default: "active", enum: ["active", "trial", "expired"] },
     lisensiExpiresAt: { type: Date, default: null },
+
+    // ── Transaction Capability (SP-029 — POS V1) ──
+    // Sama seperti deklarasi di Console (DB bersama). Default V1 = ["retail"]
+    // (backward compatible); array kosong diperbolehkan. Fallback untuk
+    // company lama tanpa field ini ditangani normalizeCompanyConfig.
+    transactionTypes: { type: [String], default: () => [...DEFAULT_TRANSACTION_TYPES] },
+
+    // ── WhatsApp Gateway (F&B V1 — Settings → Konfigurasi WA) ──
+    // Konfigurasi gateway per-company untuk kirim notifikasi status order
+    // via WhatsApp (Sidobe). Diatur admin dari Settings → Konfigurasi WA.
+    // Additive; company lama tanpa field ini → fallback env SIDOBE_* di
+    // service wa-notify (provider default api.sidobe.com/wa/v1).
+    // `whatsapp` (nomor restoran utk checkout) terpisah dari gateway ini.
+    waProviderUrl:  { type: String, default: "" },   // mis. https://api.sidobe.com/wa/v1/send-message
+    waSecretKey:    { type: String, default: "" },   // X-Secret-Key (dari dashboard Sidobe)
+    waSenderNumber: { type: String, default: "" },   // Nomor pengirim (opsional)
 
     // Status
     active: { type: Boolean, default: true },

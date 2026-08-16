@@ -37,16 +37,30 @@ router.get("/", async (req, res) => {
 });
 
 // Check kode existence (BEFORE /:id to avoid route conflict)
-// Scoped by optional ?gudang= query param — kode yang sama di gudang berbeda dianggap valid
+// SELALU discope per gudang (kode yang sama di gudang berbeda dianggap VALID —
+// konsisten dengan validasi POST/PUT). `excludeId` = dokumen yang sedang diedit
+// (di-exclude agar edit barang dengan kode yang sama TIDAK dianggap duplikat).
 router.get("/check-kode/:kode", async (req, res) => {
     try {
         const kode = req.params.kode;
         const gudang = req.query.gudang || "";
+        const excludeId = req.query.excludeId || "";
         const companyCode = req.headers["x-company-code"];
         const escaped = kode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        let query = { kode: { $regex: new RegExp("^" + escaped + "$", "i") } };
+        const query = { kode: { $regex: new RegExp("^" + escaped + "$", "i") } };
         if (companyCode) query.companyCode = companyCode;
-        if (gudang) query.gudang = gudang; // scope ke gudang tertentu
+        // Scope ke gudang SELALU (termasuk gudang kosong) — jangan pernah
+        // cocokkan lintas gudang (kode sama di gudang beda = legal).
+        if (gudang) {
+            query.gudang = gudang;
+        } else {
+            // Bucket gudang kosong: item legacy tanpa field gudang ikut cocok.
+            query.gudang = { $in: ["", null] };
+        }
+        // Edit mode: kecualikan barang yang sedang diedit
+        if (excludeId && /^[0-9a-fA-F]{24}$/.test(excludeId)) {
+            query._id = { $ne: excludeId };
+        }
         const item = await Barang.findOne(query);
         if (item) {
             return res.json({ exists: true, nama: item.nama, id: item._id.toString() });
@@ -65,6 +79,55 @@ function checkCompany(item, req) {
     const companyCode = req.headers["x-company-code"];
     if (!companyCode) return true; // no company filter = allow
     return item.companyCode === companyCode;
+}
+
+/**
+ * Normalisasi VARIAN produk (M6.2-FIX v0.43 — marketplace SKU):
+ *  - varianDef: [{ nama, nilai[] }] — dimensi varian (ukuran/warna/topping)
+ *  - skus:      [{ kode, label, foto, harga, harga_khusus, stok }] — tiap
+ *    kombinasi = 1 SKU; `harga` = pelanggan umum, `harga_khusus` = member.
+ *  - stok utama dihitung ulang = Σ stok seluruh SKU (agregat untuk
+ *    laporan/kasir); bila tanpa SKU, stok = nilai yang dikirim (existing).
+ *  - harga_jual global di-derive = harga SKU termurah ("mulai") agar
+ *    list/detail/fallback offline tetap menampilkan harga bermakna.
+ * @param {object} data Body request (mutated)
+ */
+function normalizeVarian(data) {
+    if (!Array.isArray(data.skus)) return; // field tidak dikirim → biarkan
+
+    const varianDef = Array.isArray(data.varianDef)
+        ? data.varianDef
+            .filter(d => d && String(d.nama || "").trim() && Array.isArray(d.nilai))
+            .map(d => ({
+                nama: String(d.nama).trim(),
+                nilai: d.nilai.map(n => String(n || "").trim()).filter(Boolean)
+            }))
+            .filter(d => d.nilai.length)
+        : [];
+
+    const skus = Array.isArray(data.skus)
+        ? data.skus
+            .filter(s => s && String(s.kode || "").trim())
+            .map(s => ({
+                kode: String(s.kode).trim(),
+                label: String(s.label || "").trim(),
+                // M6.2-FIX v0.43 — foto per SKU (opsional, data URI)
+                foto: String(s.foto || ""),
+                harga: Math.max(0, Number(s.harga) || 0),
+                // M6.2-FIX — harga khusus per SKU utk member (0 = pakai harga)
+                harga_khusus: Math.max(0, Number(s.harga_khusus) || 0),
+                stok: Math.max(0, Number(s.stok) || 0)
+            }))
+        : [];
+
+    data.varianDef = varianDef;
+    data.skus = skus;
+    if (skus.length) {
+        // Barang ber-varian: stok utama = agregat seluruh SKU
+        data.stok = skus.reduce((sum, s) => sum + s.stok, 0);
+        // Harga "mulai" = SKU termurah (utk list/detail/fallback offline).
+        data.harga_jual = Math.min(...skus.map(s => s.harga));
+    }
 }
 
 // Get by ID (scoped to company)
@@ -91,7 +154,10 @@ router.post("/", async (req, res) => {
             return res.status(400).json({ error: "Kode barang wajib diisi (manual, barcode, atau QR code)" });
         }
         data.kode = data.kode.trim(); // Normalize early
-        
+
+        // M6.2-FIX v0.43 — normalisasi varian/SKU + stok agregat
+        normalizeVarian(data);
+
         // Auto-tag with company code from header
         const companyCode = req.headers["x-company-code"];
         if (companyCode && !data.companyCode) {
@@ -160,7 +226,11 @@ router.put("/:id", async (req, res) => {
             }
         }
 
-        const item = await Barang.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        // M6.2-FIX v0.43 — normalisasi varian/SKU sebelum update (stok agregat)
+        const updateData = { ...req.body };
+        normalizeVarian(updateData);
+
+        const item = await Barang.findByIdAndUpdate(req.params.id, updateData, { new: true });
 
         // Log activity
         try {

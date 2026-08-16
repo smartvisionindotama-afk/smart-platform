@@ -7,7 +7,8 @@ import {
     framework,
     impersonation,
     audit,
-    SMART
+    SMART,
+    filterMenusByTransactionTypes
 } from "@smart/core";
 
 import { loadUI } from "@smart/ui";
@@ -21,6 +22,8 @@ import { configureKasirShell, requestKasirLogout } from "./pages/pos";
 import { LoginPage, initLoginPage } from "./pages/login";
 import { ResetPasswordPage, initResetPasswordPage } from "./pages/reset-password";
 import { RegisterPage, initRegisterPage } from "./pages/register";
+// F&B Customer Ordering V1 — halaman customer /m/:identifier (TANPA login)
+import { CustomerMenuPage, initCustomerMenuPage } from "./pages/customer-menu";
 import { getCompanyByCode } from "./data";
 import {
     configureAuthTokens,
@@ -218,7 +221,12 @@ function refreshSidebarMenus() {
     const sidebarMenu = document.querySelector(".sidebar-menu");
     if (!sidebarMenu) return;
     // SP-029 M2 — filter lokasi juga diterapkan saat permission berubah
-    const allowedMenus = filterMenus(filterMenusByLokasi(menus, getCompanyConfig().lokasiMode));
+    // SP-029 POS V1 — filter capability (transactionTypes) juga diterapkan
+    const cfg = getCompanyConfig();
+    const allowedMenus = filterMenus(filterMenusByTransactionTypes(
+        filterMenusByLokasi(menus, cfg.lokasiMode),
+        cfg.transactionTypes
+    ));
     sidebarMenu.innerHTML = renderSidebarMenuItems(allowedMenus);
 }
 
@@ -290,8 +298,13 @@ async function renderApp() {
 
     // SP-029 M2 — konfigurasi lokasi dari Master Platform:
     // single → sembunyikan Transfer Gudang & pemilihan gudang.
+    // SP-029 POS V1 — capability (transactionTypes): menu dengan field
+    // `capability` hanya tampil bila capability tsb diaktifkan perusahaan.
     const companyConfig = getCompanyConfig();
-    const allowedMenus = filterMenus(filterMenusByLokasi(menus, companyConfig.lokasiMode));
+    const allowedMenus = filterMenus(filterMenusByTransactionTypes(
+        filterMenusByLokasi(menus, companyConfig.lokasiMode),
+        companyConfig.transactionTypes
+    ));
 
     // Use impersonated company name for topbar title when impersonating
     const topbarTitle = isImpersonating && impSession
@@ -322,7 +335,10 @@ async function renderApp() {
         if (!existingLogout) {
             const logoutBtn = document.createElement("button");
             logoutBtn.id = "logout-btn";
-            logoutBtn.innerHTML = "🚪 Logout";
+            // Icon logout = SVG panah keluar dari pintu (pola Feather "log-out" /
+            // Flaticon 12635060). SVG dipakai karena simbol Unicode (⏻) tidak
+            // dirender di sebagian perangkat; warna ikut currentColor (putih).
+            logoutBtn.innerHTML = `<svg class="pos-logout-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Logout`;
             logoutBtn.style.cssText = `
                 padding: 6px 14px;
                 border: 1px solid rgba(255,255,255,0.2);
@@ -358,7 +374,11 @@ async function renderApp() {
     showEntitlementBanner();
     showCompanyConfigBanner();
 
-    navigate("dashboard");
+    // F&B V1 — Role CHEF hanya punya permission kitchen: arahkan langsung ke
+    // halaman Kitchen (dashboard butuh inventory.dashboard.view yang tidak
+    // dimiliki chef — RBAC server-side juga menolak route lain).
+    const userRole = String((Auth.user && Auth.user() && Auth.user().role) || "").toLowerCase();
+    navigate(userRole === "chef" ? "kitchen" : "dashboard");
 }
 
 
@@ -1082,6 +1102,38 @@ async function start() {
             clearAuthTokens();
         }
         // Gagal → fall through ke login
+    }
+
+    // ── F&B Customer Ordering V1 — QR Menu Meja customer (PUBLIK, tanpa login) ──
+    // Customer scan QR → https://pos.e-profit.id/m/{qrIdentifier} → halaman
+    // mobile QR Menu. Semua data di-resolve server dari identifier (company →
+    // lokasi → table). JANGAN tampilkan login/dashboard/desktop cashier.
+    const cmMatch = window.location.pathname.match(/^\/m\/([A-Za-z0-9_-]+)\/?$/);
+    // PWA diinstal dari home screen membuka start_url /m/ TANPA identifier
+    // (manifest.json) — tampilkan prompt pindai QR meja, JANGAN jatuh ke
+    // login POS (customer tidak punya akun).
+    const cmNoId = /^\/m\/?$/.test(window.location.pathname);
+    if (cmNoId) {
+        document.title = "QR Menu — Pesan dari Meja";
+        document.querySelector("#app").innerHTML = `
+            <div style="min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;background:#f8fafc;color:#1e293b;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif">
+                <div style="font-size:3.5rem">🍽️</div>
+                <h1 style="font-size:1.3rem;margin:0">QR Menu Meja</h1>
+                <p style="color:#64748b;font-size:0.95rem;max-width:380px;margin:0;line-height:1.6">Pindai kode QR di meja Anda untuk melihat menu dan membuat pesanan.</p>
+            </div>
+        `;
+        return;
+    }
+    if (cmMatch) {
+        try {
+            const logoUrl = await resolveLoginLogo();
+            if (logoUrl) setFavicon(logoUrl);
+        } catch { /* favicon opsional */ }
+        const cmIdentifier = cmMatch[1];
+        document.title = "QR Menu — Pesan dari Meja";
+        document.querySelector("#app").innerHTML = CustomerMenuPage(cmIdentifier);
+        await initCustomerMenuPage();
+        return;
     }
 
     // Check for reset-password route

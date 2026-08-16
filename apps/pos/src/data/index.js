@@ -37,7 +37,12 @@ export {
     revokePermissionFromRole,
     getPermissionGroups,
     getPosSettings,
-    setPosSettings
+    setPosSettings,
+    getTransactionCapabilities,
+    setTransactionCapabilities,
+    getWaSettings,
+    setWaSettings,
+    testWaSettings
 } from "./settings-data.js";
 
 // ── Supplier (Inventory-specific data service) ──
@@ -197,6 +202,17 @@ export {
     resetReturPenjualanData
 } from "./retur-penjualan-data.js";
 
+// ── F&B Recipe / BOM (M6.2) ──
+export {
+    listRecipes,
+    getRecipe,
+    getRecipeCost,
+    createRecipe,
+    updateRecipe,
+    activateRecipe,
+    archiveRecipe
+} from "./recipe-data.js";
+
 // ── Laporan (Reporting) ──
 export {
     getLaporanStock,
@@ -212,3 +228,35 @@ export {
 
 // ── Laporan Kasir / POS Breakdown (PRD V1 §13) ──
 export { getSalesBreakdown } from "./laporan-data.js";
+
+// ── F&B Customer Ordering V1 — QR Menu, Order Meja, Kitchen, Payment ──
+export {
+    listQrTables,
+    createQrTable,
+    updateQrTable,
+    deleteQrTable,
+    createQrTableLink,
+    disableQrTable
+} from "./qr-menu-data.js";
+
+export {
+    listTableOrders,
+    getTableOrder,
+    confirmTableOrderPayment,
+    updateTableOrderKitchen,
+    refundTableOrder,
+    listKitchenOrders,
+    updateKitchenStatus,
+    cancelKitchenOrder,
+    cancelKitchenOrderItems
+} from "./table-order-data.js";
+
+export {
+    getCompanyQris,
+    saveCompanyQris,
+    disableCompanyQris,
+    listBankAccounts,
+    createBankAccount,
+    updateBankAccount,
+    deleteBankAccount
+} from "./payment-data.js";

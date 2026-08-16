@@ -72,6 +72,10 @@
 .app {
     display: flex;
     height: 100vh;
+    /* dvh fallback: di browser tablet/mobile, 100vh lebih tinggi dari viewport
+       yang terlihat (termasuk area di belakang toolbar) → konten bawah
+       terpotong. 100dvh = tinggi dinamis yang benar-benar terlihat. */
+    height: 100dvh;
 }
 
 .sidebar {

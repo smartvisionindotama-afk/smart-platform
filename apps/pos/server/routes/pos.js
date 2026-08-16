@@ -15,13 +15,54 @@ import { Router } from "express";
 import { Barang } from "../models/Barang.js";
 import { Kategori } from "../models/Kategori.js";
 import { Penjualan } from "../models/Penjualan.js";
+import { Recipe } from "../models/Recipe.js";
 import { Shift } from "../models/Shift.js";
 import { Setting } from "../models/Setting.js";
+import { TableOrder } from "../models/TableOrder.js";
 import { Warehouse } from "../models/Warehouse.js";
 import { resolveKasirGudang } from "../services/pos-gudang.js";
+import { getCompanyTransactionTypes } from "../services/transaction-capability.js";
 import { security } from "../security.js";
 
 const router = Router();
+
+/**
+ * Hitung total REFUND pesanan QR Menu (F&B V1) dalam rentang waktu shift,
+ * discope per-kasir (pola sama dengan Penjualan): refundedBy/refundedUsername
+ * dicocokkan dengan kasir pemilik shift. Refund TIDAK dihitung dua kali
+ * (refundStatus=refunded saja; refundedAt jadi penanda waktu diproses).
+ * @param {string} companyCode
+ * @param {Date} from waktuMulai shift
+ * @param {Date} to waktu tutup
+ * @param {object} shift Dokumen Shift (kasir / kasirUsername)
+ * @returns {Promise<{ totalRefund: number, refundTunai: number }>}
+ */
+async function computeShiftRefunds(companyCode, from, to, shift) {
+    const match = {
+        companyCode,
+        refundStatus: "refunded",
+        refundedAt: { $gte: from, $lte: to }
+    };
+    const kasirClauses = [];
+    if (shift.kasirUsername) kasirClauses.push({ refundedUsername: shift.kasirUsername });
+    if (shift.kasir) kasirClauses.push({ refundedBy: shift.kasir });
+    if (kasirClauses.length) match.$or = kasirClauses;
+    const agg = await TableOrder.aggregate([
+        { $match: match },
+        {
+            $group: {
+                _id: null,
+                totalRefund: { $sum: "$refundAmount" },
+                // Refund pesanan yang bayarnya TUNAI → uang keluar dari laci
+                // (mengurangi kas fisik / expectedCash).
+                refundTunai: { $sum: { $cond: [{ $in: ["$paymentMethod", ["cash", null, ""]] }, "$refundAmount", 0] } }
+            }
+        }
+    ]);
+    const a = agg[0] || {};
+    const round2 = (v) => Math.round((v || 0) * 100) / 100;
+    return { totalRefund: round2(a.totalRefund), refundTunai: round2(a.refundTunai) };
+}
 
 /**
  * GET /kasir-data
@@ -32,6 +73,10 @@ router.get("/kasir-data", async (req, res) => {
     try {
         const companyCode = req.headers["x-company-code"];
         const query = { active: true, status: { $ne: "archived" } };
+        // M6.2-FIX v0.40 — barang "Tidak Dijual" (dijual:false — mis. gula/
+        // rempah, hanya ingredient resep F&B) TIDAK tampil di layar kasir.
+        // Data lama tanpa field dijual → dianggap dijual (default true).
+        query.dijual = { $ne: false };
         if (companyCode) query.companyCode = companyCode;
 
         // M3-FIX v21 — gudang terhubung kasir (PRD V1 §X): kasir hanya melihat
@@ -65,24 +110,78 @@ router.get("/kasir-data", async (req, res) => {
             .limit(1000)
             .lean();
 
+        // M6.2-FIX v0.42 — VARIAN: produk F&B boleh punya beberapa recipe aktif
+        // (mis. Kopi Susu Manis → "Pake Gula" & "Tanpa Gula"). Kasir menampilkan
+        // 1 kartu produk; saat diorder kasir memilih varian. Varian diambil dari
+        // Recipe aktif (company-scoped) utk semua produk yang ditampilkan.
+        let varianByProduct = {};
+        try {
+            const activeRecipes = await Recipe.find({
+                companyCode: companyCode || "",
+                status: "active"
+            })
+                .select("productId name harga")
+                .sort({ name: 1 })
+                .lean();
+            for (const r of activeRecipes) {
+                const pid = String(r.productId || "");
+                if (!pid) continue;
+                if (!varianByProduct[pid]) varianByProduct[pid] = [];
+                varianByProduct[pid].push({
+                    recipeId: String(r._id),
+                    nama: r.name || "",
+                    // Harga varian: recipe.harga bila > 0, fallback harga_jual produk
+                    // (diisi setelah produk di-map).
+                    harga: Math.max(0, Number(r.harga) || 0)
+                });
+            }
+        } catch { /* ignore — produk tanpa varian tetap retail */ }
+
         const produk = barangs
-            .filter(b => (Number(b.harga_jual) || 0) > 0)
-            .map(b => ({
-                id: String(b._id),
-                kode: b.kode,
-                nama: b.nama,
-                kategori: b.kategori || "",
-                satuan: b.satuan || "",
-                // Harga normal = harga_jual. Harga khusus (harga_khusus) HANYA
-                // berlaku untuk member — dipilih di layar kasir (M3-FIX v19).
-                harga: Number(b.harga_jual) || 0,
-                harga_jual: Number(b.harga_jual) || 0,
-                harga_khusus: Number(b.harga_khusus) || 0,
-                barcode: b.barcode || "",
-                stok: Number(b.stok) || 0,
-                behavior: b.behavior || "trading",
-                foto: b.foto || ""
-            }));
+            .filter(b => (Number(b.harga_jual) || 0) > 0 || (Array.isArray(b.skus) && b.skus.length))
+            .map(b => {
+                const productHarga = Number(b.harga_jual) || 0;
+                const variants = (varianByProduct[String(b._id)] || []).map(v => ({
+                    ...v,
+                    harga: v.harga > 0 ? v.harga : productHarga
+                }));
+                // M6.2-FIX v0.43 — SKU varian marketplace (trading & resep simple):
+                // harga per kombinasi + stok per kombinasi; kartu kasir tampil 1,
+                // klik → modal pilih kombinasi (dropdown per dimensi varianDef).
+                const skus = Array.isArray(b.skus) && b.skus.length
+                    ? b.skus.map(s => ({
+                        kode: s.kode || "",
+                        label: s.label || "",
+                        foto: s.foto || "",
+                        // M6.2-FIX — harga per SKU: `harga` utk pelanggan umum,
+                        // `harga_khusus` utk member (dipakai kasir bila > 0).
+                        harga: Math.max(0, Number(s.harga) || 0),
+                        harga_khusus: Math.max(0, Number(s.harga_khusus) || 0),
+                        stok: Math.max(0, Number(s.stok) || 0)
+                    }))
+                    : [];
+                return {
+                    id: String(b._id),
+                    kode: b.kode,
+                    nama: b.nama,
+                    kategori: b.kategori || "",
+                    satuan: b.satuan || "",
+                    // Harga normal = harga_jual. Harga khusus (harga_khusus) HANYA
+                    // berlaku untuk member — dipilih di layar kasir (M3-FIX v19).
+                    harga: productHarga,
+                    harga_jual: productHarga,
+                    harga_khusus: Number(b.harga_khusus) || 0,
+                    barcode: b.barcode || "",
+                    stok: Number(b.stok) || 0,
+                    behavior: b.behavior || "trading",
+                    foto: b.foto || "",
+                    // VARIAN recipe F&B: [{ recipeId, nama, harga }] — kosong = tanpa
+                    varian: variants,
+                    // SKU varian marketplace: [{ kode, label, harga, stok }]
+                    skus,
+                    varianDef: Array.isArray(b.varianDef) ? b.varianDef : []
+                };
+            });
 
         // Kategori sidebar kasir = MASTER KATEGORI (SSOT) — BUKAN diturunkan
         // dari Barang.kategori (M6-FIX: kasir mengikuti master tanpa
@@ -134,6 +233,13 @@ router.get("/kasir-data", async (req, res) => {
             if (setting) taxEnabled = setting.taxEnabled !== false;
         } catch { /* ignore — default aktif */ }
 
+        // SP-029 POS V1 — jenis transaksi aktif (default V1 = retail) — dibaca
+        // kasir untuk gate workflow F&B (meja/kitchen/QR) di milestone berikutnya.
+        let transactionTypes = null;
+        try {
+            transactionTypes = await getCompanyTransactionTypes(companyCode || "");
+        } catch { /* default aman */ }
+
         res.json({
             produk,
             kategori,
@@ -144,7 +250,8 @@ router.get("/kasir-data", async (req, res) => {
             gudang: gudangInfo
                 ? { kodeGudang: gudangInfo.kodeGudang, namaGudang: gudangInfo.namaGudang, kodeList: gudangInfo.kodeList }
                 : null,
-            warehouses: (warehouses || []).map(w => ({ kode: w.kode, nama: w.nama || w.kode }))
+            warehouses: (warehouses || []).map(w => ({ kode: w.kode, nama: w.nama || w.kode })),
+            transactionTypes
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -210,17 +317,29 @@ router.get("/shift/summary", async (req, res) => {
         ]);
         const a = agg[0] || {};
         const round2 = (v) => Math.round((v || 0) * 100) / 100;
-        const penjualanTunai = round2(a.penjualanTunai);
-        const penjualanNonTunai = round2(a.penjualanNonTunai);
+        // F&B V1 — REFUND (order QR Menu dibatalkan & lunas) mengurangi nilai
+        // penjualan shift: totalPenjualan = bruto − totalRefund; penjualan
+        // tunai = bruto tunai − refundTunai (expectedCash ikut berkurang).
+        let refunds = { totalRefund: 0, refundTunai: 0 };
+        try {
+            refunds = await computeShiftRefunds(companyCode, shift.waktuMulai, now, shift);
+        } catch (err) {
+            console.warn("[ShiftSummary] Gagal hitung refund:", err?.message);
+        }
+        const totalRefund = refunds.totalRefund;
+        const refundTunai = refunds.refundTunai;
+        const penjualanTunai = round2(a.penjualanTunai - refundTunai);
+        const penjualanNonTunai = round2(a.penjualanNonTunai - (totalRefund - refundTunai));
         res.json({
             kasir: shift.kasir || "",
             kasirUsername: shift.kasirUsername || "",
             kasAwal: round2(shift.kasAwal),
             waktuMulai: shift.waktuMulai,
             totalTransaksi: a.totalTransaksi || 0,
-            totalPenjualan: round2(a.totalPenjualan),
+            totalPenjualan: round2((a.totalPenjualan || 0) - totalRefund),
             penjualanTunai,
             penjualanNonTunai,
+            totalRefund,
             expectedCash: round2((shift.kasAwal || 0) + penjualanTunai)
         });
     } catch (err) {
@@ -380,11 +499,23 @@ router.post("/shift/close", security.permission("pos.shift.close"), async (req, 
         ]);
         const a = agg[0] || {};
         const round2 = (v) => Math.round((v || 0) * 100) / 100;
-        const totalPenjualan = round2(a.totalPenjualan);
-        const penjualanTunai = round2(a.penjualanTunai);
-        const penjualanNonTunai = round2(a.penjualanNonTunai);
+        // F&B V1 — REFUND (order QR Menu dibatalkan & lunas) mengurangi nilai
+        // penjualan shift: totalPenjualan = bruto − totalRefund; penjualan
+        // tunai = bruto tunai − refundTunai (expectedCash ikut berkurang).
+        let refunds = { totalRefund: 0, refundTunai: 0 };
+        try {
+            refunds = await computeShiftRefunds(companyCode, shift.waktuMulai, now, shift);
+        } catch (err) {
+            console.warn("[ShiftClose] Gagal hitung refund:", err?.message);
+        }
+        const totalRefund = refunds.totalRefund;
+        const refundTunai = refunds.refundTunai;
+        const totalPenjualan = round2((a.totalPenjualan || 0) - totalRefund);
+        const penjualanTunai = round2(a.penjualanTunai - refundTunai);
+        const penjualanNonTunai = round2(a.penjualanNonTunai - (totalRefund - refundTunai));
         // M6-FIX v3 — kas diharapkan = kas awal + PENJUALAN TUNAI saja
-        // (non-tunai tidak menambah uang fisik di laci kas).
+        // (non-tunai tidak menambah uang fisik di laci kas). Refund tunai
+        // mengurangi uang fisik → ikut mengurangi expectedCash.
         const expectedCash = round2(shift.kasAwal + penjualanTunai);
         const difference = Math.round((actualCash - expectedCash) * 100) / 100;
 
@@ -394,6 +525,8 @@ router.post("/shift/close", security.permission("pos.shift.close"), async (req, 
         shift.totalDiskon = round2(a.totalDiskon);
         shift.penjualanTunai = penjualanTunai;
         shift.penjualanNonTunai = penjualanNonTunai;
+        shift.totalRefund = totalRefund;
+        shift.refundTunai = refundTunai;
         shift.expectedCash = expectedCash;
         shift.actualCash = actualCash;
         shift.difference = difference;

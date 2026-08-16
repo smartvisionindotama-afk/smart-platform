@@ -4,8 +4,11 @@
  * Logika penjualan kasir yang bergantung pada `behavior` barang (PRD V1 §9):
  *   - trading      → barang fisik, stok berkurang saat terjual
  *   - service      → jasa, TIDAK mengurangi stok
- *   - recipe       → resep (keputusan PO 2026-08-10: dijual TANPA kurangi
- *                     stok di V1; engine BOM penuh V2)
+ *   - recipe       → resep MODEL SIMPLE (dijual TANPA kurangi stok produk;
+ *                     penyesuaian stok manual via stok opname)
+ *   - recipe-fnb   → resep TERHUBUNG Recipe F&B (M6.2): produk tidak punya
+ *                     stok sendiri — bahan (ingredient) yang dikurangi
+ *                     realtime saat transaksi (engine BOM di services/recipe)
  *   - manufactured → produksi (placeholder V1, tanpa dampak stok)
  *   - digital      → produk digital (placeholder V1, tanpa dampak stok)
  *
@@ -15,7 +18,8 @@
  */
 
 // Behavior yang TIDAK mengurangi stok saat terjual (V1).
-const NO_STOCK_BEHAVIORS = new Set(["service", "recipe", "manufactured", "digital"]);
+// recipe-fnb: produk menu tidak punya stok — ingredient yang dikonsumsi.
+const NO_STOCK_BEHAVIORS = new Set(["service", "recipe", "recipe-fnb", "manufactured", "digital"]);
 
 /**
  * Pisahkan item transaksi berdasarkan behavior barangnya.
@@ -53,9 +57,9 @@ export function splitPosItemsByBehavior(items = [], barangs = []) {
 /**
  * Item retur penjualan yang memengaruhi stok — kebalikan penjualan:
  * hanya barang `trading` (fisik) yang stoknya dikembalikan bertambah saat
- * pelanggan mengembalikan barang. Service/recipe/manufactured/digital tidak
- * pernah memakai stok → tidak di-retur-kan ke stok (PRD V1 §8–9, keputusan
- * PO C1 2026-08-10).
+ * pelanggan mengembalikan barang. Service/recipe/recipe-fnb/manufactured/
+ * digital tidak pernah memakai stok sendiri → tidak di-retur-kan ke stok
+ * (PRD V1 §8–9, keputusan PO C1 2026-08-10).
  *
  * @param {object[]} items Item retur ({ kode, qty, … })
  * @param {object[]} [barangs] Daftar Barang ({ kode, behavior }) — bisa dari DB

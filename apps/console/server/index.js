@@ -118,6 +118,8 @@ const PUBLIC_RULES = [
     { prefix: "/companies", methods: ["GET"], exact: true, softAuth: true },
     // SP-029 M2: katalog business type (konfigurasi publik seperti /wilayah)
     { prefix: "/companies/business-types", methods: ["GET"] },
+    // SP-029 POS V1: katalog transaction capability (metadata publik)
+    { prefix: "/companies/transaction-types", methods: ["GET"] },
     { prefix: "/wilayah", methods: ["GET"] },
     // SP-029 M6: webhook payment provider — diverifikasi via BILLING_WEBHOOK_SECRET
     // (bukan JWT superadmin); idempotent + audited di dalam route.

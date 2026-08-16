@@ -20,7 +20,21 @@ const penjualanItemSchema = new mongoose.Schema({
     qty:       { type: Number, required: true, min: 0 },
     harga:     { type: Number, required: true, min: 0 },
     diskon:    { type: Number, default: 0, min: 0 },
-    subtotal:  { type: Number, required: true, min: 0 }
+    subtotal:  { type: Number, required: true, min: 0 },
+    // M6.2 — referensi produk (Barang._id) utk lookup recipe F&B pada
+    // konsumsi bahan. Additive; data lama tanpa field ini tetap valid
+    // (consumption fallback mencocokkan productKode recipe).
+    productId: { type: String, default: "" },
+    // M6.2-FIX v0.42 — referensi VARIAN recipe F&B yang dipilih kasir
+    // (Recipe._id). Produk boleh punya beberapa varian aktif; konsumsi bahan
+    // memakai ingredient recipe varian ini. Additive — data lama tanpa field
+    // tetap valid (fallback ke recipe aktif pertama per produk).
+    recipeId: { type: String, default: "" },
+    // M6.2-FIX v0.43 — SKU varian produk (marketplace) yang dipilih kasir.
+    // Decrement/reversal stok memakai SKU spesifik. Additive — barang tanpa
+    // varian tidak membawa field ini.
+    skuKode: { type: String, default: "" },
+    skuLabel: { type: String, default: "" }
 }, { _id: false });
 
 const penjualanSchema = new mongoose.Schema({

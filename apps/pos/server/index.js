@@ -43,7 +43,25 @@ import returPembelianRoutes from "./routes/retur-pembelian.js";
 import returPenjualanRoutes from "./routes/retur-penjualan.js";
 import laporanRoutes from "./routes/laporan.js";
 import posRoutes from "./routes/pos.js";
+import posConfigRoutes, { settingsRouter as posSettingsRouter } from "./routes/pos-config.js";
+import recipeRoutes from "./routes/recipes.js";
 import settingsRoutes from "./routes/settings.js";
+// Settings → Company: profil company dibaca/ditulis server POS (token POS
+// ditolak console — audience isolation), DB bersama.
+import companyProfileRoutes from "./routes/company-profile.js";
+// F&B Customer Ordering V1 — QR Menu Meja, Order Meja, Kitchen, Payment, Push
+import qrTableRoutes from "./routes/qr-tables.js";
+import tableOrderRoutes from "./routes/table-orders.js";
+import kitchenRoutes from "./routes/kitchen.js";
+import companyPaymentRoutes from "./routes/company-payment.js";
+import pushRoutes from "./routes/push.js";
+import qrPublicRoutes from "./routes/qr-public.js";
+// Payment Proof V1 — verifikasi bukti pembayaran kasir + bell notifikasi
+import paymentProofRoutes from "./routes/payment-proofs.js";
+// Role-Based Notification Center (F&B V1) — bell cashier & kitchen
+import notificationRoutes from "./routes/notifications.js";
+// F&B V1 — migration index PushSubscription (drop legacy unique index)
+import { ensurePushIndexes } from "./models/PushSubscription.js";
 import {
     helmetHeaders,
     corsOrigins,
@@ -108,7 +126,14 @@ const PUBLIC_RULES = [
     // Konfigurasi Google OAuth (client ID) untuk halaman login — publik, client
     // ID bukan secret (hanya origin terdaftar di Google Cloud Console yang valid).
     { prefix: "/auth/google/config", methods: ["GET"] },
-    { prefix: "/auth/impersonate", methods: ["POST"] }
+    { prefix: "/auth/impersonate", methods: ["POST"] },
+    // F&B Customer Ordering V1 — endpoint PUBLIK customer (tanpa login):
+    // resolve QR meja + menu, create order, status order, web push.
+    // Multi-tenant di-resolve server dari qrIdentifier (company→lokasi→table).
+    { prefix: "/qr/menu", methods: ["GET"] },
+    { prefix: "/qr/orders", methods: ["GET", "POST"] },
+    { prefix: "/push/public-key", methods: ["GET"] },
+    { prefix: "/push/subscribe", methods: ["POST"] }
 ];
 
 app.use("/api", (req, res, next) => {
@@ -172,7 +197,38 @@ app.use("/api/laporan", laporanRoutes);
 
 // SP-029 M3 — kasir endpoints (authenticated + company scope global di atas)
 app.use("/api/pos", posRoutes);
+// SP-029 POS V1 / M6.1 — Transaction Capability config (GET/PUT)
+//   /api/pos/config/transaction-types (kanonik) + /transaction-capabilities (alias)
+app.use("/api/pos/config", posConfigRoutes);
+// M6.1 — spesifikasi Settings: GET/PUT /api/pos/settings/transaction-capabilities
+app.use("/api/pos/settings", posSettingsRouter);
+// M6.2 — F&B Recipe/BOM (gate fnb + permission pos.recipe.manage di dalam route)
+app.use("/api/recipes", recipeRoutes);
 app.use("/api/settings", settingsRoutes);
+// Settings → Company (profil company) — GET publik-authed, PUT settings.company.edit
+app.use("/api/company-profile", companyProfileRoutes);
+
+// ── F&B Customer Ordering V1 (QR Menu + Table Order + Chef + Push) ──
+// Base URL link QR (env POS_BASE_URL, fallback host request).
+app.set("qrBaseUrl", process.env.POS_BASE_URL || null);
+// Publik customer (PUBLIC_RULES di atas) — resolve tenant dari qrIdentifier.
+app.use("/api/qr", qrPublicRoutes);
+// Admin: QR Menu Meja (pos.qr.manage)
+app.use("/api/qr-tables", qrTableRoutes);
+// Kasir: Order Meja (pos.order.view / pos.order.confirm)
+app.use("/api/table-orders", tableOrderRoutes);
+// Chef: Kitchen (pos.kitchen.view / pos.kitchen.update)
+app.use("/api/kitchen", kitchenRoutes);
+// Settings → Company → Payment Settings (settings.company.edit)
+app.use("/api/company-payment", companyPaymentRoutes);
+// Web push customer (public-key GET publik, subscribe POST publik)
+app.use("/api/push", pushRoutes);
+// Payment Proof V1 — verifikasi bukti pembayaran (kasir: pos.order.confirm)
+app.use("/api/payment-proofs", paymentProofRoutes);
+// Role-Based Notification Bell (F&B V1) — ?role=cashier (pos.order.view)
+// / ?role=kitchen (pos.kitchen.view). Endpoint ini menangani bell kasir DAN
+// kitchen (notification center, bukan sekadar icon — event tersimpan penuh).
+app.use("/api/notifications", notificationRoutes);
 
 // Error handler
 app.use((err, req, res, next) => {
@@ -184,6 +240,12 @@ app.use((err, req, res, next) => {
 async function start() {
     try {
         await connectDB();
+        // F&B V1 — migration PushSubscription: drop legacy unique index
+        // {companyCode, endpoint} agar browser yang sama bisa terikat banyak
+        // order (idempotent; kegagalan hanya di-log, tidak menggagalkan boot).
+        ensurePushIndexes().catch(err => {
+            console.warn("[Server] ensurePushIndexes:", err && err.message ? err.message : err);
+        });
         app.listen(PORT, () => {
             console.log(`[Server] SMART Kasir API running on http://localhost:${PORT}`);
             console.log(`[Server] Health check: http://localhost:${PORT}/api/health`);

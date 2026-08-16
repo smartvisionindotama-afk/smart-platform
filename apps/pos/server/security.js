@@ -22,6 +22,7 @@ import { SecurityAuditLog } from "./models/SecurityAuditLog.js";
 import { User } from "./models/User.js";
 import { SuperAdmin } from "./models/SuperAdmin.js";
 import { Permission } from "./models/Permission.js";
+import { Role } from "./models/Role.js";
 
 const cfg = securityConfig();
 
@@ -81,17 +82,58 @@ const FALLBACK_ROLE_PERMISSIONS = {
     admin: [
         "inventory.barang.update", "inventory.barang.create", "inventory.supplier.create",
         "inventory.supplier.update", "inventory.pembelian.approve", "inventory.stock.opname",
-        "inventory.report.export"
+        "inventory.report.export",
+        // M6.2 — Recipe/BOM F&B (Admin/Owner; kasir TIDAK diberi)
+        "pos.recipe.manage"
     ],
     operator: ["inventory.barang.read", "inventory.barang.create", "inventory.pembelian.create", "inventory.stock.adjust"],
     // SP-029 M3 + PRD V1 — kasir: dashboard + kasir + katalog + customer +
     // riwayat transaksi + shift; TANPA akses ubah master.
-    kasir: ["inventory.dashboard.view", "pos.kasir.use", "inventory.barang.read", "inventory.customer.read", "inventory.sales.read", "pos.shift.open", "pos.shift.close", "pos.transaction.hold"],
+    kasir: ["inventory.dashboard.view", "pos.kasir.use", "inventory.barang.read", "inventory.customer.read", "inventory.sales.read", "pos.shift.open", "pos.shift.close", "pos.transaction.hold", "pos.order.view", "pos.order.confirm"],
+    // F&B V1 — Chef: kitchen display saja (view + update status). TIDAK punya
+    // akses settings/payment/void/laporan (RBAC server-side).
+    chef: ["pos.kitchen.view", "pos.kitchen.update"],
     supervisor: ["inventory.dashboard.view", "inventory.barang.read", "inventory.supplier.read", "inventory.pembelian.read", "inventory.report.view"]
 };
 
 /**
- * Resolver permission role dari collection Permission (server-side RBAC).
+ * Cache permission tree (semua role + level + permissions) — TTL 60 detik.
+ * Role hierarchy (SP-027): user mewarisi permission dari SEMUA role dengan
+ * level <= level role-nya (pola sama dengan Permission client — sync dari
+ * /api/permissions/roles). Tanpa hierarchy, UI menampilkan bell/aksi yang
+ * server TOLAK 403 (mis. operator lihat bell via inheritance, server tolak
+ * karena operator sendiri tidak punya pos.order.view).
+ */
+let _permCache = null;
+let _permCacheAt = 0;
+const PERM_CACHE_TTL_MS = 60_000;
+
+async function loadPermissionTree() {
+    const now = Date.now();
+    if (_permCache && now - _permCacheAt < PERM_CACHE_TTL_MS) return _permCache;
+    const [roles, perms] = await Promise.all([
+        Role.find({}).lean(),
+        Permission.find({}).lean()
+    ]);
+    const permMap = {};
+    for (const p of perms) permMap[p.roleName] = p.permissions || [];
+    _permCache = roles.map(r => ({
+        name: r.name,
+        level: Number(r.level) || 0,
+        permissions: permMap[r.name] || []
+    }));
+    _permCacheAt = now;
+    return _permCache;
+}
+
+/**
+ * Resolver permission role dari collection Permission + Role (server-side RBAC).
+ *
+ * Menerapkan ROLE-HIERARCHY yang sama dengan client: user mewarisi permission
+ * dari semua role dengan level <= level role-nya. Contoh: chef (level 25)
+ * mewarisi permission kasir (level 20) → pos.order.view dihitung via hierarki.
+ *
+ * Owner & superadmin: wildcard "*" (akses penuh).
  * @param {string} role
  * @returns {Promise<string[]>}
  */
@@ -99,10 +141,20 @@ async function getRolePermissions(role) {
     if (!role) return [];
     if (role === "owner" || role === "superadmin") return ["*"];
     try {
-        const doc = await Permission.findOne({ roleName: role }).lean();
-        if (doc && Array.isArray(doc.permissions)) return doc.permissions;
+        const tree = await loadPermissionTree();
+        const userRole = tree.find(r => r.name === role);
+        if (userRole && userRole.permissions.includes("*")) return ["*"];
+        if (userRole) {
+            const merged = new Set();
+            for (const r of tree) {
+                if (r.level <= userRole.level) {
+                    for (const p of r.permissions) merged.add(p);
+                }
+            }
+            return [...merged];
+        }
     } catch {
-        // fallback ke template bawaan
+        // fallback ke template bawaan (mis. DB tidak siap saat boot)
     }
     return FALLBACK_ROLE_PERMISSIONS[role] || [];
 }

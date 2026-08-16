@@ -19,7 +19,22 @@
 import { showToast, scanButtonHTML, scannerSectionHTML, attachScanner, Modal } from "@smart/ui";
 import { Auth, Permission, esc } from "@smart/core";
 import { apiCall } from "../../data/api.js";
-import { listBarang, listKategori, listPenjualan, createPenjualan, getCompanyByCode, formatRupiah, openShift, closeShift, resumePenjualan, deletePenjualan, getMemberByKode, listCustomer, getPosSettings } from "../../data/index.js";
+// F&B V1 — audio notifikasi kasir (tone + pesan suara saat pembayaran masuk)
+import { speak, playAlertTone } from "../../utils/audio-notify.js";
+import { mountOrderMeja, refreshOrderMejaPanel } from "../order-meja/index.js";
+// F&B V1 — Role-Based Notification Bell (cashier) + verifikasi bukti pembayaran
+import {
+    listNotifications,
+    markNotificationRead,
+    markAllNotificationsRead
+} from "../../data/notification-data.js";
+import {
+    listOrderProofs,
+    approvePaymentProof,
+    rejectPaymentProof
+} from "../../data/payment-proof-data.js";
+import { listBarang, listKategori, listPenjualan, createPenjualan, getCompanyByCode, formatRupiah, openShift, closeShift, resumePenjualan, deletePenjualan, getMemberByKode, listCustomer, getPosSettings, listTableOrders } from "../../data/index.js";
+import { isTransactionTypeEnabled } from "../../config/company-config.js";
 
 // PRD V1 (keputusan PO 2026-08-10): tarif pajak transaksi = 11%.
 const TAX_RATE = 0.11;
@@ -31,6 +46,13 @@ const PAYMENT_METHODS = [
     { value: "qris", label: "QRIS", icon: "📱" },
     { value: "card", label: "Kartu", icon: "💳" }
 ];
+
+// Icon logout — SVG panah keluar dari pintu (pola icon logout umum, lihat
+// Feather "log-out" / Flaticon 12635060). SVG dipakai karena simbol Unicode
+// (mis. ⏻ / U+23FB) tidak dirender di sebagian font/perangkat (kotak kosong),
+// sedangkan SVG konsisten di semua browser & HP. Warna mengikuti currentColor
+// agar ikut warna teks tombol (putih di header kasir).
+const LOGOUT_ICON = `<svg class="pos-logout-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
 
 // ── State ──
 
@@ -58,7 +80,10 @@ const state = {
     heldList: [],
     heldLoaded: false,
     // M3-FIX v21 — gudang terhubung kasir ({ kodeGudang, namaGudang } | null)
-    gudang: null
+    gudang: null,
+    // F&B V1 — tampilan konten tengah kasir: "produk" (default) | "order-meja"
+    // (Order Meja EMBEDDED — tetap konten halaman kasir, bukan fullscreen)
+    view: "produk"
 };
 
 let kasirName = "Kasir";
@@ -121,8 +146,17 @@ export function PosPage() {
                         <span class="pos-cart-icon">🛒</span>
                         <span id="pos-cart-count" class="pos-cart-count">0</span>
                     </button>
+                    <!-- F&B Payment Proof V1 — bell notifikasi kasir (muncul via
+                         initCashierBell; tersembunyi bila tanpa permission fnb). -->
+                    <button id="pos-bell-btn" class="pos-bell-btn" title="Order pending — klik untuk notifikasi" aria-label="Order pending — klik untuk notifikasi" style="display:none">
+                        🔔<span id="pos-bell-count" class="pos-bell-count">0</span>
+                    </button>
+                    <!-- F&B V1 — Order Meja HP: icon-only di header (kanan lonceng),
+                         tampil hanya di layar HP (media query). Desktop/tablet tetap
+                         memakai tombol Order Meja di sidebar Kategori. -->
+                    <button id="pos-order-meja-header" class="pos-order-meja-btn" title="Order Meja" aria-label="Order Meja">🍽️</button>
                     ${fullscreen ? "" : `<span class="pos-header-hint">Pilih produk, atur jumlah, lalu checkout</span>`}
-                    ${fullscreen ? `<button id="pos-logout" class="pos-logout-btn" title="Keluar dari kasir">🚪 Logout</button>` : ""}
+                    ${fullscreen ? `<button id="pos-logout" class="pos-logout-btn" title="Keluar dari kasir">${LOGOUT_ICON}<span class="pos-logout-label"> Logout</span></button>` : ""}
                 </div>
             </header>
 
@@ -131,6 +165,13 @@ export function PosPage() {
                 <aside class="pos-kategori">
                     <h3 class="pos-panel-title">Kategori</h3>
                     <div id="pos-kategori" class="pos-kategori-list"></div>
+                    <!-- F&B V1 — Order Meja di SIDEBAR KASIR (setelah Kategori):
+                         yang mengonfirmasi pembayaran QR Menu adalah kasir, bukan
+                         admin — tombol navigasi ke halaman order-meja. -->
+                    <button type="button" class="pos-kat-btn pos-kat-order-meja" id="pos-order-meja-sidebar" data-title="Order Meja" title="Order Meja">
+                        <span class="pos-kat-icon">🧾</span>
+                        <span class="pos-kat-name">Order Meja</span>
+                    </button>
                     <!-- M3-FIX v23 — status bawah sidebar KIRI: Gudang, Shift, Pajak -->
                     <div class="pos-kategori-footer">
                         <div class="pos-status-row" id="pos-gudang-row" style="display:none">
@@ -154,14 +195,19 @@ export function PosPage() {
                     <div class="pos-produk-head">
                         <h2 id="pos-kategori-title">Semua</h2>
                         <div class="pos-produk-tools">
+                            <!-- Barcode dibaca USB reader: ketikan kode/barcode di kolom ini
+                                 cocok persis → otomatis masuk bill (tanpa tombol kamera). -->
                             <input type="search" id="pos-search" placeholder="Cari nama / kode / barcode..." autocomplete="off" />
-                            ${scanButtonHTML(`data-scan-index="0" title="Scan barcode"`)}
                         </div>
                     </div>
-                    <div id="pos-scan-wrap">${scannerSectionHTML("pos-scan-cam", "pos-scan-switch", "pos-scan-flash")}</div>
                     <div id="pos-produk-grid" class="pos-produk-grid"></div>
                     <div id="pos-produk-pager" class="pos-produk-pager"></div>
                 </section>
+
+                <!-- F&B V1 — Order Meja EMBEDDED di halaman kasir (bukan fullscreen):
+                     konten tampil menggantikan produk+bill, sidebar Kategori tetap
+                     terlihat — konsisten dengan halaman menu lainnya. -->
+                <section class="pos-order-meja" id="pos-order-meja-panel" hidden></section>
 
                 <!-- KANAN: Bill -->
                 <aside class="pos-bill">
@@ -206,12 +252,47 @@ export function PosPage() {
                         </button>
                     </div>
                 </aside>
+                <!-- Tombol scroll ▲/▼ kolom bill (desktop & tablet) — mengambang
+                     di tepi kanan; disembunyikan di HP (bill overlay sempit) dan
+                     saat panel Order Meja terbuka (lihat showOrderMejaPanel). -->
+                <div class="pos-bill-scroll" id="pos-bill-scroll">
+                    <button type="button" class="pos-bill-scroll-btn" id="pos-bill-scroll-up" title="Gulir bill ke atas" aria-label="Gulir bill ke atas">▲</button>
+                    <button type="button" class="pos-bill-scroll-btn" id="pos-bill-scroll-down" title="Gulir bill ke bawah" aria-label="Gulir bill ke bawah">▼</button>
+                </div>
             </div>
         </div>
     `;
 }
 
 // ── Init ──
+
+/**
+ * Tombol scroll ▲/▼ kolom bill: scroll `.pos-bill` per langkah (smooth).
+ * Tombol dinonaktifkan otomatis saat sudah di ujung atas/bawah; state
+ * di-refresh saat scroll, resize, dan setiap perubahan konten bill
+ * (item masuk/keluar, widget shift, hold, dll).
+ */
+function initBillScrollButtons() {
+    const bill = document.querySelector(".pos-bill");
+    const up = document.getElementById("pos-bill-scroll-up");
+    const down = document.getElementById("pos-bill-scroll-down");
+    if (!bill || !up || !down) return;
+    const STEP = 260;
+    const update = () => {
+        const canUp = bill.scrollTop > 2;
+        const canDown = bill.scrollTop + bill.clientHeight < bill.scrollHeight - 2;
+        up.disabled = !canUp;
+        down.disabled = !canDown;
+    };
+    up.addEventListener("click", () => bill.scrollBy({ top: -STEP, behavior: "smooth" }));
+    down.addEventListener("click", () => bill.scrollBy({ top: STEP, behavior: "smooth" }));
+    bill.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    try {
+        new MutationObserver(update).observe(bill, { childList: true, subtree: true, attributes: true });
+    } catch { /* observer tidak tersedia — state tetap di-refresh saat scroll/resize */ }
+    update();
+}
 
 export async function initPosPage() {
     const user = Auth.user && Auth.user();
@@ -226,6 +307,29 @@ export async function initPosPage() {
         }
     } catch { /* ignore */ }
 
+    // F&B V1 — tombol Order Meja di SIDEBAR KIRI kasir (setelah Kategori).
+    // Yang mengonfirmasi pembayaran QR Menu adalah KASIR, bukan admin.
+    // Tampil hanya bila permission pos.order.view + capability fnb aktif
+    // (route tetap di-gate di router bila capability tidak aktif).
+    const orderMejaSidebar = document.getElementById("pos-order-meja-sidebar");
+    const orderMejaHeader = document.getElementById("pos-order-meja-header");
+    if (orderMejaSidebar || orderMejaHeader) {
+        let canOrder = false;
+        try { canOrder = Permission.can("pos.order.view"); } catch { /* ignore */ }
+        let fnbActive = false;
+        try { fnbActive = isTransactionTypeEnabled("fnb"); } catch { /* ignore */ }
+        if (!canOrder || !fnbActive) {
+            if (orderMejaSidebar) orderMejaSidebar.style.display = "none";
+            if (orderMejaHeader) orderMejaHeader.style.display = "none";
+        } else {
+            // F&B V1 — buka Order Meja sebagai KONTEN halaman kasir (embedded),
+            // bukan halaman fullscreen terpisah. Sidebar (desktop/tablet) dan
+            // tombol header HP sama-sama memanggil showOrderMejaPanel.
+            if (orderMejaSidebar) orderMejaSidebar.addEventListener("click", showOrderMejaPanel);
+            if (orderMejaHeader) orderMejaHeader.addEventListener("click", showOrderMejaPanel);
+        }
+    }
+
     // Mode fullscreen (role kasir): tombol Logout sendiri di header kasir
     const logoutBtn = document.getElementById("pos-logout");
     if (logoutBtn) {
@@ -238,10 +342,10 @@ export async function initPosPage() {
         });
     }
 
-    // Search + scan (desktop/tablet) — kolom pencarian berperilaku "pintar":
+    // Search + scan (USB reader) — kolom pencarian berperilaku "pintar":
     // - ketikan/scan yang COCOK PERSIS kode/barcode produk → langsung masuk
-    //   bill (pola sama dengan kamera di HP; reader barcode USB yang mengetik
-    //   ke kolom ini otomatis ikut perilaku ini).
+    //   bill (reader barcode USB yang mengetik ke kolom ini otomatis ikut
+    //   perilaku ini).
     // - ketikan berupa nama produk (tidak cocok persis kode) → tetap filter
     //   grid seperti biasa.
     const searchEl = document.getElementById("pos-search");
@@ -303,19 +407,8 @@ export async function initPosPage() {
         });
     }
 
-    // PRD V1 — barcode scanner (reuse komponen @smart/ui BarcodeScanner).
-    // Hasil scan langsung ditambahkan ke keranjang (qty +1 per scan).
-    attachScanner({
-        containerId: "pos-scan-cam",
-        switchBtnId: "pos-scan-switch",
-        flashId: "pos-scan-flash",
-        scanBtnSel: "[data-scan-index]",
-        onScanDecoded: (_idx, code) => {
-            if (code && code.trim()) {
-                addByBarcode(String(code).trim());
-            }
-        }
-    });
+    // Barcode dibaca USB reader (bukan kamera) — ketikan masuk kolom #pos-search
+    // dan diproses addByBarcode di atas. Kamera produk dihapus (tanpa attachScanner).
 
     // PRD V1 — metode bayar / diskon / catatan transaksi
     const metodeEl = document.getElementById("pos-metode");
@@ -364,6 +457,13 @@ export async function initPosPage() {
     renderHoldActions();
     refreshHeldList();
 
+    // Tombol scroll ▲/▼ kolom bill (desktop & tablet).
+    initBillScrollButtons();
+
+    // F&B Payment Proof V1 — bell notifikasi kasir (unread count + verifikasi
+    // bukti pembayaran QRIS/Transfer dari customer).
+    initCashierBell();
+
     // M6-FIX v2/v3 — kasir yang login & belum ada shift aktif: arahkan
     // langsung ke modal Buka Shift (melayang di atas halaman kasir,
     // NON-dismissable — kasir tidak bisa bertransaksi sebelum shift dibuka).
@@ -380,6 +480,48 @@ export async function initPosPage() {
     // getCompanyByCode). Render tidak menunggu network call (pola sama dgn
     // fetch logo async di halaman lain).
     patchKasirCompanyName();
+}
+
+/**
+ * F&B V1 — tampilkan panel Order Meja EMBEDDED di halaman kasir.
+ * Produk & bill disembunyikan, panel order-meja mengisi area konten;
+ * sidebar Kategori (dan tombol Order Meja) tetap terlihat.
+ */
+function showOrderMejaPanel() {
+    if (state.view === "order-meja") return;
+    state.view = "order-meja";
+    const produk = document.querySelector(".pos-produk");
+    const bill = document.querySelector(".pos-bill");
+    const panel = document.getElementById("pos-order-meja-panel");
+    if (produk) produk.style.display = "none";
+    if (bill) bill.style.display = "none";
+    // Tombol scroll bill tidak relevan saat panel Order Meja mengisi konten
+    const scrollBtns = document.getElementById("pos-bill-scroll");
+    if (scrollBtns) scrollBtns.style.display = "none";
+    if (panel) {
+        panel.hidden = false;
+        mountOrderMeja(panel, { showBack: true, onBack: showProdukPanel, showRefresh: true });
+    }
+}
+
+/**
+ * F&B V1 — kembali ke tampilan produk kasir (panel Order Meja disembunyikan).
+ */
+function showProdukPanel() {
+    if (state.view === "produk") return;
+    state.view = "produk";
+    const produk = document.querySelector(".pos-produk");
+    const bill = document.querySelector(".pos-bill");
+    const panel = document.getElementById("pos-order-meja-panel");
+    if (produk) produk.style.display = "";
+    if (bill) bill.style.display = "";
+    const scrollBtns = document.getElementById("pos-bill-scroll");
+    if (scrollBtns) scrollBtns.style.display = "";
+    if (panel) {
+        panel.hidden = true;
+        panel.innerHTML = "";
+    }
+    renderKasir();
 }
 
 /**
@@ -542,7 +684,7 @@ async function openShiftModal(required = false) {
         ? `
             <div class="shift-open-actions">
                 <button class="smart-btn smart-btn-primary" id="f-shift-confirm" style="width:49%">Buka Shift</button>
-                <button class="smart-btn smart-btn-secondary" id="f-shift-logout" style="width:49%">🚪 Logout</button>
+                <button class="smart-btn smart-btn-secondary" id="f-shift-logout" style="width:49%">${LOGOUT_ICON} Logout</button>
             </div>
         `
         : `
@@ -693,7 +835,8 @@ function closeShiftModal(onDone = null) {
                         <div class="shift-summary-row"><span>Saldo Awal</span><strong>Rp ${formatRupiah(res.kasAwal)}</strong></div>
                         <div class="shift-summary-row"><span>Penjualan Tunai</span><strong>Rp ${formatRupiah(res.penjualanTunai)}</strong></div>
                         <div class="shift-summary-row"><span>Penjualan Non-Tunai</span><strong>Rp ${formatRupiah(res.penjualanNonTunai)}</strong></div>
-                        <div class="shift-summary-row shift-summary-sub"><span>Total Penjualan (${res.totalTransaksi} transaksi)</span><strong>Rp ${formatRupiah(res.totalPenjualan)}</strong></div>
+                        ${Number(res.totalRefund) ? `<div class="shift-summary-row shift-summary-refund"><span>Refund (order dibatalkan)</span><strong>− Rp ${formatRupiah(res.totalRefund)}</strong></div>` : ""}
+                        <div class="shift-summary-row shift-summary-sub"><span>Total Penjualan (${res.totalTransaksi} transaksi)${Number(res.totalRefund) ? " — sudah dipotong refund" : ""}</span><strong>Rp ${formatRupiah(res.totalPenjualan)}</strong></div>
                         <div class="shift-summary-row shift-summary-expected"><span>Kas Diharapkan (saldo awal + tunai)</span><strong>Rp ${formatRupiah(res.expectedCash)}</strong></div>
                     `;
                 }
@@ -795,6 +938,8 @@ function setKasirFavicon(url) {
 function handleClick(e) {
     const katBtn = e.target.closest("[data-kategori]");
     if (katBtn) {
+        // F&B V1 — klik kategori saat panel Order Meja terbuka: kembali ke produk
+        if (state.view !== "produk") showProdukPanel();
         state.activeKategori = katBtn.dataset.kategori;
         state.page = 1;
         renderKasir();
@@ -803,7 +948,12 @@ function handleClick(e) {
     const prod = e.target.closest("[data-key]");
     if (prod) {
         if (prod.dataset.disabled === "1") return;
-        addToCart(prod.dataset.key);
+        // M6.2-FIX v0.42 — produk ber-varian: buka modal pilih varian dulu
+        if (prod.dataset.varian) {
+            openVarianModal(prod.dataset.key);
+        } else {
+            addToCart(prod.dataset.key);
+        }
         return;
     }
     const minus = e.target.closest("[data-minus]");
@@ -853,7 +1003,46 @@ function handleClick(e) {
 
 // ── Data ──
 
+/**
+ * Pastikan access token valid (decode klaim `exp` lokal). Bila kedaluwarsa,
+ * refresh via httpOnly cookie (server) — pola sama dengan boot main.js.
+ * @returns {Promise<string|null>} Token segar atau null bila gagal
+ */
+async function ensureFreshAccessToken() {
+    try {
+        const { getAccessToken, refreshAccessToken } = await import("../../data/api.js");
+        const token = getAccessToken();
+        if (!token) return null;
+        if (isJwtExpiredLocal(token)) {
+            return await refreshAccessToken();
+        }
+        return token;
+    } catch {
+        return null;
+    }
+}
+
+/** Decode klaim exp JWT lokal (tanpa network). */
+function isJwtExpiredLocal(token) {
+    try {
+        const parts = String(token || "").split(".");
+        if (parts.length !== 3) return true;
+        const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+        const payload = JSON.parse(globalThis.atob(padded));
+        if (!payload || !payload.exp) return true;
+        return Number(payload.exp) * 1000 <= Date.now();
+    } catch {
+        return true;
+    }
+}
+
 async function loadKasirData() {
+    // M6-FIX — refresh PREVENTIF: akses token mungkin sudah kedaluwarsa dari
+    // sesi lama (browser dibiarkan terbuka semalaman). Refresh duluan (cookie
+    // httpOnly, tanpa 401) agar kasir-data TIDAK memunculkan 401 di console
+    // (authorizedFetch akan 401 sekali lalu retry — hindari kebisingan itu).
+    await ensureFreshAccessToken();
     let produk = null;
     let kategori = null;
     let kategoriIcons = {};
@@ -878,7 +1067,10 @@ async function loadKasirData() {
     }
     if (!produk) {
         const result = await listBarang({ page: 1, limit: 999 });
-        const all = (result.data || []).filter(b => b.active !== false && (Number(b.harga_jual) || 0) > 0);
+        // M6.2-FIX v0.40 — fallback offline ikut menyaring barang "Tidak
+        // Dijual" (dijual:false) agar konsisten dengan server kasir-data.
+        // Produk ber-SKU tetap tampil walau harga_jual global 0 (harga per SKU).
+        const all = (result.data || []).filter(b => b.active !== false && b.dijual !== false && ((Number(b.harga_jual) || 0) > 0 || (Array.isArray(b.skus) && b.skus.length)));
         produk = all.map(b => ({
             id: String(b.id || b._id || ""),
             kode: b.kode,
@@ -890,7 +1082,21 @@ async function loadKasirData() {
             harga_khusus: Number(b.harga_khusus) || 0,
             stok: Number(b.stok) || 0,
             behavior: b.behavior || "trading",
-            foto: b.foto || ""
+            foto: b.foto || "",
+            // M6.2-FIX — fallback offline menyertakan SKU varian marketplace
+            // (harga utk umum + harga_khusus utk member) agar pilih varian &
+            // reprice member tetap berfungsi saat API down.
+            skus: Array.isArray(b.skus) && b.skus.length
+                ? b.skus.map(s => ({
+                    kode: s.kode || "",
+                    label: s.label || "",
+                    foto: s.foto || "",
+                    harga: Number(s.harga) || 0,
+                    harga_khusus: Number(s.harga_khusus) || 0,
+                    stok: Number(s.stok) || 0
+                }))
+                : [],
+            varianDef: Array.isArray(b.varianDef) ? b.varianDef : []
         }));
         // Kategori sidebar kasir = Master Kategori (SSOT, sama dengan server):
         // fallback offline tetap mengambil dari listKategori (bukan menurunkan
@@ -979,11 +1185,17 @@ function addByBarcode(barcode) {
         showToast("warning", `Barcode "${esc(barcode)}" tidak ditemukan`);
         return false;
     }
-    if ((Number(p.stok) || 0) <= 0 && p.behavior !== "service" && p.behavior !== "recipe") {
+    if ((Number(p.stok) || 0) <= 0 && p.behavior !== "service" && p.behavior !== "recipe" && p.behavior !== "recipe-fnb") {
         showToast("warning", `${p.nama} stok habis`);
         return false;
     }
-    addToCart(String(p.id || p.kode));
+    // M6.2-FIX v0.42/0.43 — scan produk ber-varian (recipe F&B / SKU) →
+    // buka modal pilih varian/kombinasi
+    if ((Array.isArray(p.varian) && p.varian.length) || (Array.isArray(p.skus) && p.skus.length)) {
+        openVarianModal(String(p.id || p.kode));
+    } else {
+        addToCart(String(p.id || p.kode));
+    }
     return true;
 }
 
@@ -1040,15 +1252,40 @@ function tileStyle(p) {
 
 function renderProdukCard(p) {
     // PRD V1 — non-trading (jasa/resep/manufaktur/digital) tidak memakai stok
-    const noStock = ["service", "recipe", "manufactured", "digital"].includes(p.behavior);
+    const noStock = ["service", "recipe", "recipe-fnb", "manufactured", "digital"].includes(p.behavior);
     const isService = p.behavior === "service";
     const isRecipe = p.behavior === "recipe";
-    const habis = !noStock && (Number(p.stok) || 0) <= 0;
+    const isRecipeFnb = p.behavior === "recipe-fnb";
+    // M6.2-FIX v0.42 — VARIAN recipe F&B: produk punya beberapa recipe aktif
+    // (mis. Kopi Susu Manis → Pake Gula / Tanpa Gula).
+    // M6.2-FIX v0.43 — SKU varian marketplace (trading & resep simple):
+    // produk punya beberapa KOMBINASI (mis. Ukuran: S/M, Warna: Merah/Biru),
+    // tiap kombinasi = SKU dengan harga & stok sendiri.
+    // Keduanya: kartu tetap 1 produk; harga tampil "mulai" (termurah);
+    // klik → modal pilih varian/kombinasi.
+    const variants = Array.isArray(p.varian) && p.varian.length ? p.varian : [];
+    const skus = Array.isArray(p.skus) && p.skus.length ? p.skus : [];
+    const hasVarian = variants.length > 0 || skus.length > 0;
+    const varianTerendah = hasVarian
+        ? Math.min(
+            ...variants.map(v => Number(v.harga) || 0),
+            // M6.2-FIX — member melihat harga khusus (harga_khusus) per SKU
+            ...skus.map(s => skuPrice(s) || Number(s.harga) || 0)
+        )
+        : 0;
+    const displayHarga = hasVarian
+        ? (varianTerendah > 0 ? varianTerendah : effectivePrice(p))
+        : effectivePrice(p);
+    // SKU: produk habis bila SEMUA kombinasi stok 0
+    const habis = skus.length
+        ? !skus.some(s => (Number(s.stok) || 0) > 0)
+        : (!noStock && (Number(p.stok) || 0) <= 0);
+    const jumlahVarian = skus.length || variants.length;
     const imgHTML = p.foto
         ? `<img class="pos-prod-img" src="${esc(p.foto)}" alt="${esc(p.nama)}" loading="lazy" onerror="this.style.display='none'" />`
         : `<div class="pos-prod-tile" style="${tileStyle(p)}"><span>${esc((p.nama || "?").charAt(0).toUpperCase())}</span></div>`;
     return `
-        <div class="pos-prod-card ${habis ? "disabled" : ""}" data-key="${esc(p.id || p.kode)}" data-disabled="${habis ? "1" : "0"}">
+        <div class="pos-prod-card ${habis ? "disabled" : ""}" data-key="${esc(p.id || p.kode)}" data-disabled="${habis ? "1" : "0"}" ${hasVarian ? `data-varian="${jumlahVarian}"` : ""}>
             <div class="pos-prod-media">${imgHTML}</div>
             <div class="pos-prod-info">
                 <div class="pos-prod-name">${esc(p.nama)}</div>
@@ -1056,11 +1293,13 @@ function renderProdukCard(p) {
                     ${p.kode ? `<span class="pos-badge pos-badge-kat">${esc(p.kode)}</span>` : ""}
                     ${isService ? `<span class="pos-badge pos-badge-jasa">Jasa</span>` : ""}
                     ${isRecipe ? `<span class="pos-badge pos-badge-recipe">Resep</span>` : ""}
+                    ${isRecipeFnb ? `<span class="pos-badge pos-badge-recipe-fnb">Resep F&B</span>` : ""}
+                    ${hasVarian ? `<span class="pos-badge pos-badge-varian">${jumlahVarian} Varian</span>` : ""}
                 </div>
-                <div class="pos-prod-price">Rp ${formatRupiah(effectivePrice(p))}</div>
+                <div class="pos-prod-price">${hasVarian ? "mulai " : ""}Rp ${formatRupiah(displayHarga)}</div>
             </div>
             ${habis ? `<div class="pos-prod-habis">Habis</div>` : ""}
-            ${!habis ? `<div class="pos-prod-add">+</div>` : ""}
+            ${!habis ? `<div class="pos-prod-add">${hasVarian ? "∨" : "+"}</div>` : ""}
         </div>
     `;
 }
@@ -1089,7 +1328,7 @@ function renderBill() {
         cartEl.innerHTML = state.keranjang.map(i => `
             <div class="pos-cart-item">
                 <div class="pos-cart-left">
-                    <div class="pos-cart-name">${esc(i.nama)}${i.behavior === "service" ? ' <span class="pos-badge pos-badge-jasa">Jasa</span>' : ""}</div>
+                    <div class="pos-cart-name">${esc(i.nama)}${i.behavior === "service" ? ' <span class="pos-badge pos-badge-jasa">Jasa</span>' : ""}${i.behavior === "recipe" ? ' <span class="pos-badge pos-badge-recipe">Resep</span>' : ""}${i.behavior === "recipe-fnb" ? ' <span class="pos-badge pos-badge-recipe-fnb">Resep F&B</span>' : ""}</div>
                     <div class="pos-cart-qty">
                         <button class="pos-qty-btn" data-minus="${esc(i.key)}">−</button>
                         <span class="pos-qty-val">${i.qty}</span>
@@ -1171,6 +1410,22 @@ function effectivePrice(p) {
 }
 
 /**
+ * Harga efektif SKU varian marketplace (M6.2-FIX — harga khusus utk member):
+ * `harga` = pelanggan umum; `harga_khusus` = member/pelanggan terdaftar
+ * (dipakai bila > 0). `isMember` opsional utk unit test (default: tipe
+ * pelanggan aktif).
+ * @param {{harga?:*, harga_khusus?:*}} sku SKU varian dari katalog kasir
+ * @param {boolean} [isMember] apakah tipe pelanggan saat ini "member"
+ * @returns {number}
+ */
+export function skuPrice(sku, isMember = state.tipePelanggan === "member") {
+    if (isMember && Number(sku?.harga_khusus) > 0) {
+        return Number(sku.harga_khusus);
+    }
+    return Number(sku?.harga) || 0;
+}
+
+/**
  * Ganti jenis pelanggan (M3-FIX v20):
  * - "member" → WAJIB verifikasi kartu member / kode (modal scan/input),
  *   harga khusus hanya berlaku setelah member terverifikasi.
@@ -1200,8 +1455,17 @@ function setTipePelanggan(tipe) {
 /** Re-price semua item keranjang sesuai jenis pelanggan aktif. */
 function repriceCart() {
     state.keranjang.forEach(item => {
+        // M6.2-FIX — item VARIAN resep F&B punya harga sendiri (tidak ditimpa).
+        // Item SKU varian marketplace IKUT di-reprice: member → harga_khusus
+        // per SKU (bila > 0), umum → harga per SKU.
+        if (item.recipeId) return;
         const p = state.produk.find(x => (x.kode || "") === (item.kode || ""));
-        if (p) item.harga = effectivePrice(p);
+        if (!p) return;
+        if (item.skuKode) {
+            const sku = (Array.isArray(p.skus) ? p.skus : []).find(s => String(s.kode || "") === String(item.skuKode));
+            if (sku) { item.harga = skuPrice(sku) || effectivePrice(p); return; }
+        }
+        item.harga = effectivePrice(p);
     });
 }
 
@@ -1255,10 +1519,8 @@ function openMemberModal() {
     const memberPick = overlay.querySelector("#f-member-pick");
     const memberList = overlay.querySelector("#f-member-list");
 
-    // 1) Scanner kartu member — selektor khusus [data-scan-member] agar TIDAK
-    // bentrok dengan scanner produk ([data-scan-index]) di halaman kasir.
-    // scanIndexAttr=data-scan-member → tombol scan bisa diklik (pola sama dgn
-    // scan barcode daftar produk yang memakai data-scan-index).
+    // 1) Scanner kartu member — selektor khusus [data-scan-member].
+    //    scanIndexAttr=data-scan-member → tombol scan bisa diklik.
     try { memberScannerHandle?.destroy?.(); } catch { /* ignore */ }
     memberScannerHandle = attachScanner({
         containerId: "pos-member-cam",
@@ -1520,17 +1782,115 @@ async function doVerifyMemberByKode(kode, overlay, focusEl = null) {
     }
 }
 
-function addToCart(key) {
+function addToCart(key, varian = null, sku = null) {
     const p = state.produk.find(x => (x.id || x.kode) === key);
     if (!p) return;
-    const existing = state.keranjang.find(i => i.key === key);
+    // M6.2-FIX v0.42 — VARIAN: key unik per varian (produk::recipeId) sehingga
+    // varian berbeda bisa ada bersamaan di keranjang; nama = "Produk (Varian)".
+    // M6.2-FIX v0.43 — SKU: key unik per kombinasi (produk::sku::<kode>);
+    // nama = "Produk (label SKU)"; harga & stok per kombinasi.
+    const itemKey = sku
+        ? `${key}::sku::${sku.kode}`
+        : (varian ? `${key}::${varian.recipeId}` : key);
+    const existing = state.keranjang.find(i => i.key === itemKey);
     if (existing) {
         existing.qty++;
     } else {
         // id dipakai server untuk pengurangan stok deterministik (dokumen yang diklik)
-        state.keranjang.push({ key, id: p.id || null, kode: p.kode, nama: p.nama, satuan: p.satuan || "", harga: effectivePrice(p), behavior: p.behavior || "trading", qty: 1 });
+        state.keranjang.push({
+            key: itemKey,
+            id: p.id || null,
+            kode: p.kode,
+            nama: sku
+                ? `${p.nama} (${sku.label})`
+                : (varian ? `${p.nama} (${varian.nama})` : p.nama),
+            satuan: p.satuan || "",
+            harga: sku
+                // M6.2-FIX — SKU: member → harga_khusus per SKU, umum → harga
+                ? (skuPrice(sku) || effectivePrice(p))
+                : (varian ? (Number(varian.harga) || effectivePrice(p)) : effectivePrice(p)),
+            behavior: p.behavior || "trading",
+            // recipeId varian — server konsumsi bahan memakai ingredient varian ini
+            recipeId: varian ? varian.recipeId : "",
+            // skuKode/skuLabel — server decrement/reversal stok kombinasi spesifik
+            skuKode: sku ? sku.kode : "",
+            skuLabel: sku ? sku.label : "",
+            qty: 1
+        });
     }
     renderBill();
+}
+
+/**
+ * Modal pilih VARIAN (M6.2-FIX v0.42): produk ber-varian (beberapa recipe
+ * aktif) menampilkan 1 kartu; saat diorder kasir memilih varian yang punya
+ * ingredient & harga sendiri.
+ * @param {string} key Produk key (id atau kode)
+ */
+function openVarianModal(key) {
+    const p = state.produk.find(x => (x.id || x.kode) === key);
+    if (!p) return;
+    const skus = (Array.isArray(p.skus) && p.skus.length) ? p.skus : [];
+    const variants = (Array.isArray(p.varian) && p.varian.length) ? p.varian : [];
+    if (!skus.length && !variants.length) { addToCart(key); return; }
+
+    // ── M6.2-FIX v0.43 — SKU varian marketplace: daftar tombol per KOMBINASI
+    // (label + harga) — tampilan SAMA dengan varian resep F&B (v0.42); klik
+    // langsung tambah ke keranjang. Kombinasi stok 0 dinonaktifkan ("Habis").
+    if (skus.length) {
+        const rows = skus.map((sku, idx) => {
+            const stok = Number(sku.stok) || 0;
+            const habis = stok <= 0;
+            return `
+                <button type="button" class="pos-varian-row" data-sku-pick="${idx}" ${habis ? "disabled" : ""} style="display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--smart-border,#e2e8f0);border-radius:10px;background:#fff;cursor:pointer;margin-bottom:8px;text-align:left;${habis ? "opacity:0.55;cursor:not-allowed;" : ""}">
+                    <span style="display:flex;align-items:center;gap:8px;min-width:0">
+                        ${sku.foto ? `<img src="${esc(sku.foto)}" alt="" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0" />` : ""}
+                        <span style="font-size:0.95rem;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sku.label || "Varian")}</span>
+                    </span>
+                    <span style="font-size:0.95rem;font-weight:700;color:#059669;white-space:nowrap">Rp ${formatRupiah(skuPrice(sku) || Number(sku.harga) || 0)}${habis ? ' <span style="font-size:0.72rem;color:#dc2626;font-weight:600">· Habis</span>' : ""}</span>
+                </button>
+            `;
+        }).join("");
+        const content = `
+            <p class="cn-muted" style="margin-top:0">Pilih varian <strong>${esc(p.nama)}</strong>:</p>
+            <div>${rows}</div>
+        `;
+        const footer = `<button class="smart-btn smart-btn-secondary" id="pos-varian-close">Batal</button>`;
+        const overlay = Modal({ open: true, title: "Pilih Varian", content, footer, closable: true, onClose: () => overlay?.remove?.() });
+        document.body.appendChild(overlay);
+        overlay.querySelector("#pos-varian-close")?.addEventListener("click", () => overlay.remove());
+        overlay.querySelectorAll("[data-sku-pick]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const sku = skus[Number(btn.dataset.skuPick)];
+                overlay.remove();
+                if (sku) addToCart(key, null, sku);
+            });
+        });
+        return;
+    }
+
+    // ── VARIAN recipe F&B (existing) ──
+    const rows = variants.map((v, idx) => `
+        <button type="button" class="pos-varian-row" data-varian-pick="${idx}" style="display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--smart-border,#e2e8f0);border-radius:10px;background:#fff;cursor:pointer;margin-bottom:8px;text-align:left">
+            <span style="font-size:0.95rem;font-weight:600;color:#1a1a2e">${esc(v.nama || "Varian")}</span>
+            <span style="font-size:0.95rem;font-weight:700;color:#059669;white-space:nowrap">Rp ${formatRupiah(Number(v.harga) || 0)}</span>
+        </button>
+    `).join("");
+    const content = `
+        <p class="cn-muted" style="margin-top:0">Pilih varian <strong>${esc(p.nama)}</strong>:</p>
+        <div>${rows}</div>
+    `;
+    const footer = `<button class="smart-btn smart-btn-secondary" id="pos-varian-close">Batal</button>`;
+    const overlay = Modal({ open: true, title: "Pilih Varian", content, footer, closable: true, onClose: () => overlay?.remove?.() });
+    document.body.appendChild(overlay);
+    overlay.querySelector("#pos-varian-close")?.addEventListener("click", () => overlay.remove());
+    overlay.querySelectorAll("[data-varian-pick]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const v = variants[Number(btn.dataset.varianPick)];
+            overlay.remove();
+            if (v) addToCart(key, v);
+        });
+    });
 }
 
 function changeQty(key, delta) {
@@ -1662,7 +2022,10 @@ async function holdCurrentCart() {
             qty: i.qty,
             harga: i.harga,
             diskon: 0,
-            subtotal: i.harga * i.qty
+            subtotal: i.harga * i.qty,
+            recipeId: i.recipeId || undefined,
+            skuKode: i.skuKode || undefined,
+            skuLabel: i.skuLabel || undefined
         })),
         total: subtotal,
         diskon: diskonTransaksi,
@@ -1791,6 +2154,12 @@ async function resumeHeldTransaction(id, overlay) {
                 satuan: i.satuan || "",
                 harga: Number(i.harga) || 0,
                 behavior: cat?.behavior || "trading",
+                // recipeId varian tersimpan di item transaksi ditahan — konsumsi
+                // bahan tetap memakai ingredient varian yang benar setelah resume
+                recipeId: i.recipeId || "",
+                // skuKode/skuLabel tersimpan — stok kombinasi tetap konsisten
+                skuKode: i.skuKode || "",
+                skuLabel: i.skuLabel || "",
                 qty: Number(i.qty) || 1
             };
         });
@@ -1867,7 +2236,10 @@ async function checkout() {
             qty: i.qty,
             harga: i.harga,
             diskon: 0,
-            subtotal: i.harga * i.qty
+            subtotal: i.harga * i.qty,
+            recipeId: i.recipeId || undefined,
+            skuKode: i.skuKode || undefined,
+            skuLabel: i.skuLabel || undefined
         })),
         total: subtotal,
         diskon: diskonTransaksi,
@@ -2007,11 +2379,320 @@ function printToWindow(html) {
     setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 250);
 }
 
+// ── F&B Payment Proof V1 — Bell Notifikasi Kasir ──
+// Badge menampilkan JUMLAH ORDER PENDING (paymentStatus=pending) — kasir
+// langsung tahu berapa order menunggu diproses. Order BARU → badge naik +
+// SUARA "Ada order masuk". Klik bell → modal notifikasi (bukti pembayaran,
+// pembatalan) seperti sebelumnya.
+
+let bellTimer = null;
+let bellLastCount = -1;      // jumlah order PENDING (badge)
+let bellNotifLast = -1;      // jumlah notifikasi unread (bukti pembayaran)
+
+/**
+ * Inisialisasi bell notifikasi kasir: tampil hanya bila permission
+ * pos.order.view + capability fnb aktif. Poll tiap 15 detik (pola kitchen
+ * display):
+ *   - Badge 🔔 = JUMLAH ORDER PENDING (paymentStatus=pending)
+ *   - Order BARU masuk → toast + badge + SUARA "Ada order masuk"
+ *   - Notifikasi unread (bukti pembayaran diupload) naik → SUARA
+ *     "Pembayaran baru menunggu verifikasi" (fitur lama tetap jalan)
+ */
+function initCashierBell() {
+    const bell = document.getElementById("pos-bell-btn");
+    if (!bell) return;
+    let canView = false;
+    try { canView = Permission.can("pos.order.view"); } catch { /* ignore */ }
+    let fnbActive = false;
+    try { fnbActive = isTransactionTypeEnabled("fnb"); } catch { /* ignore */ }
+    if (!canView || !fnbActive) return;
+
+    bell.style.display = "inline-flex";
+    bell.addEventListener("click", openCashierBellModal);
+
+    clearInterval(bellTimer);
+    refreshBellCount();
+    bellTimer = setInterval(() => {
+        const prevPending = bellLastCount;
+        const prevNotif = bellNotifLast;
+        refreshBellCount().then(() => {
+            // Order BARU masuk saat halaman terbuka → toast + SUARA.
+            if (bellLastCount > prevPending && prevPending >= 0 && bellLastCount > 0) {
+                showToast("info", `🔔 Ada ${bellLastCount} order pending menunggu diproses`);
+                playAlertTone();
+                speak("Ada order masuk");
+            }
+            // Bukti pembayaran baru diupload (notifikasi unread naik).
+            if (bellNotifLast > prevNotif && prevNotif >= 0 && bellNotifLast > 0) {
+                showToast("info", "🔔 Pembayaran baru menunggu verifikasi");
+                playAlertTone();
+                speak("Pembayaran baru menunggu verifikasi");
+            }
+        });
+    }, 15000);
+}
+
+/** Ambil jumlah order PENDING (badge) + notifikasi unread (suara). */
+async function refreshBellCount() {
+    try {
+        const [pendingRes, notifRes] = await Promise.allSettled([
+            listTableOrders({ status: "pending" }),
+            listNotifications({ role: "cashier", unread: true })
+        ]);
+        const pending = pendingRes.status === "fulfilled" && Array.isArray(pendingRes.value?.data)
+            ? pendingRes.value.data.length : 0;
+        bellLastCount = pending;
+        const notifCount = notifRes.status === "fulfilled" && Array.isArray(notifRes.value?.data)
+            ? notifRes.value.data.length : 0;
+        bellNotifLast = notifCount;
+        const el = document.getElementById("pos-bell-count");
+        if (el) {
+            el.textContent = pending > 99 ? "99+" : String(pending);
+            el.style.display = pending > 0 ? "inline-flex" : "none";
+        }
+    } catch { /* server tidak tersedia — jangan mengganggu kasir */ }
+}
+
+/** Modal bell — daftar notifikasi (unread + read) dengan [LIHAT]. */
+async function openCashierBellModal() {
+    const content = `
+        <div id="pos-bell-body">
+            <div class="cn-loading"><span class="cn-spinner"></span> Memuat notifikasi...</div>
+        </div>
+    `;
+    const footer = `
+        <button class="smart-btn smart-btn-secondary" id="pos-bell-close">Tutup</button>
+    `;
+    const overlay = Modal({ open: true, title: "🔔 Notifikasi Kasir", content, footer, closable: true, onClose: () => overlay?.remove?.() });
+    document.body.appendChild(overlay);
+    overlay.querySelector("#pos-bell-close")?.addEventListener("click", () => overlay.remove());
+    const body = overlay.querySelector("#pos-bell-body");
+    try {
+        const res = await listNotifications({ role: "cashier" });
+        const items = Array.isArray(res?.data) ? res.data : [];
+        if (!items.length) {
+            body.innerHTML = `<p class="cn-muted" style="text-align:center;padding:20px 0">Belum ada notifikasi.</p>`;
+            return;
+        }
+        body.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <span class="cn-muted" style="font-size:0.78rem">${items.length} notifikasi</span>
+                <button class="smart-btn smart-btn-secondary" id="pos-bell-read-all" style="font-size:0.75rem;padding:4px 10px">Tandai semua dibaca</button>
+            </div>
+            ${items.map(n => `
+                <div class="pos-bell-item ${n.read ? "read" : ""}" data-notif-id="${esc(String(n._id))}">
+                    <div class="pos-bell-item-head">
+                        <span class="pos-bell-item-title">${esc(n.title || "Notifikasi")}</span>
+                        ${n.read ? "" : `<span class="pos-bell-dot"></span>`}
+                    </div>
+                    <div class="pos-bell-item-msg">${esc(n.message || "")}</div>
+                    <div class="pos-bell-item-meta">${fmtBellTime(n.createdAt)}</div>
+                    ${n.read ? "" : `<button class="smart-btn smart-btn-primary" data-bell-view="${esc(String(n._id))}" data-order-id="${esc(String(n.orderId || ""))}" data-notif-type="${esc(String(n.type || ""))}" style="margin-top:8px;font-size:0.8rem;padding:6px 14px">LIHAT</button>`}
+                </div>
+            `).join("")}
+        `;
+        body.querySelector("#pos-bell-read-all")?.addEventListener("click", async () => {
+            try {
+                await markAllNotificationsRead("cashier");
+                showToast("success", "Semua notifikasi ditandai dibaca");
+                overlay.remove();
+                refreshBellCount();
+            } catch (err) {
+                showToast("danger", err?.message || "Gagal menandai dibaca");
+            }
+        });
+        body.querySelectorAll("[data-bell-view]").forEach(btn => btn.addEventListener("click", async () => {
+            const notifId = btn.dataset.bellView;
+            const orderId = btn.dataset.orderId;
+            const notifType = btn.dataset.notifType || "";
+            try { await markNotificationRead(notifId); } catch { /* best effort */ }
+            overlay.remove();
+            refreshBellCount();
+            if (!orderId) return;
+            // ORDER DIBATALKAN (kitchen) → modal refund (bila lunas) / info
+            // pembatalan; selain itu (payment_proof) → verifikasi bukti bayar.
+            if (notifType === "order_cancelled") {
+                openCancelledOrderModal(orderId);
+            } else {
+                openPaymentVerificationModal(orderId);
+            }
+        }));
+    } catch (err) {
+        body.innerHTML = `<p class="cn-muted" style="text-align:center;padding:20px 0">${esc(err?.message || "Gagal memuat notifikasi")}</p>`;
+    }
+}
+
+/**
+ * Modal PAYMENT VERIFICATION — kasir membuka bukti yang di-upload customer:
+ * tampilkan Order / Meja / Metode / Total + gambar bukti + [TOLAK]
+ * [KONFIRMASI BAYAR]. Approve → PENDING → PAID (manual); Reject → bukti
+ * REJECTED, order TETAP PENDING (customer dapat upload ulang).
+ * @param {string} orderId TableOrder._id
+ */
+async function openPaymentVerificationModal(orderId) {
+    let proofs = [];
+    try {
+        const res = await listOrderProofs(orderId);
+        proofs = Array.isArray(res?.data) ? res.data : [];
+    } catch (err) {
+        return showToast("danger", err?.message || "Gagal memuat bukti pembayaran");
+    }
+    const pending = proofs.find(p => p.status === "pending");
+    if (!pending) {
+        return showToast("warning", "Tidak ada bukti pembayaran yang menunggu verifikasi");
+    }
+
+    // Info order (orderId, meja, metode, total) untuk tampilan verifikasi.
+    let order = null;
+    try {
+        const { getTableOrder } = await import("../../data/table-order-data.js");
+        order = await getTableOrder(orderId);
+    } catch { /* info order fallback dari bukti */ }
+    const nomorMeja = (order && order.nomorMeja) || pending.nomorMeja || "—";
+    const paymentMethod = (order && order.paymentMethod) || "";
+    const total = (order && Number(order.total)) || 0;
+
+    const content = `
+        <div class="pv-head">
+            <div class="pv-order-id">${esc((order && order.orderId) || pending.orderId || "")}</div>
+            <div class="cn-muted" style="font-size:0.85rem">
+                Meja ${esc(nomorMeja)} · ${paymentMethodLabel(paymentMethod)} · <strong>Rp ${total.toLocaleString("id-ID")}</strong>
+            </div>
+        </div>
+        <div class="pv-proof-img"><img src="${esc(pending.dataUri || "")}" alt="Bukti pembayaran" /></div>
+        <div class="pv-proof-meta">Bukti di-upload ${fmtBellTime(pending.createdAt)}${pending.uploadedBy ? ` oleh ${esc(pending.uploadedBy)}` : ""}</div>
+        <label for="pv-reason" class="cn-muted" style="font-size:0.78rem">Catatan (wajib saat menolak):</label>
+        <input class="smart-input pv-reason-input" id="pv-reason" placeholder="Contoh: nominal tidak sesuai" maxlength="300" />
+    `;
+    const footer = `
+        <button class="smart-btn smart-btn-secondary" id="pv-close">Tutup</button>
+        <button class="smart-btn smart-btn-danger" id="pv-reject">✕ TOLAK</button>
+        <button class="smart-btn smart-btn-primary" id="pv-approve">✅ KONFIRMASI BAYAR</button>
+    `;
+    const overlay = Modal({ open: true, title: "PAYMENT VERIFICATION", content, footer, closable: true, onClose: () => overlay?.remove?.() });
+    document.body.appendChild(overlay);
+    overlay.querySelector("#pv-close")?.addEventListener("click", () => overlay.remove());
+    overlay.querySelector("#pv-approve")?.addEventListener("click", async () => {
+        if (!window.confirm(`Konfirmasi pembayaran order ini? Status berubah PENDING → PAID dan customer diberi notifikasi.`)) return;
+        try {
+            await approvePaymentProof(pending._id);
+            showToast("success", "Pembayaran dikonfirmasi — customer diberi notifikasi");
+            overlay.remove();
+            refreshBellCount();
+            refreshOrderMejaPanel();
+        } catch (err) {
+            showToast("danger", err?.message || "Gagal mengonfirmasi pembayaran");
+        }
+    });
+    overlay.querySelector("#pv-reject")?.addEventListener("click", async () => {
+        const reason = (overlay.querySelector("#pv-reason")?.value || "").trim();
+        if (!window.confirm(`Tolak bukti pembayaran ini? Order tetap ${paymentMethod ? "menunggu pembayaran" : "pending"} dan customer dapat upload ulang.`)) return;
+        try {
+            await rejectPaymentProof(pending._id, reason);
+            showToast("success", "Bukti ditolak — customer diberi notifikasi");
+            overlay.remove();
+            refreshBellCount();
+            refreshOrderMejaPanel();
+        } catch (err) {
+            showToast("danger", err?.message || "Gagal menolak bukti");
+        }
+    });
+}
+
+/** Label metode bayar utk tampilan verifikasi (mirror PAYMENT_LABEL order-meja). */
+function paymentMethodLabel(method) {
+    return { cash: "💵 Tunai", qris: "📱 QRIS", transfer: "🏦 Transfer", card: "💳 Kartu" }[method] || method || "";
+}
+
+/**
+ * Modal ORDER DIBATALKAN (dibuka dari bell kasir, type order_cancelled):
+ * tampilkan info pembatalan; bila order SUDAH LUNAS → tombol [💰 REFUND]
+ * (kasir wajib mengembalikan pembayaran). Belum lunas → info saja (tanpa
+ * refund — tidak ada yang perlu dikembalikan; notifikasi sudah terkirim).
+ * @param {string} orderId TableOrder._id
+ */
+async function openCancelledOrderModal(orderId) {
+    let order = null;
+    try {
+        const { getTableOrder } = await import("../../data/table-order-data.js");
+        order = await getTableOrder(orderId);
+    } catch (err) {
+        return showToast("danger", err?.message || "Gagal memuat order");
+    }
+    if (!order) return showToast("warning", "Order tidak ditemukan");
+    // Berlaku utk pembatalan SELURUH (kitchenStatus=cancelled) ATAU parsial
+    // (sebagian item ditandai cancelled).
+    const hasCancelledItems = (Array.isArray(order.items) ? order.items : []).some(i => i && i.cancelled);
+    if (String(order.kitchenStatus || "") !== "cancelled" && !hasCancelledItems) {
+        return showToast("warning", "Order ini tidak berstatus dibatalkan");
+    }
+
+    const isPaid = order.paymentStatus === "paid";
+    const isRefunded = order.refundStatus === "refunded";
+    const canRefund = isPaid && !isRefunded;
+    const total = Number(order.total || 0);
+    const refundAmount = Number(order.refundAmount || order.total || 0);
+    // F&B V1 — pembatalan PER-ITEM: tampilkan baris yang dibatalkan.
+    const cancelledItems = (Array.isArray(order.items) ? order.items : []).filter(i => i && i.cancelled);
+    const partial = cancelledItems.length > 0 && cancelledItems.length < (Array.isArray(order.items) ? order.items : []).length;
+    const cancelledLines = cancelledItems.length
+        ? `<div class="pv-proof-meta" style="margin-top:8px">🗑️ Dibatalkan: ${esc(cancelledItems.map(i => `${i.qty}× ${i.nama}`).join(", "))}</div>`
+        : "";
+
+    const content = `
+        <div class="pv-head">
+            <div class="pv-order-id">${esc(order.orderId || "")}</div>
+            <div class="cn-muted" style="font-size:0.85rem">
+                Meja ${esc(order.nomorMeja || "-")} · ${paymentMethodLabel(order.paymentMethod)} · <strong>Rp ${total.toLocaleString("id-ID")}</strong>
+            </div>
+        </div>
+        <p class="pv-proof-meta">❌ ${partial ? "Item dibatalkan" : "Order dibatalkan"} oleh <strong>${esc(order.cancelledBy || "-")}</strong> pada ${fmtBellTime(order.cancelledAt)}${order.cancelReason ? `<br/>📝 ${esc(order.cancelReason)}` : ""}</p>
+        ${cancelledLines}
+        ${isPaid ? (isRefunded
+            ? `<div class="pv-proof-meta">💰 Refund <strong>Rp ${Number(order.refundAmount || 0).toLocaleString("id-ID")}</strong> diproses oleh <strong>${esc(order.refundedBy || "-")}</strong> pada ${fmtBellTime(order.refundedAt)}</div>`
+            : `<div class="cn-alert-danger" style="margin-top:8px">⚠️ ${partial ? "Sebagian item sudah lunas — wajib refund parsial" : "Order SUDAH LUNAS — wajib refund"} ke pelanggan sebesar <strong>Rp ${refundAmount.toLocaleString("id-ID")}</strong>.</div>`)
+            : `<div class="pv-proof-meta" style="margin-top:8px">Pembayaran belum lunas — tidak ada refund. Pelanggan sudah diberi notifikasi pembatalan.</div>`}
+    `;
+    const footer = `
+        <button class="smart-btn smart-btn-secondary" id="pv-close">Tutup</button>
+        ${canRefund ? `<button class="smart-btn smart-btn-danger" id="pv-refund">💰 REFUND Rp ${refundAmount.toLocaleString("id-ID")}</button>` : ""}
+    `;
+    const overlay = Modal({ open: true, title: partial ? "Item Dibatalkan" : "Order Dibatalkan", content, footer, closable: true, onClose: () => overlay?.remove?.() });
+    document.body.appendChild(overlay);
+    overlay.querySelector("#pv-close")?.addEventListener("click", () => overlay.remove());
+    overlay.querySelector("#pv-refund")?.addEventListener("click", async () => {
+        if (!window.confirm(`Proses REFUND ${order.orderId} (Meja ${order.nomorMeja}) sebesar Rp ${refundAmount.toLocaleString("id-ID")}?\n\nRefund tercatat sebagai pengurang nilai penjualan shift dan pelanggan diberi notifikasi.`)) return;
+        try {
+            const { refundTableOrder } = await import("../../data/table-order-data.js");
+            await refundTableOrder(orderId);
+            showToast("success", `Refund Rp ${total.toLocaleString("id-ID")} diproses — pelanggan diberi notifikasi`);
+            overlay.remove();
+            refreshBellCount();
+            refreshOrderMejaPanel();
+        } catch (err) {
+            showToast("danger", err?.message || "Gagal memproses refund");
+        }
+    });
+}
+
+/** Format timestamp ringkas utk bell (id-ID). */
+function fmtBellTime(d) {
+    if (!d) return "";
+    try {
+        return new Date(d).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" });
+    } catch {
+        return String(d);
+    }
+}
+
 // ── Styles ──
 
 function getStyles() {
     return `
-.pos-page { display:flex; flex-direction:column; gap:0; height:calc(100vh - 118px); min-height:480px; }
+/* dvh fallback: 100vh mengukur viewport besar termasuk area di belakang toolbar
+   browser tablet/mobile → konten bawah terpotong & seolah tidak bisa discroll.
+   100dvh = tinggi viewport dinamis yang benar-benar terlihat. */
+.pos-page { display:flex; flex-direction:column; gap:0; height:calc(100vh - 118px); height:calc(100dvh - 118px); min-height:480px; }
 /* Header — samakan dengan topbar admin: var(--topbar-bg/--topbar-text)
    (putih + aksen emerald di light mode; ikut gelap di dark mode admin) */
 /* Header — hijau selaras dengan sidebar (gradient emerald yang sama),
@@ -2020,7 +2701,7 @@ function getStyles() {
     display:flex; align-items:center; justify-content:space-between; gap:12px;
     background:linear-gradient(to bottom, #064e3b 0%, #059669 100%);
     color:#fff;
-    padding:12px 18px; border-radius:10px 10px 0 0; flex-shrink:0;
+    padding:12px 18px; border-radius:0; flex-shrink:0; /* tanpa radius atas — menyatu dengan tab browser */
     border-bottom:1px solid rgba(255,255,255,0.14);
 }
 .pos-header-left { display:flex; align-items:center; gap:12px; min-width:0; }
@@ -2036,11 +2717,20 @@ function getStyles() {
 .pos-header-right { display:flex; align-items:center; gap:8px; margin-left:auto; }
 .pos-header-right .pos-header-hint { font-size:0.78rem; color:rgba(255,255,255,0.75); }
 .pos-logout-btn {
+    display:inline-flex; align-items:center; gap:6px;
     padding:7px 14px; border:1px solid rgba(255,255,255,0.55); border-radius:8px;
     background:rgba(255,255,255,0.16); color:#fff; cursor:pointer;
     font-size:0.8rem; font-weight:600; white-space:nowrap;
     transition:background 0.15s, transform 0.1s;
 }
+.pos-logout-btn .pos-logout-icon {
+    display:block; flex-shrink:0;
+}
+.pos-logout-btn:hover .pos-logout-icon { transform:translateX(2px); }
+.pos-logout-btn .pos-logout-icon { transition:transform 0.15s; }
+/* SVG logout di dalam smart-btn (modal shift) — sejajar dengan teks */
+.shift-open-actions .pos-logout-icon,
+.smart-btn .pos-logout-icon { vertical-align:-2px; margin-right:4px; }
 /* HP — ikon keranjang di header (bill overlay). Tersembunyi di desktop/tablet. */
 .pos-cart-btn {
     display:none; align-items:center; gap:6px;
@@ -2056,6 +2746,50 @@ function getStyles() {
     background:#f59e0b; color:#0f172a; font-size:0.72rem; font-weight:700;
     display:inline-flex; align-items:center; justify-content:center;
 }
+/* F&B Payment Proof V1 — bell notifikasi kasir di header (unread count badge). */
+.pos-bell-btn {
+    position:relative; display:none; align-items:center; gap:6px;
+    padding:7px 11px; border:1px solid rgba(255,255,255,0.55); border-radius:8px;
+    background:rgba(255,255,255,0.16); color:#fff; cursor:pointer;
+    font-size:0.95rem; font-weight:600; white-space:nowrap;
+    transition:background 0.15s, transform 0.1s;
+}
+.pos-bell-btn:hover { background:rgba(255,255,255,0.28); }
+.pos-bell-btn:active { transform:scale(0.97); }
+.pos-bell-count {
+    position:absolute; top:-5px; right:-5px; min-width:18px; height:18px; padding:0 4px;
+    border-radius:999px; background:#ef4444; color:#fff; font-size:0.7rem; font-weight:700;
+    display:none; align-items:center; justify-content:center;
+}
+/* F&B V1 — Order Meja HP: icon-only di header (kanan lonceng). Tersembunyi
+   di desktop/tablet — tombol Order Meja tetap di sidebar Kategori. */
+.pos-order-meja-btn {
+    display:none; align-items:center; justify-content:center;
+    padding:7px 11px; border:1px solid rgba(255,255,255,0.55); border-radius:8px;
+    background:rgba(255,255,255,0.16); color:#fff; cursor:pointer;
+    font-size:0.95rem; font-weight:600; white-space:nowrap;
+    transition:background 0.15s, transform 0.1s;
+}
+.pos-order-meja-btn:hover { background:rgba(255,255,255,0.28); }
+.pos-order-meja-btn:active { transform:scale(0.97); }
+
+/* Modal bell — daftar notifikasi pembayaran */
+.pos-bell-item { padding:10px 12px; border:1px solid var(--smart-border,#e2e8f0); border-radius:10px; margin-bottom:8px; }
+.pos-bell-item.read { opacity:0.72; }
+.pos-bell-item-head { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.pos-bell-item-title { font-weight:700; font-size:0.88rem; }
+.pos-bell-dot { width:8px; height:8px; border-radius:50%; background:#ef4444; flex-shrink:0; }
+.pos-bell-item-msg { font-size:0.82rem; color:var(--smart-text-secondary,#64748b); margin-top:2px; line-height:1.4; }
+.pos-bell-item-meta { font-size:0.72rem; color:var(--smart-text-secondary,#64748b); margin-top:4px; }
+
+/* Modal verifikasi pembayaran — bukti + tombol TOLAK / KONFIRMASI BAYAR */
+.pv-head { margin-bottom:10px; }
+.pv-order-id { font-size:1.15rem; font-weight:800; }
+.pv-proof-img { border:1px solid var(--smart-border,#e2e8f0); border-radius:10px; overflow:hidden; margin:10px 0; background:#f8fafc; }
+.pv-proof-img img { display:block; width:100%; max-height:420px; object-fit:contain; }
+.pv-proof-meta { font-size:0.75rem; color:var(--smart-text-secondary,#64748b); margin-top:6px; }
+.pv-reason-input { width:100%; margin-top:8px; }
+
 /* HP — tombol tutup (✕) di header bill overlay: kiri judul Bill, merah + X putih. */
 .pos-bill-header-left { display:flex; align-items:center; gap:8px; min-width:0; }
 .pos-bill-close {
@@ -2069,10 +2803,10 @@ function getStyles() {
 .pos-logout-btn:active { transform:scale(0.97); }
 
 /* Mode fullscreen (role kasir) — halaman standalone tanpa shell admin */
-.pos-page.pos-fullscreen { height:100vh; min-height:0; border-radius:0; }
-.pos-shell-host { height:100vh; overflow:hidden; }
+.pos-page.pos-fullscreen { height:100vh; height:100dvh; min-height:0; border-radius:0; }
+.pos-shell-host { height:100vh; height:100dvh; overflow:hidden; }
 
-.pos-body { flex:1; display:flex; overflow:hidden; min-height:0; border-radius:0 0 10px 10px; box-shadow:0 6px 24px rgba(0,0,0,0.08); }
+.pos-body { flex:1; display:flex; overflow:hidden; min-height:0; position:relative; border-radius:0 0 10px 10px; box-shadow:0 6px 24px rgba(0,0,0,0.08); }
 
 /* Kiri: Kategori — samakan dengan sidebar admin: gradient emerald */
 .pos-kategori {
@@ -2151,6 +2885,20 @@ function getStyles() {
 .pos-kat-btn.active { background:#10b981; color:#022c22; font-weight:700; }
 .pos-kat-icon { flex-shrink:0; }
 .pos-kat-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* F&B V1 — tombol Order Meja di sidebar kasir (setelah daftar Kategori) */
+.pos-kat-order-meja {
+    flex-shrink:0; margin-top:8px;
+    border-top:1px dashed rgba(255,255,255,0.35);
+    border-radius:0 0 8px 8px;
+    font-weight:600;
+}
+/* F&B V1 — panel Order Meja embedded (menggantikan produk+bill, sidebar tetap) */
+.pos-order-meja {
+    flex:1; background:#f8fafc; padding:14px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:12px; min-width:0;
+}
+/* display:flex di atas menimpa UA [hidden] — pastikan hidden tetap menang */
+.pos-order-meja[hidden] { display:none; }
 
 /* Tengah: Produk */
 .pos-produk {
@@ -2168,14 +2916,6 @@ function getStyles() {
     font-size:0.82rem; outline:none; background:#fff; color:#0f172a;
 }
 .pos-produk-head input:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,0.15); }
-/* Tombol scan barcode (PRD V1) */
-.pos-scan-btn {
-    padding:8px 10px; border:1px solid #10b981; border-radius:8px; background:#ecfdf5;
-    color:#047857; font-size:0.82rem; font-weight:600; cursor:pointer; white-space:nowrap;
-    transition:all 0.15s;
-}
-.pos-scan-btn:hover { background:#d1fae5; }
-.pos-scan-wrap:not(:empty) { margin-bottom:6px; }
 .pos-produk-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); gap:10px; align-content:start; }
 /* Sidebar disembunyikan → kartu lebih kecil agar lebih banyak tampil per baris */
 .pos-kategori.collapsed ~ .pos-produk .pos-produk-grid { grid-template-columns:repeat(auto-fill, minmax(112px, 1fr)); }
@@ -2200,6 +2940,8 @@ function getStyles() {
 .pos-badge-kat { background:#e0f2fe; color:#0369a1; }
 .pos-badge-jasa { background:#d1fae5; color:#065f46; }
 .pos-badge-recipe { background:#fef3c7; color:#92400e; }
+.pos-badge-recipe-fnb { background:#cffafe; color:#0e7490; }
+.pos-badge-varian { background:#ede9fe; color:#6d28d9; }
 .pos-prod-price { font-size:0.85rem; font-weight:700; color:#059669; }
 .pos-prod-habis {
     position:absolute; inset:auto 0 0 0; background:rgba(15,23,42,0.75); color:#fff;
@@ -2223,10 +2965,36 @@ function getStyles() {
 .pos-bill {
     width:20%; min-width:250px; background:#fff; padding:14px 16px;
     display:flex; flex-direction:column; gap:10px;
+    /* min-height:0 + overflow-y:auto → bila isi kolom bill melebihi tinggi
+       panel (mis. layout desktop di tablet landscape), kolom discroll
+       internal — bayar/checkout selalu terjangkau, tidak terpotong. */
+    min-height:0; overflow-y:auto;
 }
+/* Tombol scroll ▲/▼ kolom bill — mengambang di tepi kanan, discroll per
+   langkah (smooth). Disabled otomatis saat di ujung atas/bawah. HP: hidden. */
+.pos-bill-scroll {
+    position:absolute; right:10px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:8px; z-index:20;
+}
+.pos-bill-scroll-btn {
+    width:30px; height:30px; border-radius:8px; border:1px solid #cbd5e1;
+    background:rgba(255,255,255,0.92); color:#334155; cursor:pointer;
+    font-size:0.7rem; line-height:1; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 6px rgba(0,0,0,0.15); transition:all 0.15s;
+}
+.pos-bill-scroll-btn:hover:not(:disabled) { background:#fff; color:#059669; border-color:#10b981; }
+.pos-bill-scroll-btn:disabled { opacity:0.35; cursor:default; }
+[data-theme="dark"] .pos-bill-scroll-btn { background:#1e293b; border-color:#475569; color:#e2e8f0; }
+[data-theme="dark"] .pos-bill-scroll-btn:hover:not(:disabled) { color:#34d399; border-color:#10b981; }
+@media (max-width: 767px) { .pos-bill-scroll { display:none; } }
 .pos-bill-title { margin:0; font-size:1.1rem; font-weight:700; color:#0f172a; }
 .pos-bill-header { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-shrink:0; }
-.pos-keranjang { flex:1; overflow-y:auto; border-bottom:1px dashed #cbd5e1; padding-bottom:4px; min-height:0; }
+/* Item terpilih memakai tinggi NATURAL (semua item tampil, tidak dibatasi
+   max-height & tidak discroll sendiri) — yang discroll adalah SELURUH kolom
+   bill (overflow-y:auto di .pos-bill), termasuk summary + checkout. Saat
+   item sedikit, flex:1 membuat area item mengisi sisa (checkout tetap di
+   bawah); saat item banyak, kolom bill discroll utuh. */
+.pos-keranjang { flex:1; border-bottom:1px dashed #cbd5e1; padding-bottom:4px; }
 .pos-cart-empty { text-align:center; color:#94a3b8; font-size:0.8rem; padding:18px 0; }
 .pos-cart-item { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid #f1f5f9; }
 .pos-cart-name { font-size:0.78rem; font-weight:600; color:#0f172a; line-height:1.3; }
@@ -2374,8 +3142,12 @@ function getStyles() {
 [data-theme="dark"] .pos-bill-bayar input { background:#334155; border-color:#475569; color:#f1f5f9; }
 [data-theme="dark"] .pos-metode-select { background:#334155; border-color:#475569; color:#f1f5f9; }
 [data-theme="dark"] .pos-bill-row input[type="text"], [data-theme="dark"] .pos-catatan-input { background:#334155; border-color:#475569; color:#f1f5f9; }
-[data-theme="dark"] .pos-scan-btn { background:#064e3b; border-color:#10b981; color:#6ee7b7; }
+
 [data-theme="dark"] .pos-badge-recipe { background:#78350f; color:#fcd34d; }
+[data-theme="dark"] .pos-badge-recipe-fnb { background:#155e75; color:#a5f3fc; }
+[data-theme="dark"] .pos-badge-varian { background:#4c1d95; color:#ddd6fe; }
+[data-theme="dark"] .pos-varian-row { background:#1e293b; border-color:#475569; }
+[data-theme="dark"] .pos-varian-row span:first-child { color:#f1f5f9; }
 [data-theme="dark"] .pos-bill-total { border-top-color:#475569; color:#f1f5f9; }
 [data-theme="dark"] .pos-cart-remove { color:#f87171; }
 [data-theme="dark"] .pos-empty { color:#64748b; }
@@ -2403,6 +3175,8 @@ function getStyles() {
 }
 .shift-summary-row strong { font-variant-numeric:tabular-nums; }
 .shift-summary-sub { padding-top:4px; border-top:1px dashed #cbd5e1; }
+.shift-summary-refund { color:#dc2626; font-weight:600; }
+.shift-summary-refund strong { color:#dc2626; }
 .shift-summary-expected { padding-top:6px; border-top:1px solid #cbd5e1; font-weight:700; }
 .shift-summary-expected strong { color:var(--primary,#10b981); }
 .shift-selisih { margin-top:6px; font-size:13px; }
@@ -2466,8 +3240,16 @@ function getStyles() {
    horizontal di bawah topbar (kategori digeser kanan 0,5cm dari judul), lalu
    daftar barang 80% + bill 20% di bawahnya ── */
 @media (min-width: 768px) and (max-width: 1100px) {
-    .pos-body { flex-wrap:wrap; }
+    /* Grid (bukan flex-wrap): baris 1 = strip kategori (60px), baris 2 =
+       produk (74.7%) + bill (25.3%). minmax(0,1fr) membuat baris 2 terikat
+       ke sisa tinggi panel dengan NILAI PASTI di semua browser — flex-wrap
+       lama mengikat tinggi baris ke tinggi KONTEN sehingga konten bawah
+       terpotong & tidak bisa discroll (dan height:% pada flex item tidak
+       selalu teresolusi, mis. Safari iPad). overflow-y:auto produk/bill
+       sekarang benar-benar jalan. */
+    .pos-body { display:grid; grid-template-rows:60px minmax(0,1fr); grid-template-columns:minmax(0,74.7%) minmax(0,25.3%); }
     .pos-kategori {
+        grid-row:1; grid-column:1 / -1;
         flex:1 1 100%; width:100%; max-width:100%; min-width:0;
         height:60px; min-height:60px; max-height:60px;
         flex-direction:row; align-items:center; gap:8px;
@@ -2479,11 +3261,13 @@ function getStyles() {
     .pos-kategori-footer { display:none; }
     .pos-kat-btn { width:auto; white-space:nowrap; }
     /* Bill tablet diperlebar 115% (22% → 25.3%); produk mengisi sisa (74.7%) */
-    .pos-produk { flex:1 1 74.7%; width:74.7%; max-width:74.7%; min-width:0; border:0; }
-    .pos-bill { flex:1 1 25.3%; width:25.3%; max-width:25.3%; min-width:0; background:#F0FFF0; }
+    .pos-produk { grid-row:2; grid-column:1; width:auto; max-width:none; min-width:0; min-height:0; border:0; }
+    .pos-bill { grid-row:2; grid-column:2; width:auto; max-width:none; min-width:0; min-height:0; background:#F0FFF0; }
+    /* F&B V1 — Order Meja: saat produk & bill disembunyikan, panel mengisi
+       kedua kolom baris 2 (selebar area produk+bill, bukan 74.7% saja). */
+    .pos-order-meja { grid-row:2; grid-column:1 / -1; min-height:0; }
     /* Kartu produk tablet: tetap 5 kartu per baris (kolom produk 78%) */
     .pos-produk-grid { grid-template-columns:repeat(5, 1fr); gap:8px; }
-    .pos-keranjang { max-height:280px; }
     /* Bill header tablet (kolom bill sempit 22%): judul "Bill" di baris atas,
        tombol Umum/Member di baris bawah — tidak saling menimpa */
     .pos-bill-header { flex-direction:column; align-items:stretch; }
@@ -2492,7 +3276,8 @@ function getStyles() {
     .pos-bill-title { align-self:flex-start; }
     /* Collapsed diabaikan di tablet (pola sidebar admin) — tetap strip horizontal */
     .pos-kategori.collapsed {
-        flex:1 1 100%; width:100%; min-width:0; height:60px; max-height:60px;
+        grid-row:1; grid-column:1 / -1;
+        width:100%; max-width:100%; min-width:0; height:60px; max-height:60px;
         padding:10px 14px; overflow-x:auto; overflow-y:hidden;
     }
     .pos-kategori.collapsed .pos-kategori-list { overflow-x:auto; margin-left:0.5cm; }
@@ -2536,7 +3321,25 @@ function getStyles() {
     }
     .pos-page.bill-open .pos-bill-close { display:inline-flex; }
     .pos-keranjang { max-height:none; }
+    /* HP — tombol Umum/Member di baris BAWAH judul "Bill" (pola sama dengan
+       tampilan tablet): judul di baris atas, tombol di baris bawah, melebar
+       penuh & mepet kanan. Nama member yang panjang tidak lagi menimpa judul
+       karena berada di baris terpisah. */
+    .pos-bill-header { flex-direction:column; align-items:stretch; }
+    .pos-pelanggan-type { width:100%; }
+    .pos-type-btn { flex:1; justify-content:center; }
+    .pos-bill-title { align-self:flex-start; }
     .pos-cart-btn { display:inline-flex; }
+    /* F&B V1 — Order Meja HP: tombol pindah dari sidebar Kategori ke header
+       (kanan lonceng), icon-only. Sidebar disembunyikan di HP. */
+    .pos-order-meja-btn { display:inline-flex; }
+    .pos-kat-order-meja { display:none; }
+    /* Logout HP: icon saja (label disembunyikan), ukuran tombol mengikuti
+       pola tombol icon lain di header (cart/bell/order meja). */
+    .pos-logout-btn { padding:7px 11px; }
+    .pos-logout-label { display:none; }
+    /* SVG logout HP sedikit lebih besar agar proporsional sbg tombol icon */
+    .pos-logout-btn .pos-logout-icon { width:18px; height:18px; }
     /* Collapsed diabaikan di HP — tetap strip horizontal */
     .pos-kategori.collapsed { width:100%; min-width:0; padding:8px 12px; overflow-x:auto; overflow-y:hidden; }
     .pos-kategori.collapsed .pos-kategori-list { overflow-x:auto; margin-left:0.5cm; }

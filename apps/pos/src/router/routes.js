@@ -19,6 +19,14 @@ import { CompanyPage, initCompanyPage } from "../pages/settings/company";
 import { UserSettingsPage, initUserSettingsPage } from "../pages/settings/user";
 import { RolePage, initRolePage } from "../pages/settings/role";
 import { PermissionPage, initPermissionPage } from "../pages/settings/permission";
+import { CapabilityPage, initCapabilityPage } from "../pages/settings/capability";
+import { RecipePage, initRecipePage } from "../pages/recipe";
+// F&B Customer Ordering V1 — QR Menu Meja, Order Meja, Kitchen, Payment Settings
+import { QrMenuPage, initQrMenuPage } from "../pages/qr-menu";
+import { OrderMejaPage, initOrderMejaPage } from "../pages/order-meja";
+import { KitchenPage, initKitchenPage } from "../pages/kitchen";
+import { PaymentSettingsPage, initPaymentSettingsPage } from "../pages/settings/payment";
+import { WaSettingsPage, initWaSettingsPage } from "../pages/settings/wa";
 
 
 export const routes = {
@@ -37,10 +45,14 @@ export const routes = {
     },
 
     // ── Kasir (SP-029 M3) ──
+    // SP-029 POS V1 — halaman kasir adalah workflow capability "retail".
+    // Bila perusahaan tidak mengaktifkan retail, route ini ditolak frontend
+    // (navigate) dan pembuatan transaksi ditolak backend (requireTransactionType).
     pos: {
         component: PosPage,
         init: initPosPage,
-        permission: "pos.kasir.use"
+        permission: "pos.kasir.use",
+        capability: "retail"
     },
 
     // ── Shift Kasir (PRD V1 §12) ──
@@ -150,6 +162,57 @@ export const routes = {
         component: PermissionPage,
         init: initPermissionPage,
         permission: "settings.permission.manage"
+    },
+
+    // ── M6.1 — Transaction Capabilities (jenis transaksi kasir) ──
+    "settings-capability": {
+        component: CapabilityPage,
+        init: initCapabilityPage,
+        permission: "settings.company.edit"
+    },
+
+    // ── M6.2 — F&B Recipe / BOM (gate capability fnb + permission admin) ──
+    recipe: {
+        component: RecipePage,
+        init: initRecipePage,
+        permission: "pos.recipe.manage",
+        capability: "fnb"
+    },
+
+    // ── F&B Customer Ordering V1 — QR Menu Meja + Order Meja + Kitchen ──
+    "qr-menu": {
+        component: QrMenuPage,
+        init: initQrMenuPage,
+        permission: "pos.qr.manage",
+        capability: "fnb"
+    },
+    "order-meja": {
+        component: OrderMejaPage,
+        init: initOrderMejaPage,
+        permission: "pos.order.view",
+        capability: "fnb"
+    },
+    kitchen: {
+        component: KitchenPage,
+        init: initKitchenPage,
+        permission: "pos.kitchen.view",
+        capability: "fnb"
+    },
+
+    // ── F&B V1 — Settings → Payment Settings (QRIS + Bank Accounts) ──
+    "settings-payment": {
+        component: PaymentSettingsPage,
+        init: initPaymentSettingsPage,
+        permission: "settings.company.edit",
+        capability: "fnb"
+    },
+
+    // ── F&B V1 — Settings → Konfigurasi WA (gateway notifikasi WhatsApp) ──
+    "settings-wa": {
+        component: WaSettingsPage,
+        init: initWaSettingsPage,
+        permission: "settings.company.edit",
+        capability: "fnb"
     }
 
 };

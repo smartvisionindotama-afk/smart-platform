@@ -4,6 +4,47 @@
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!-- F&B V1 — PWA (Web Push customer setelah browser ditutup): manifest
+         + iOS meta (Safari iOS butuh PWA di-install ke Home Screen dulu
+         sebelum pushManager tersedia — tanpa ini notifikasi tidak akan
+         pernah muncul di iPhone). -->
+    <link rel="manifest" href="/manifest.json" />
+    <script>
+        // PWA dinamis per halaman (manifest dipilih sebelum browser memproses
+        // install):
+        //   - /m/...        → QR Menu customer (manifest.json default; buka
+        //                     dengan ?tab=1 / preferensi tersimpan →
+        //                     manifest-tablet.json versi landscape).
+        //   - selainnya      → SMART Kasir (manifest-kasir.json — PWA kasir,
+        //                     orientation: any (fleksibel potret/lanskap),
+        //                     start_url "/" → login → layar kasir fullscreen).
+        (function () {
+            try {
+                var path = window.location.pathname;
+                var q = new URLSearchParams(window.location.search);
+                var link = document.querySelector('link[rel="manifest"]');
+                if (!link) return;
+                if (path.indexOf("/m/") === 0) {
+                    var tab = q.get("tab") === "1" || window.localStorage.getItem("cm-tab-mode") === "1";
+                    if (tab) link.setAttribute("href", "/manifest-tablet.json");
+                } else {
+                    link.setAttribute("href", "/manifest-kasir.json");
+                    // iOS: label Home Screen ikut berganti (manifest orientation
+                    // tidak dibaca iOS — judul ini yang dipakai).
+                    var t = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+                    if (t) t.setAttribute("content", "SMART Kasir");
+                }
+            } catch (e) { /* ignore — manifest default tetap dipakai */ }
+        })();
+    </script>
+    <meta name="theme-color" content="#064e3b" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="QR Menu" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
     <title>SMART Kasir</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>

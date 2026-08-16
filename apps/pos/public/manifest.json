@@ -1,0 +1,25 @@
+{
+    "name": "QR Menu — Pesan dari Meja",
+    "short_name": "QR Menu",
+    "description": "Pesan langsung dari meja Anda — menu digital, pembayaran, dan notifikasi status pesanan.",
+    "start_url": "/m/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#059669",
+    "theme_color": "#064e3b",
+    "lang": "id",
+    "icons": [
+        {
+            "src": "/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

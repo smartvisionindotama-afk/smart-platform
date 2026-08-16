@@ -748,6 +748,25 @@ body {
     margin-top: 8px;
 }
 
+/* Transaction Capability (SP-029 POS V1) — checkbox + deskripsi */
+.cn-tt-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 8px;
+    background: var(--surface, #fff);
+}
+.cn-tt-item .smart-switch-wrapper {
+    justify-content: flex-start;
+}
+.cn-tt-desc {
+    font-size: 0.72rem;
+    color: var(--text-secondary, #64748b);
+    line-height: 1.4;
+}
+
 /* ── Login As — Pilih Aplikasi (SP-027 PRE-M5 round 6) ── */
 .cn-login-as-list {
     display: grid;

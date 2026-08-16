@@ -29,6 +29,12 @@ const shiftSchema = new mongoose.Schema({
     // non-tunai (transfer/qris/card). Kas diharapkan = kasAwal + penjualanTunai.
     penjualanTunai: { type: Number, default: 0 },
     penjualanNonTunai: { type: Number, default: 0 },
+    // F&B V1 — REFUND pesanan dibatalkan (QR Menu, sudah lunas) yang diproses
+    // kasir selama shift: PENGURANG nilai penjualan saat tutup shift.
+    // totalRefund = Σ refundAmount; refundTunai = subset yang metode bayarnya
+    // tunai (mengurangi kas fisik di laci — dipakai expectedCash).
+    totalRefund: { type: Number, default: 0 },
+    refundTunai: { type: Number, default: 0 },
     // expected = kasAwal + penjualanTunai (pembayaran non-tunai tidak menambah
     // uang fisik di laci — V1: void tidak dihitung)
     expectedCash: { type: Number, default: 0 },

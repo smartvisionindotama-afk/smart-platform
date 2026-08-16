@@ -19,6 +19,7 @@
 | 1.1 | 2026-08-10 | Freebuff | Sinkronisasi status implementasi (Void ✅, Return engine ✅ + dukungan `sumber=pos`, behavior-aware stok) + definisi resmi **Void vs Retur vs Koreksi** (§7.8.1) + referensi `pos-retur-koreksi.md` |
 | 1.2 | 2026-08-10 | Freebuff | Audit final V1 — sinkron checklist Acceptance Criteria §18 (checklist tercentang sesuai implementasi live: sales-breakdown by item/category/cashier/payment, payment report, cashier report; item diskon = backlog; Hold (T5) & UI retur kasir (T13) = backlog butuh approval PO) |
 | 1.3 | 2026-08-10 | Freebuff | T5 Hold/Resume DIIMPLEMENTASIKAN (M3-FIX v16, approval PO) — §7.5 diperbarui: status `held` (additive) + `POST /:id/hold` & `POST /:id/resume` (permission `pos.transaction.hold`) + filter `?status=held` + tombol/badge/modal di layar kasir; stok tidak berubah saat hold/resume; transaksi held tidak masuk laporan/omzet |
+| 1.4 | 2026-08-14 | Freebuff | Sinkronisasi milestone F&B SP-029 POS V1 — M6.1 Transaction Capability Foundation ✅ + M6.2 F&B Recipe/BOM Engine ✅ diimplementasikan (dokumen: `TRANSACTION-CAPABILITY-V1.md` & `M6-CAPABILITY-RECIPE.md`); §9.2 Recipe diperbarui (dua model resep: `recipe` simple vs `recipe-fnb` terhubung — konsumsi realtime), §10 Transaction Engine diperbarui (bukan lagi NO-OP), §15.1 backlog ditambah M6.3 Table/Order, M6.4 KDS, M6.5 QR Ordering (fondasi capability `fnb` + engine BOM siap dipasang) |
 
 ---
 
@@ -1066,7 +1067,7 @@ Sale → Decrease Item Stock
 
 ✅ Implemented (stok trading berkurang saat checkout POS, jasa tidak).
 
-## 9.2 Recipe (Foundation V1)
+## 9.2 Recipe (M6.2 — F&B Recipe/BOM Engine, SP-029)
 
 Contoh: Kopi, Nasi Goreng, Mie Goreng.
 
@@ -1074,11 +1075,28 @@ Contoh: Kopi, Nasi Goreng, Mie Goreng.
 Sale → Recipe → Consume Ingredients
 ```
 
-V1 cukup menyediakan **foundation/interface** yang tidak mengunci implementasi Recipe Engine penuh (V2).
+**Status (2026-08-14):** F&B Recipe/BOM Engine (**M6.2**) DIIMPLEMENTASIKAN —
+lihat `docs/pos/M6-CAPABILITY-RECIPE.md`. V1 sebelumnya hanya menyediakan
+foundation NO-OP (`behavior: recipe` dijual tanpa kurangi stok, keputusan PO
+2026-08-10); M6.2 menambahkan **model terhubung** yang mengonsumsi bahan realtime.
 
-- Foundation minimal: `behavior` enum diperluas ke `recipe` + field referensi resep opsional + hook engine (NO-OP di V1).
-- **Keputusan PO (2026-08-10): item recipe dijual TANPA mengurangi stok di V1** (seperti service) — tidak ada BOM sampai V2.
-- Implementasi F&B advanced (BOM, modifier) masuk **V2**.
+- **Dua model resep** (M6.2-FIX):
+  - `recipe` — model **SIMPLE**: dijual TANPA kurangi stok produk, bahan TIDAK
+    dikonsumsi realtime (penyesuaian stok manual via **stok opname**).
+  - `recipe-fnb` — model **TERHUBUNG**: bahan dikonsumsi **realtime** saat
+    transaksi via engine BOM (`applyRecipeConsumption`, idempotent per
+    `(saleId, productId, recipeId)` + reversal saat void).
+- Engine pure `services/recipe.js`: `calculateRecipeConsumption` (ingredient.quantity
+  × qty, round 4 desimal), `calculateRecipeCost` (Σ qty × harga_beli; null bila cost
+  tak reliable), `validateRecipeIngredients` (item ada, qty > 0, tanpa duplikat,
+  unit konsisten).
+- **Produk VARIAN** (M6.2-FIX v0.42): satu produk boleh punya BANYAK recipe aktif
+  = varian (mis. Kopi Susu Manis "Pake Gula"/"Tanpa Gula"); item transaksi simpan
+  `recipeId`; kasir modal **Pilih Varian**; konsumsi per varian.
+- API `/api/recipes` di-gate `requireTransactionType("fnb")` + permission
+  `pos.recipe.manage` (Admin/Owner; kasir tidak).
+- **Backlog lanjutan** (bukan scope M6.2, butuh approval PO): Modifier, Topping,
+  Table/Order (M6.3), KDS (M6.4), QR Ordering (M6.5) — lihat §15.1.
 
 ## 9.3 Service
 
@@ -1107,13 +1125,21 @@ Enum behavior extensible (`digital` placeholder, tanpa engine).
 Engine harus menentukan behavior masing-masing item:
 
 - Aqua → Trading → Stock -1 ✅
-- Kopi → Recipe → Ingredient consumption (V1: foundation NO-OP)
-- Nasi Goreng → Recipe → Ingredient consumption (V1: foundation NO-OP)
+- Kopi → Recipe → Ingredient consumption realtime (M6.2 — `recipe-fnb` ber-recipe)
+- Nasi Goreng → Recipe → Ingredient consumption realtime (M6.2 — `recipe-fnb` ber-recipe)
 - Jasa Antar → Service → No stock impact ✅
 
 **Kasir tidak perlu melakukan proses manual berbeda untuk setiap behavior** (Rule 19).
 
+> Catatan M6.2: produk `recipe` (model SIMPLE) dijual TANPA konsumsi realtime —
+> bahan disesuaikan manual via stok opname; hanya `recipe-fnb` (model TERHUBUNG)
+> yang dikonsumsi realtime saat transaksi (engine BOM, lihat §9.2).
+
 Existing: `splitPosItemsByBehavior` (trading vs service) — perluas ke recipe/manufactured/digital (NO-OP).
+
+> Status M6.2: `recipe` (simple) & `manufactured`/`digital` (belum ada engine) tetap
+> no-stock; `recipe-fnb` kini di-consume realtime via `applyRecipeConsumption`
+> (bukan lagi NO-OP) — lihat §9.2.
 
 ---
 
@@ -1201,9 +1227,18 @@ V1 (MVP) terdiri dari: Platform Integration ✅ · POS Core (search, cart, payme
 
 ## 15.1 Non-MVP / Backlog — JANGAN implementasi tanpa approval PO
 
+> **Status SP-029 (2026-08-14):** M6.1 Transaction Capability Foundation ✅ dan
+> M6.2 F&B Recipe/BOM Engine ✅ sudah diimplementasikan (dokumen:
+> `docs/pos/TRANSACTION-CAPABILITY-V1.md` & `docs/pos/M6-CAPABILITY-RECIPE.md`).
+> Berikut backlog F&B lanjutan (M6.3–M6.5) + backlog versi lain — JANGAN
+> implementasi tanpa approval PO.
+
 | Versi | Fitur |
 |-------|-------|
-| V2 | Recipe Engine penuh, BOM, Modifier, Topping, Table Management, Kitchen Order, Kitchen Display, Production |
+| M6.3 | **Table & Order Management** — meja, order per meja, pindah/gabung/pecah meja; fondasi capability `fnb` + engine BOM M6.2 siap dipasang |
+| M6.4 | **Kitchen Display System (KDS) / Kitchen Order** — tampilan dapur utk order F&B, status memasak/selesai |
+| M6.5 | **Customer QR Ordering** — pelanggan scan QR meja → order langsung (fondasi M6.1/M6.2) |
+| V2 | Recipe Engine penuh lanjutan (Modifier, Topping), Production |
 | V3 | Digital Product Engine (Pulsa, Paket Data, Token PLN, PPOB, Digiflazz), Provider abstraction |
 | V4+ | Loyalty, Membership, Voucher, Gift Card, Delivery, Marketplace, Mobile POS, Offline Sync, Omnichannel |
 
@@ -1247,7 +1282,7 @@ V1 dianggap selesai hanya jika seluruh berikut terpenuhi:
 
 ## 18.3 Inventory
 
-- [x] Trading behavior berjalan ✅ · Stock berkurang setelah sale ✅ · Recipe foundation ✅ (NO-OP V1, C1) · Service behavior ✅ · Inventory tetap konsisten ✅ (verifikasi live: stok Aquaviva 200→199)
+- [x] Trading behavior berjalan ✅ · Stock berkurang setelah sale ✅ · Recipe foundation ✅ (V1: NO-OP per C1; **M6.2 2026-08-14: BOM engine DONE** — `recipe-fnb` konsumsi realtime, `recipe` simple tetap tanpa stok) · Service behavior ✅ · Inventory tetap konsisten ✅ (verifikasi live: stok Aquaviva 200→199)
 
 ## 18.4 Security
 

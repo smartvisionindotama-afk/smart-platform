@@ -4,6 +4,7 @@ import { User } from "../models/User.js";
 import { hashPassword, validateNewPassword } from "../../../../packages/smart-security/src/index.js";
 import { security, audit } from "../security.js";
 import { BUSINESS_TYPES, normalizeCompanyConfigFields } from "../config/business-types.js";
+import { TRANSACTION_TYPES, validateTransactionTypes } from "../../../../packages/smart-core/src/transaction-types/transaction-types.js";
 
 const router = Router();
 
@@ -66,6 +67,8 @@ async function loadKnownAppSlugs() {
  */
 export const COMPANY_UPDATE_FIELDS = [
     "code", "jenis", "name", "address", "phone", "email", "taxId",
+    // F&B QR Menu — nomor WhatsApp resto (diisi Settings → Company POS)
+    "whatsapp",
     "logo", "favicon",
     "legalId", "legalPerdes", "legalPerdesDate", "legalAhu", "legalNib", "legalNpwp", "legalInduk", "legalIjin",
     "orgPenasehat", "orgPengawas", "orgKetua", "orgSekretaris", "orgBendahara",
@@ -76,6 +79,10 @@ export const COMPANY_UPDATE_FIELDS = [
     // SP-029 M2 — Konfigurasi produk (POS)
     "businessType", "lokasiMode", "jumlahGudang", "jumlahKasir",
     "lisensiStatus", "lisensiExpiresAt",
+    // SP-029 POS V1 — Transaction Capability (jenis transaksi kasir)
+    "transactionTypes",
+    // F&B V1 — WhatsApp Gateway (Settings → Konfigurasi WA di POS)
+    "waProviderUrl", "waSecretKey", "waSenderNumber",
     "updatedBy"
 ];
 
@@ -99,6 +106,17 @@ export function selectCompanyListPayload({ authed, docs }) {
  */
 router.get("/business-types", (req, res) => {
     res.json({ data: BUSINESS_TYPES });
+});
+
+/**
+ * GET /api/companies/transaction-types
+ * Katalog Transaction Capability (SP-029 POS V1) — Available Capabilities
+ * yang tersedia di platform, dengan metadata (key/label/description).
+ * Dibaca UI Console untuk checkbox "Jenis Transaksi Kasir".
+ * Sumber kebenaran: registry @smart/core (satu tempat, bukan hardcode).
+ */
+router.get("/transaction-types", (req, res) => {
+    res.json({ data: TRANSACTION_TYPES });
 });
 
 // List with search, pagination & company scoping
@@ -206,6 +224,17 @@ router.post("/", async (req, res) => {
         // Normalisasi konfigurasi produk (POS) — whitelist & clamp (SP-029 M2)
         Object.assign(companyData, normalizeCompanyConfigFields(companyData));
 
+        // Transaction Capability (SP-029 POS V1) — validasi ketat: hanya
+        // capability terdaftar, tanpa duplikat; array kosong diperbolehkan.
+        // Unknown/duplikat → 400 (TIDAK dibuang diam-diam).
+        if (companyData.transactionTypes !== undefined) {
+            const ttCheck = validateTransactionTypes(companyData.transactionTypes);
+            if (!ttCheck.ok) {
+                return res.status(400).json({ error: ttCheck.error });
+            }
+            companyData.transactionTypes = ttCheck.value;
+        }
+
         // Validasi password SEBELUM Company.create (hindari partial create)
         if (adminUsername && adminPassword) {
             const passCheck = validateNewPassword(adminPassword);
@@ -286,6 +315,16 @@ router.put("/:id", async (req, res) => {
         }
         // Normalisasi konfigurasi produk (POS) — whitelist & clamp (SP-029 M2)
         Object.assign(companyData, normalizeCompanyConfigFields(companyData));
+
+        // Transaction Capability (SP-029 POS V1) — validasi ketat (sama
+        // seperti POST): unknown/duplikat ditolak 400, kosong diperbolehkan.
+        if (companyData.transactionTypes !== undefined) {
+            const ttCheck = validateTransactionTypes(companyData.transactionTypes);
+            if (!ttCheck.ok) {
+                return res.status(400).json({ error: ttCheck.error });
+            }
+            companyData.transactionTypes = ttCheck.value;
+        }
 
         // Validasi password admin SEBELUM company di-save (hindari partial update)
         if (adminPassword) {

@@ -2,12 +2,20 @@
  * Company Config — SMART Kasir (SP-029 M2 [USULAN], Rule 4 & 17).
  *
  * Konfigurasi produk berasal dari Master Platform (Company.apps + businessType
- * + lokasiMode + jumlahKasir + lisensi). POS HANYA membaca — tidak mengelola.
+ * + lokasiMode + jumlahKasir + lisensi + transactionTypes). POS HANYA membaca —
+ * tidak mengelola (kecuali endpoint PUT /api/pos/config/transaction-types yang
+ * menulis field transactionTypes pada dokumen Company yang sama).
  *
  * Fungsi murni (testable) — dipakai route auth (gate + response login).
  *
  * @module pos/server/services/company-config
  */
+
+import {
+    DEFAULT_TRANSACTION_TYPES,
+    isKnownTransactionType,
+    normalizeTransactionTypes
+} from "../../../../packages/smart-core/src/transaction-types/transaction-types.js";
 
 /** Slug aplikasi POS di platform (Company.apps / Application.slug / Feature.slug). */
 export const POS_APP_SLUG = "pos";
@@ -42,8 +50,30 @@ export function normalizeCompanyConfig(raw = {}) {
         jumlahGudang: Math.max(1, parseInt(src.jumlahGudang, 10) || 1),
         jumlahKasir: Math.max(1, parseInt(src.jumlahKasir, 10) || 1),
         lisensiStatus,
-        lisensiExpiresAt: src.lisensiExpiresAt || null
+        lisensiExpiresAt: src.lisensiExpiresAt || null,
+        // Transaction Capability (SP-029 POS V1) — backward compatible:
+        // company lama TANPA field transactionTypes → default V1 (["retail"]),
+        // sesuai perilaku POS saat ini. Array kosong yang tersimpan EKSPLISIT
+        // dipertahankan (bisnis valid: tanpa jenis transaksi aktif).
+        transactionTypes: Array.isArray(src.transactionTypes)
+            ? normalizeTransactionTypes(src.transactionTypes)
+            : [...DEFAULT_TRANSACTION_TYPES]
     };
+}
+
+/**
+ * Apakah sebuah capability diaktifkan pada konfigurasi perusahaan?
+ * Pure — memakai default V1 bila daftar tidak tersedia (company lama).
+ * @param {object} [config] Konfigurasi ternormalisasi (normalizeCompanyConfig)
+ * @param {string} key Key capability (mis. "retail", "fnb")
+ * @returns {boolean}
+ */
+export function isTransactionTypeEnabled(config, key) {
+    if (!isKnownTransactionType(key)) return false;
+    const list = Array.isArray(config?.transactionTypes)
+        ? config.transactionTypes
+        : DEFAULT_TRANSACTION_TYPES;
+    return list.includes(key);
 }
 
 /**
@@ -70,4 +100,10 @@ export function filterMenusByLokasi(items, lokasiMode) {
     return walk(items);
 }
 
-export default { POS_APP_SLUG, companyHasAppAccess, normalizeCompanyConfig, filterMenusByLokasi };
+export default {
+    POS_APP_SLUG,
+    companyHasAppAccess,
+    normalizeCompanyConfig,
+    isTransactionTypeEnabled,
+    filterMenusByLokasi
+};

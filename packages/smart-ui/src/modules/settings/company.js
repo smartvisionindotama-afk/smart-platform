@@ -21,9 +21,14 @@ import { esc } from "@smart/core";
  * @param {function} options.updateCompany   Async (id, data) => object
  * @param {function} options.deleteCompany   Async (id) => boolean
  * @param {string[]} [options.companyTypes]  List of company type options
+ * @param {boolean} [options.identityLocked] Bila true: identitas company
+ *        (Kode + Nama) TIDAK bisa diubah/diisi — diatur Master Platform
+ *        (Console); form hanya mengelola konfigurasi (WA, logo, kontak, dll)
+ *        dan tombol "Tambah Perusahaan" disembunyikan. Dipakai aplikasi
+ *        tenant-scoped (mis. Settings → Company di POS admin).
  * @returns {{ render: function, init: function }}
  */
-export function SettingsCompanyModule({ listCompanies, getCompany, createCompany, updateCompany, deleteCompany, companyTypes = [] }) {
+export function SettingsCompanyModule({ listCompanies, getCompany, createCompany, updateCompany, deleteCompany, companyTypes = [], identityLocked = false }) {
     const state = { items: [], page: 1, limit: 10, total: 0, totalPages: 1, search: "", loading: false, formMode: null, editingId: null, deletingId: null, viewModalShown: false, singleViewMode: false };
 
     /** @returns {string} HTML */
@@ -91,14 +96,18 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
             if (existingBtn) existingBtn.remove();
 
             if (state.items.length === 0) {
+                // identityLocked (aplikasi tenant-scoped): company dibuat di
+                // Console — TIDAK ada alur "Tambah Perusahaan" di sini.
                 tableArea.appendChild(EmptyState({
                     icon: "🏢", title: "Belum ada perusahaan",
-                    description: state.search ? `Tidak ditemukan "${state.search}"` : "Klik Tambah Perusahaan untuk menambahkan",
-                    actionText: state.search ? "" : "Tambah Perusahaan",
-                    onAction: state.search ? null : () => openForm("create")
+                    description: identityLocked
+                        ? "Data perusahaan diatur dari Master Platform (Console)."
+                        : (state.search ? `Tidak ditemukan "${state.search}"` : "Klik Tambah Perusahaan untuk menambahkan"),
+                    actionText: (identityLocked || state.search) ? "" : "Tambah Perusahaan",
+                    onAction: (identityLocked || state.search) ? null : () => openForm("create")
                 }));
-                // Show add button when empty
-                if (pageActions && !state.search) {
+                // Show add button when empty (kecuali identityLocked)
+                if (pageActions && !state.search && !identityLocked) {
                     const addBtn = document.createElement("button");
                     addBtn.id = "btn-add-company";
                     addBtn.className = "smart-btn smart-btn-primary";
@@ -129,7 +138,8 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
                     if (pageInfo) pageInfo.textContent = "";
                 } else {
                     // ── Multi-company: show table with Add button ──
-                    if (pageActions) {
+                    // (identityLocked: perusahaan dikelola Console — tanpa tombol tambah)
+                    if (pageActions && !identityLocked) {
                         const addBtn = document.createElement("button");
                         addBtn.id = "btn-add-company";
                         addBtn.className = "smart-btn smart-btn-primary";
@@ -150,7 +160,7 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
                                 render: (_, row) => `
                                     <div class="action-buttons">
                                         <button class="action-btn action-btn-edit" data-edit="${row.id}">✏️ Edit</button>
-                                        <button class="action-btn action-btn-delete" data-delete="${row.id}">🗑️ Hapus</button>
+                                        ${identityLocked ? "" : `<button class="action-btn action-btn-delete" data-delete="${row.id}">🗑️ Hapus</button>`}
                                     </div>` }
                         ], rows: state.items, striped: true, hoverable: true, bordered: false
                     });
@@ -235,6 +245,7 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
                     <div class="cv-field cv-span-2"><span class="cv-label">Alamat</span><span class="cv-value">${esc(item.address || "-")}</span></div>
                     <div class="cv-field"><span class="cv-label">Email</span><span class="cv-value">${esc(item.email || "-")}</span></div>
                     <div class="cv-field"><span class="cv-label">Telepon</span><span class="cv-value">${esc(item.phone || "-")}</span></div>
+
                 </div>
             </div>
 
@@ -336,16 +347,18 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
                 <div class="form-section-title">Identitas Lembaga</div>
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="f-code">Kode Perusahaan <span class="required">*</span></label>
-                        <input type="text" id="f-code" value="${esc(formData.code)}" placeholder="e.g. PT-001" required />
+                        <label for="f-code">Kode Perusahaan ${identityLocked ? "" : `<span class="required">*</span>`}</label>
+                        <input type="text" id="f-code" value="${esc(formData.code)}" placeholder="e.g. PT-001" ${identityLocked ? "readonly" : "required"} />
+                        ${identityLocked ? `<small class="field-hint">Otomatis dari Master Platform (Console) — tidak dapat diubah di sini.</small>` : ""}
                     </div>
                     <div class="form-group">
                         <label for="f-jenis">Jenis Perusahaan</label>
                         <select id="f-jenis">${typeOptions}</select>
                     </div>
                     <div class="form-group full-width">
-                        <label for="f-name">Nama Lembaga <span class="required">*</span></label>
-                        <input type="text" id="f-name" value="${esc(formData.name)}" placeholder="Nama perusahaan / lembaga" required />
+                        <label for="f-name">Nama Lembaga ${identityLocked ? "" : `<span class="required">*</span>`}</label>
+                        <input type="text" id="f-name" value="${esc(formData.name)}" placeholder="Nama perusahaan / lembaga" ${identityLocked ? "readonly" : "required"} />
+                        ${identityLocked ? `<small class="field-hint">Nama perusahaan diatur dari Master Platform (Console).</small>` : ""}
                     </div>
                     <div class="form-group full-width">
                         <label for="f-address">Alamat</label>
@@ -392,8 +405,19 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
         const overlay = Modal({ open: true, title, content: contentHTML, footer: footerHTML, closable: true, onClose: removeModal });
         document.body.appendChild(overlay);
 
-        // When single-company view and editing, make kode perusahaan readonly
-        if (state.singleViewMode && isEdit) {
+        // identityLocked: Kode + Nama diatur Master Platform (Console) — admin
+        // tidak bisa mengubah identitas company (readonly + gaya disabled).
+        if (identityLocked && isEdit) {
+            ["f-code", "f-name"].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.readOnly = true;
+                el.style.background = "#f3f4f6";
+                el.style.cursor = "not-allowed";
+                el.title = "Diatur dari Master Platform (Console)";
+            });
+        } else if (state.singleViewMode && isEdit) {
+            // Single-company view (tanpa identityLocked): kode perusahaan readonly
             const codeInput = document.getElementById("f-code");
             if (codeInput) {
                 codeInput.readOnly = true;
@@ -469,6 +493,12 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
             orgSekretaris: document.getElementById("f-org-sekretaris")?.value?.trim() || "",
             orgBendahara: document.getElementById("f-org-bendahara")?.value?.trim() || ""
         };
+        // identityLocked: identitas (code/nama) dikelola Console — JANGAN
+        // dikirim ulang (perubahan apapun di form tsb tidak mungkin terjadi).
+        if (identityLocked) {
+            delete data.code;
+            delete data.name;
+        }
         try {
             if (isEdit && editId) { await updateCompany(editId, data); showToast("success", "Perusahaan berhasil diperbarui"); }
             else { await createCompany(data); showToast("success", "Perusahaan berhasil ditambahkan"); }
@@ -543,6 +573,7 @@ export function SettingsCompanyModule({ listCompanies, getCompany, createCompany
                     <div class="cv-field cv-span-2"><span class="cv-label">Alamat</span><span class="cv-value">${esc(item.address || "-")}</span></div>
                     <div class="cv-field"><span class="cv-label">Email</span><span class="cv-value">${esc(item.email || "-")}</span></div>
                     <div class="cv-field"><span class="cv-label">Telepon</span><span class="cv-value">${esc(item.phone || "-")}</span></div>
+
                 </div>
             </div>
 
@@ -633,6 +664,7 @@ function getStyles() { return `
 .form-group input, .form-group textarea, .form-group select { width:100%; padding:0.45rem 0.7rem; border:1px solid var(--smart-border,#d1d5db); border-radius:6px; font-size:0.85rem; outline:none; transition:border-color 0.2s; box-sizing:border-box; background:var(--smart-input-bg,#fff); color:var(--smart-text-primary,#1a1a2e); }
 .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color:var(--smart-primary,#4f46e5); box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
 .form-group textarea { resize:vertical; min-height:54px; }
+.field-hint { display:block; font-size:0.72rem; color:var(--smart-text-secondary,#9ca3af); margin-top:0.2rem; line-height:1.35; }
 .delete-confirm { text-align:center; padding:0.5rem 0; }
 .delete-confirm p { font-size:0.95rem; margin-bottom:1rem; color:var(--smart-text-secondary,#6b7280); }
 .delete-confirm .item-name { font-weight:600; color:var(--smart-text-primary,#1e293b); }

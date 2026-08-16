@@ -21,6 +21,7 @@ import { Barang } from "../models/Barang.js";
 import { ActivityLog } from "../models/ActivityLog.js";
 import { formatError } from "../utils/format-error.js";
 import { splitPosItemsByBehavior } from "../services/pos-transaction.js";
+import { adjustBarangStok } from "../services/barang-stok.js";
 
 const router = Router();
 
@@ -361,11 +362,12 @@ router.delete("/:id", async (req, res) => {
             const barangs = await fetchBehaviorBarangs(existing.companyCode, existing.items);
             const { trading } = splitPosItemsByBehavior(existing.items, barangs);
             for (const item of trading) {
-                await Barang.findOneAndUpdate(
-                    { companyCode: existing.companyCode, kode: item.kode },
-                    { $inc: { stok: -item.qty } }
-                ).catch(err => {
-                    console.warn(`[ReturPenjualan] Failed to reverse stock for ${item.kode}:`, err.message);
+                // M6.2-FIX v0.43 — SKU-aware reversal (kombinasi spesifik + agregat)
+                await adjustBarangStok({
+                    companyCode: existing.companyCode,
+                    item,
+                    delta: -item.qty,
+                    gudang: existing.gudang || ""
                 });
             }
         }
@@ -433,11 +435,12 @@ router.patch("/:id/status", async (req, res) => {
             const barangs = await fetchBehaviorBarangs(existing.companyCode, existing.items);
             const { trading } = splitPosItemsByBehavior(existing.items, barangs);
             for (const item of trading) {
-                await Barang.findOneAndUpdate(
-                    { companyCode: existing.companyCode, kode: item.kode },
-                    { $inc: { stok: item.qty } }
-                ).catch(err => {
-                    console.warn(`[ReturPenjualan] Failed to update stock for ${item.kode}:`, err.message);
+                // M6.2-FIX v0.43 — SKU-aware: stok kombinasi spesifik bertambah
+                await adjustBarangStok({
+                    companyCode: existing.companyCode,
+                    item,
+                    delta: item.qty,
+                    gudang: existing.gudang || ""
                 });
             }
         }

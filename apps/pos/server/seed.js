@@ -82,6 +82,10 @@ const ROLE_TEMPLATES = [
     { name: "supervisor", label: "Supervisor",      level: 10, description: "Mengawasi operasional gudang" },
     // SP-029 M3 — Kasir: layar kasir POS (hanya akses penjualan kasir)
     { name: "kasir",      label: "Kasir",            level: 20, description: "Kasir penjualan (POS)" },
+    // F&B V1 — Chef: kitchen display (lihat order + ubah status kitchen SAJA).
+    // TIDAK bisa: Company Settings, User Management, Role Management, Payment
+    // Settings, Bank Accounts, QRIS, Transaction Void, Financial Reports.
+    { name: "chef",       label: "Chef",             level: 25, description: "Dapur F&B — kitchen order (F&B)" },
     { name: "operator",   label: "Operator Gudang",  level: 30, description: "Operator gudang" },
     { name: "admin",      label: "Admin",            level: 70, description: "Mengelola sistem inventory" },
     { name: "owner",      label: "Owner",            level: 100,description: "Pemilik / Super Admin" }
@@ -95,9 +99,12 @@ const PERMISSION_TEMPLATES = {
     supervisor: ["inventory.dashboard.view", "inventory.barang.read", "inventory.supplier.read", "inventory.pembelian.read", "inventory.report.view"],
     // SP-029 M3 + PRD V1 — kasir: dashboard + layar kasir + katalog + customer +
     // riwayat transaksi (read) + shift (buka/tutup). TANPA akses ubah master.
-    kasir:      ["inventory.dashboard.view", "pos.kasir.use", "inventory.barang.read", "inventory.customer.read", "inventory.sales.read", "pos.shift.open", "pos.shift.close", "pos.transaction.hold"],
+    kasir:      ["inventory.dashboard.view", "pos.kasir.use", "inventory.barang.read", "inventory.customer.read", "inventory.sales.read", "pos.shift.open", "pos.shift.close", "pos.transaction.hold", "pos.order.view", "pos.order.confirm"],
+    // F&B V1 — Chef: hanya kitchen (view + update status). Tanpa dashboard
+    // (default page admin) — halaman kitchen dibuka via menu/route langsung.
+    chef:       ["pos.kitchen.view", "pos.kitchen.update"],
     operator:   ["inventory.barang.read", "inventory.barang.create", "inventory.pembelian.create", "inventory.stock.adjust"],
-    admin:      ["inventory.barang.update", "inventory.barang.create", "inventory.supplier.create", "inventory.supplier.update", "inventory.pembelian.approve", "inventory.stock.opname", "inventory.report.export", "pos.transaction.void", "pos.shift.open", "pos.shift.close", "pos.transaction.hold"],
+    admin:      ["inventory.barang.update", "inventory.barang.create", "inventory.supplier.create", "inventory.supplier.update", "inventory.pembelian.approve", "inventory.stock.opname", "inventory.report.export", "pos.transaction.void", "pos.shift.open", "pos.shift.close", "pos.transaction.hold", "pos.recipe.manage", "pos.qr.manage", "pos.order.view", "pos.order.confirm", "pos.kitchen.view", "pos.kitchen.update"],
     owner:      ["*"]
 };
 
@@ -312,6 +319,23 @@ export async function seedAll() {
     if (roleCount === 0) {
         await Role.insertMany(ROLE_TEMPLATES);
         counts.roles = ROLE_TEMPLATES.length;
+    } else {
+        // Idempotent-ADDITIVE: role bawaan baru (mis. chef F&B V1) ditambahkan
+        // ke DB yang sudah ada — seed lama hanya jalan saat DB kosong, sehingga
+        // DB live tidak punya role chef → Settings Roles/Permission & dropdown
+        // user tidak menampilkan chef (user chef tak bisa dibuat / kelola).
+        let added = 0;
+        for (const tpl of ROLE_TEMPLATES) {
+            const exists = await Role.findOne({ name: tpl.name }).select("_id").lean();
+            if (!exists) {
+                await Role.create(tpl);
+                added++;
+            }
+        }
+        if (added > 0) {
+            counts.roles = added;
+            console.log(`[Seed] Role bawaan ditambahkan (idempotent): ${added}`);
+        }
     }
 
     // Permissions: Create GLOBAL permissions

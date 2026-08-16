@@ -109,6 +109,8 @@ export function posDashboardCSS() {
 }
 .shift-summary-row strong { font-variant-numeric:tabular-nums; }
 .shift-summary-sub { padding-top:4px; border-top:1px dashed #cbd5e1; }
+.shift-summary-refund { color:#dc2626; font-weight:600; }
+.shift-summary-refund strong { color:#dc2626; }
 .shift-summary-expected { padding-top:6px; border-top:1px solid #cbd5e1; font-weight:700; }
 .shift-summary-expected strong { color:var(--smart-primary,#10b981); }
 .shift-selisih { margin-top:6px; font-size:13px; }

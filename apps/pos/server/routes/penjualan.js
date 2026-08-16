@@ -25,6 +25,9 @@ import { Warehouse } from "../models/Warehouse.js";
 import { ActivityLog } from "../models/ActivityLog.js";
 import { formatError } from "../utils/format-error.js";
 import { splitPosItemsByBehavior, normalizePosPayload, checkHoldResumeTransition, resolvePosCreateFlags, normalizeTipePelanggan } from "../services/pos-transaction.js";
+import { requireTransactionType } from "../services/transaction-capability.js";
+import { applyRecipeConsumption, revertRecipeConsumption } from "../services/recipe.js";
+import { adjustBarangStok } from "../services/barang-stok.js";
 import { security } from "../security.js";
 
 // PRD V1 — metode pembayaran POS yang didukung (extensible).
@@ -101,8 +104,13 @@ router.get("/:id", async (req, res) => {
 
 /**
  * POST / — Create sales order.
+ *
+ * SP-029 POS V1 — Transaction Capability: pembuatan transaksi penjualan
+ * adalah workflow capability "retail". Bila perusahaan tidak mengaktifkan
+ * "retail", request ditolak 403 (enforcement backend, bukan hanya UI).
+ * Default V1 (["retail"]) membuat perilaku existing tidak berubah.
  */
-router.post("/", async (req, res) => {
+router.post("/", requireTransactionType("retail"), async (req, res) => {
     try {
         const companyCode = req.headers["x-company-code"];
         if (!companyCode) {
@@ -162,10 +170,24 @@ router.post("/", async (req, res) => {
         // agar pengurangan stok deterministik (decrement dokumen yang diklik),
         // bukan dokumen arbitrer saat kode sama ada di beberapa gudang.
         const itemRefs = items.map(item => ({ kode: item.kode || "", id: item.id || null }));
-        const validatedItems = items.map(item => {
+        const validatedItems = items.map((item, idx) => {
             const qty = Number(item.qty) || 0;
             const harga = Number(item.harga) || 0;
             const diskonItem = Number(item.diskon) || 0;
+            const ref = itemRefs[idx];
+            // M6.2 — simpan referensi produk (Barang._id) utk lookup recipe F&B.
+            const productId = (ref && ref.id && mongoose.Types.ObjectId.isValid(String(ref.id)))
+                ? String(ref.id)
+                : "";
+            // M6.2-FIX v0.42 — simpan referensi VARIAN recipe F&B (Recipe._id)
+            // yang dipilih kasir (produk bisa punya beberapa varian aktif).
+            const recipeId = (item.recipeId && mongoose.Types.ObjectId.isValid(String(item.recipeId)))
+                ? String(item.recipeId)
+                : "";
+            // M6.2-FIX v0.43 — SKU varian yang dipilih kasir (kode + label),
+            // dipakai decrement/reversal stok kombinasi spesifik.
+            const skuKode = String(item.skuKode || "").trim();
+            const skuLabel = String(item.skuLabel || "").trim();
             return {
                 kode: item.kode || "",
                 nama: item.nama || "",
@@ -173,7 +195,13 @@ router.post("/", async (req, res) => {
                 qty,
                 harga,
                 diskon: diskonItem,
-                subtotal: Math.max(0, (qty * harga) - diskonItem)
+                subtotal: Math.max(0, (qty * harga) - diskonItem),
+                productId,
+                recipeId,
+                // M6.2-FIX v0.43 — SKU varian yang dipilih kasir (kode + label),
+                // dipakai decrement/reversal stok kombinasi spesifik.
+                skuKode,
+                skuLabel
             };
         });
 
@@ -256,25 +284,30 @@ router.post("/", async (req, res) => {
             for (const item of trading) {
                 const idx = validatedItems.indexOf(item);
                 const ref = idx >= 0 ? itemRefs[idx] : null;
-                // Prioritaskan decrement dokumen spesifik (id dari katalog kasir);
-                // fallback scoped ke gudang transaksi → stok tanpa gudang → kode.
-                const query = { companyCode };
-                if (ref && ref.id && mongoose.Types.ObjectId.isValid(String(ref.id))) {
-                    query._id = ref.id;
-                } else if (gudangNama) {
-                    const doc = await Barang.findOne({ companyCode, kode: item.kode, gudang: gudangNama }).select("_id").lean()
-                        || await Barang.findOne({ companyCode, kode: item.kode, gudang: "" }).select("_id").lean();
-                    if (doc) query._id = doc._id;
-                    else query.kode = item.kode;
-                } else {
-                    query.kode = item.kode;
-                }
-                await Barang.findOneAndUpdate(
-                    query,
-                    { $inc: { stok: -item.qty } }
-                ).catch(err => {
-                    console.warn(`[Penjualan] Failed to reduce stock for ${item.kode}:`, err.message);
+                // M6.2-FIX v0.43 — SKU-aware: item ber-skuKode meng-update stok
+                // kombinasi spesifik + sinkron agregat; tanpa SKU → $inc biasa.
+                await adjustBarangStok({
+                    companyCode,
+                    item,
+                    delta: -item.qty,
+                    gudang: gudangNama,
+                    id: (ref && ref.id) ? ref.id : null
                 });
+            }
+        }
+
+        // M6.2 — F&B Recipe/BOM consumption: produk ber-recipe aktif → stok
+        // ingredient dikurangi sesuai qty terjual (engine calculateRecipeConsumption,
+        // idempotent per saleId+productId). Produk tanpa recipe → Retail existing
+        // TIDAK berubah. Hold draft tidak mengonsumsi (belum ada penjualan).
+        if (flags.isPos && !isHold && validatedItems.length) {
+            try {
+                const userName = req.headers["x-user-name"] || "System";
+                await applyRecipeConsumption({ companyCode, sale: so, items: validatedItems, user: userName });
+            } catch (consumeErr) {
+                // Best effort (pola stock mutation existing): kegagalan konsumsi
+                // tidak menggagalkan transaksi — dicatat utk audit/penyelidikan.
+                console.warn("[Penjualan] Recipe consumption error (sale " + nomor + "):", consumeErr?.message);
             }
         }
 
@@ -333,20 +366,24 @@ router.post("/:id/void", security.permission("pos.transaction.void"), async (req
             : [];
         const { trading } = splitPosItemsByBehavior(existing.items, barangs);
         for (const item of trading) {
-            // Reversal scoped ke gudang transaksi (M3-FIX v21)
-            const q = { companyCode: existing.companyCode, kode: item.kode };
-            if (existing.gudang) {
-                const doc = await Barang.findOne({ ...q, gudang: existing.gudang }).select("_id").lean()
-                    || await Barang.findOne({ ...q, gudang: "" }).select("_id").lean();
-                if (doc) q._id = doc._id;
-                else delete q.gudang;
-            }
-            await Barang.findOneAndUpdate(
-                q,
-                { $inc: { stok: item.qty } }
-            ).catch(err => {
-                console.warn(`[Penjualan] Void: failed to reverse stock for ${item.kode}:`, err.message);
+            // M6.2-FIX v0.43 — SKU-aware reversal (kombinasi spesifik + agregat)
+            await adjustBarangStok({
+                companyCode: existing.companyCode,
+                item,
+                delta: item.qty,
+                gudang: existing.gudang || ""
             });
+        }
+
+        // M6.2 — F&B: kembalikan stok ingredient yang sudah dikonsumsi (reversal
+        // via service boundary). Aman karena void hanya dari status "paid" (gate
+        // existing) — transaksi tidak bisa di-void dua kali.
+        try {
+            await revertRecipeConsumption({ companyCode: existing.companyCode, sale: existing, user: userName });
+        } catch (revErr) {
+            // Best effort — void tetap selesai; konsumsi yang gagal di-reverse
+            // tercatat di RecipeConsumption (status applied) utk rekonsiliasi.
+            console.warn(`[Penjualan] Recipe consumption reversal error (${existing.nomor}):`, revErr?.message);
         }
 
         existing.status = "void";

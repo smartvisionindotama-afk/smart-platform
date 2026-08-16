@@ -48,7 +48,9 @@ describe("normalizeCompanyConfig — konfigurasi produk dari Master Platform (M2
             jumlahGudang: 1,
             jumlahKasir: 1,
             lisensiStatus: "active",
-            lisensiExpiresAt: null
+            lisensiExpiresAt: null,
+            // SP-029 POS V1 — company lama tanpa transactionTypes → default V1
+            transactionTypes: ["retail"]
         });
     });
 
@@ -59,14 +61,16 @@ describe("normalizeCompanyConfig — konfigurasi produk dari Master Platform (M2
             jumlahGudang: 3,
             jumlahKasir: 4,
             lisensiStatus: "trial",
-            lisensiExpiresAt: "2026-12-31T00:00:00.000Z"
+            lisensiExpiresAt: "2026-12-31T00:00:00.000Z",
+            transactionTypes: ["retail", "fnb"]
         })).toEqual({
             businessType: "Cafe",
             lokasiMode: "multi",
             jumlahGudang: 3,
             jumlahKasir: 4,
             lisensiStatus: "trial",
-            lisensiExpiresAt: "2026-12-31T00:00:00.000Z"
+            lisensiExpiresAt: "2026-12-31T00:00:00.000Z",
+            transactionTypes: ["retail", "fnb"]
         });
     });
 
@@ -90,7 +94,8 @@ describe("normalizeCompanyConfig — konfigurasi produk dari Master Platform (M2
             jumlahGudang: 1,
             jumlahKasir: 1,
             lisensiStatus: "active",
-            lisensiExpiresAt: null
+            lisensiExpiresAt: null,
+            transactionTypes: ["retail"]
         });
     });
 

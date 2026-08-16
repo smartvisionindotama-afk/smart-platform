@@ -144,6 +144,8 @@ async function createBarangLocal(data) {
         stok_minimum: Number(data.stok_minimum) || 0,
         // SP-029 M3 — tipe barang & foto (opsional)
         behavior: data.behavior || "trading",
+        // M6.2-FIX v0.40 — Dijual/Tidak Dijual (default true — backward compat)
+        dijual: data.dijual !== false,
         foto: data.foto || "",
         deskripsi: data.deskripsi || "",
         active: data.active !== false,
@@ -188,6 +190,7 @@ async function updateBarangLocal(id, data) {
         stok: data.stok !== undefined ? Number(data.stok) : items[index].stok,
         stok_minimum: data.stok_minimum !== undefined ? Number(data.stok_minimum) : items[index].stok_minimum,
         behavior: data.behavior !== undefined ? data.behavior : (items[index].behavior || "trading"),
+        dijual: data.dijual !== undefined ? data.dijual !== false : (items[index].dijual !== false),
         foto: data.foto !== undefined ? data.foto : (items[index].foto || ""),
         deskripsi: data.deskripsi !== undefined ? data.deskripsi : items[index].deskripsi,
         active: data.active !== undefined ? data.active : items[index].active,
@@ -297,12 +300,17 @@ export async function deleteBarang(id) {
  * Returns { exists, nama, id } — real-time lookup for form validation.
  *
  * @param {string} kode
+ * @param {string} [gudang] Scope per gudang — kode sama di gudang beda dianggap valid
+ * @param {string} [excludeId] ID barang yang sedang diedit (di-exclude dari pengecekan)
  * @returns {Promise<{exists: boolean, nama?: string, id?: string}>}
  */
-export async function checkKodeExists(kode, gudang) {
+export async function checkKodeExists(kode, gudang, excludeId) {
     try {
         let url = `/barang/check-kode/${encodeURIComponent(kode)}`;
-        if (gudang) url += `?gudang=${encodeURIComponent(gudang)}`;
+        const params = [];
+        if (gudang) params.push(`gudang=${encodeURIComponent(gudang)}`);
+        if (excludeId) params.push(`excludeId=${encodeURIComponent(excludeId)}`);
+        if (params.length) url += `?${params.join("&")}`;
         const result = await apiCall("GET", url);
         if (result !== null) return result;
     } catch (err) {
@@ -312,11 +320,16 @@ export async function checkKodeExists(kode, gudang) {
     // Seed data (companyCode kosong) tetap ketemu via (!i.companyCode)
     // Parameter companyCode null = tanpa konteks tenant → semua item ketemu via (!companyCode)
     const companyCode = currentCompanyCode();
-    const local = items.find(i =>
-        i.kode === kode &&
-        (!companyCode || !i.companyCode || i.companyCode === companyCode) &&
-        (!gudang || i.gudang === gudang) // scope ke gudang — kode sama di gudang beda dianggap valid
-    );
+    const local = items.find(i => {
+        if (i.kode !== kode) return false;
+        if (companyCode && i.companyCode && i.companyCode !== companyCode) return false;
+        if (excludeId && String(i.id) === String(excludeId)) return false; // item yang diedit
+        // Scope ke gudang — kode sama di gudang beda dianggap valid; gudang
+        // kosong = bucket sendiri (item tanpa gudang ikut cocok).
+        const itemGudang = i.gudang || "";
+        if (gudang) return itemGudang === gudang;
+        return itemGudang === "";
+    });
     if (local) {
         console.warn(`[checkKodeExists] Found local duplicate: ${local.kode} — ${local.nama} (gudang: ${local.gudang})`);
     }

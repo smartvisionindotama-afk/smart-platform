@@ -8,7 +8,7 @@
  */
 
 import { Modal, Table, Pagination, EmptyState, Alert, Skeleton, showToast, UI } from "@smart/ui";
-import { esc } from "@smart/core";
+import { esc, formatThousand, unformatThousand } from "@smart/core";
 
 /**
  * Create a Barang management module.
@@ -27,9 +27,24 @@ import { esc } from "@smart/core";
  * @param {Function} services.createSatuan
  * @param {Function} services.createRak
  * @param {Function} services.formatRupiah
+ * @param {Object} [options] Opsi modul (additive, backward compatible)
+ * @param {string[]} [options.behaviorOptions] Daftar behavior yang ditampilkan
+ *   di field "Tipe Barang". Default: semua (trading/service/recipe/recipe-fnb)
+ *   — dipakai POS. App yang tidak memakai resep (mis. inventory: hanya
+ *   barang dagangan & jasa/ongkir) mengirim subset: ["trading", "service"].
+ * @param {boolean} [options.showDijual] Tampilkan field/kolom "Dijual /
+ *   Tidak Dijual" (M6.2 — ingredient resep F&B). Hanya POS yang mengirim
+ *   true saat company mengaktifkan F&B; app lain (inventory) default false.
+ * @param {string[]} [options.varianBehaviorOptions] Daftar tipe barang yang
+ *   mendukung VARIAN produk marketplace SKU (M6.2-FIX v0.43). Default
+ *   ["trading","recipe"] (POS: Barang Dagangan & Resep simple). Inventory
+ *   mengirim ["trading","service"] (Barang Dagangan & Jasa).
+ * @param {string} [options.varianSwitchColor] Warna track toggle varian
+ *   (hex). Default hijau tua "#15803d" (POS). Inventory mengirim ungu
+ *   "#982deb" (selaras theme ungu inv.e-profit.id).
  * @returns {{ BarangPage: Function, initBarangPage: Function }}
  */
-export function BarangModule(services) {
+export function BarangModule(services, options = {}) {
     const {
         listBarang, getBarang, createBarang, updateBarang, deleteBarang,
         listKategori, listSatuan, listRak, listWarehouse,
@@ -40,8 +55,31 @@ export function BarangModule(services) {
     // ── State ──
     const state = {
         items: [], page: 1, limit: 10, total: 0, totalPages: 1,
-        search: "", loading: false, formMode: null, editingId: null, deletingId: null
+        search: "", loading: false, formMode: null, editingId: null, deletingId: null,
+        // Tipe barang yang ditampilkan di form (SP-029 M3 / M6.2-FIX).
+        // Default semua — app tertentu (inventory) memakai subset via options.
+        behaviorOptions: Array.isArray(options.behaviorOptions) && options.behaviorOptions.length
+            ? [...options.behaviorOptions]
+            : ["trading", "service", "recipe", "recipe-fnb"],
+        // M6.2-FIX v0.40 — kolom "Dijual / Tidak Dijual" (hanya saat F&B aktif)
+        showDijual: Boolean(options.showDijual),
+        // M6.2-FIX v0.43 — tipe yang mendukung VARIAN marketplace SKU
+        // (POS: trading & resep simple; Inventory: trading & jasa)
+        varianBehaviorOptions: Array.isArray(options.varianBehaviorOptions) && options.varianBehaviorOptions.length
+            ? [...options.varianBehaviorOptions]
+            : ["trading", "recipe"],
+        // Warna track toggle varian (POS: hijau tua; Inventory: ungu theme)
+        varianSwitchColor: String(options.varianSwitchColor || "#15803d")
     };
+
+    // Katalog Tipe Barang — label konsisten (dipakai form & detail modal).
+    const BEHAVIOR_LABELS = {
+        trading: "Barang Dagangan",
+        service: "Jasa / Service",
+        recipe: "Resep / Menu (Tanpa Stok — simple)",
+        "recipe-fnb": "Resep / Menu (Terhubung Recipe F&B)"
+    };
+    const NON_TRADING_BEHAVIORS = ["service", "recipe", "recipe-fnb"];
 
     // ── Cached Data ──
     let _rakData = [];
@@ -51,6 +89,15 @@ export function BarangModule(services) {
 
     // Foto produk (data URI hasil kompresi client-side) — SP-029 M3-FIX
     let _fotoDataUri = "";
+
+    // M6.2-FIX v0.43 — VARIAN PRODUK (marketplace SKU): dimensi + kombinasi.
+    // _varianDefs: [{ nama, nilai[] }] dari input form; _existingSkus: daftar
+    // SKU lama (edit) utk prefill harga/stok per kombinasi; _skuFotos: data
+    // URI foto per kombinasi (label → foto) — bertahan saat tabel di-render
+    // ulang (mis. dimensi berubah) dan disimpan ke skus[].foto saat submit.
+    let _varianDefs = [];
+    let _existingSkus = [];
+    let _skuFotos = {};
 
     // ── Page Shell ──
 
@@ -162,11 +209,17 @@ export function BarangModule(services) {
                 render: (val, row) => val
                     ? `<img class="brg-thumb" src="${esc(val)}" alt="${esc(row.nama)}" loading="lazy" onerror="this.style.display='none'" />`
                     : `<span class="brg-thumb-empty">—</span>` },
-            { key: "nama", label: "Nama Barang", render: (val, row) => `${esc(val)}${row?.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${row?.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}` },
+            { key: "nama", label: "Nama Barang", render: (val, row) => `${esc(val)}${row?.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${row?.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}${row?.behavior === "recipe-fnb" ? " <span class=\"badge-recipe-fnb\">Resep F&B</span>" : ""}${varianBadgeHTML(row)}` },
             { key: "kategori", label: "Kategori", width: "140px" },
             { key: "satuan", label: "Satuan", width: "85px", align: "center" },
             { key: "rak", label: "Rak/Etalase", width: "100px" },
             { key: "gudang", label: "Gudang", width: "100px" },
+            ...(state.showDijual
+                ? [{ key: "dijual", label: "Dijual", width: "100px", align: "center",
+                    render: (val) => val === false
+                        ? `<span class="badge-tidak-dijual">Tidak Dijual</span>`
+                        : `<span class="badge-dijual">Dijual</span>` }]
+                : []),
             { key: "harga_beli", label: "Harga Beli", width: "130px", align: "right",
                 render: (val) => `<span style="font-weight:500;color:#6b7280">${formatRupiah(val)}</span>` },
             { key: "harga_jual", label: "Harga Jual", width: "130px", align: "right",
@@ -190,7 +243,7 @@ export function BarangModule(services) {
                 : "";
             return `
                 ${imgBlock}
-                <div class="sm-card-name">${esc(item.nama)}${item.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${item.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}</div>
+                <div class="sm-card-name">${esc(item.nama)}${item.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${item.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}${item.behavior === "recipe-fnb" ? " <span class=\"badge-recipe-fnb\">Resep F&B</span>" : ""}${varianBadgeHTML(item)}${state.showDijual ? (item.dijual === false ? " <span class=\"badge-tidak-dijual\">Tidak Dijual</span>" : " <span class=\"badge-dijual\">Dijual</span>") : ""}</div>
                 <div class="card-body">
                     <div class="card-row">
                         <span class="card-label">Gudang</span>
@@ -226,8 +279,9 @@ export function BarangModule(services) {
             <div class="detail-grid">
                 ${item.foto ? `<div class="detail-row detail-row-full"><span class="detail-label">Foto</span><span class="detail-value"><img class="brg-thumb brg-thumb-lg" src="${esc(item.foto)}" alt="${esc(item.nama)}" /></span></div>` : ""}
                 ${renderDetailRow("Kode", esc(item.kode))}
-                ${renderDetailRow("Nama Barang", `${esc(item.nama)}${item.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${item.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}`)}
-                ${renderDetailRow("Tipe", item.behavior === "service" ? "Jasa / Service" : (item.behavior === "recipe" ? "Resep / Menu (V1: tanpa stok)" : "Barang Dagangan"))}
+                ${renderDetailRow("Nama Barang", `${esc(item.nama)}${item.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${item.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}${item.behavior === "recipe-fnb" ? " <span class=\"badge-recipe-fnb\">Resep F&B</span>" : ""}${varianBadgeHTML(item)}`)}
+                ${renderDetailRow("Tipe", BEHAVIOR_LABELS[item.behavior] || "Barang Dagangan")}
+                ${state.showDijual ? renderDetailRow("Dijual", item.dijual === false ? "<span class=\"badge-tidak-dijual\">Tidak Dijual</span>" : "<span class=\"badge-dijual\">Dijual</span>") : ""}
                 ${renderDetailRow("Kategori", esc(item.kategori || "—"))}
                 ${renderDetailRow("Satuan", esc(item.satuan || "—"))}
                 ${renderDetailRow("Rak/Etalase", esc(item.rak || "—"))}
@@ -251,6 +305,14 @@ export function BarangModule(services) {
         overlay.querySelector(".smart-modal-close")?.addEventListener("click", removeModal);
     }
 
+    /** Badge jumlah SKU varian (M6.2-FIX v0.43) — kosong utk barang tanpa varian. */
+    function varianBadgeHTML(row) {
+        const skus = Array.isArray(row?.skus) && row.skus.length ? row.skus : [];
+        if (!skus.length) return "";
+        const totalStok = skus.reduce((s, x) => s + (Number(x.stok) || 0), 0);
+        return ` <span class="badge-varian" title="${skus.length} SKU · total stok ${totalStok}">${skus.length} Varian</span>`;
+    }
+
     function renderDetailRow(label, valueHTML, extraStyle) {
         return `<div class="detail-row"><span class="detail-label">${label}</span><span class="detail-value" style="${extraStyle || ""}">${valueHTML}</span></div>`;
     }
@@ -272,11 +334,11 @@ export function BarangModule(services) {
         // SP-029 M3-FIX — foto produk: direset dulu, lalu diisi ulang dari data
         // item saat edit (agar foto lama TIDAK terhapus bila tidak diubah).
         _fotoDataUri = "";
-        let formData = { kode: "", nama: "", behavior: "trading", kategori: "", satuan: "", rak: "", gudang: "", harga_beli: "", harga_jual: "", harga_khusus: "", stok: "", stok_minimum: "", deskripsi: "", foto: "" };
+        let formData = { kode: "", nama: "", behavior: "trading", kategori: "", satuan: "", rak: "", gudang: "", dijual: true, harga_beli: "", harga_jual: "", harga_khusus: "", stok: "", stok_minimum: "", deskripsi: "", foto: "", varianDef: [], skus: [] };
         if (isEdit && id) {
             try {
                 const item = await getBarang(id);
-                if (item) formData = { kode: item.kode, nama: item.nama, behavior: item.behavior || "trading", kategori: item.kategori, satuan: item.satuan, rak: item.rak || "", gudang: item.gudang || "", harga_beli: item.harga_beli, harga_jual: item.harga_jual, harga_khusus: item.harga_khusus || 0, stok: item.stok, stok_minimum: item.stok_minimum, deskripsi: item.deskripsi, foto: item.foto || "" };
+                if (item) formData = { kode: item.kode, nama: item.nama, behavior: item.behavior || "trading", kategori: item.kategori, satuan: item.satuan, rak: item.rak || "", gudang: item.gudang || "", dijual: item.dijual !== false, harga_beli: item.harga_beli, harga_jual: item.harga_jual, harga_khusus: item.harga_khusus || 0, stok: item.stok, stok_minimum: item.stok_minimum, deskripsi: item.deskripsi, foto: item.foto || "", varianDef: Array.isArray(item.varianDef) ? item.varianDef : [], skus: Array.isArray(item.skus) ? item.skus : [] };
             } catch { showToast("danger", "Gagal memuat data"); return; }
         }
         // Foto lama dipertahankan sebagai baseline — bila user tidak mengubahnya,
@@ -300,6 +362,8 @@ export function BarangModule(services) {
 
         const modalContent = buildFormHTML(formData, { kategoriOptions, satuanOptions, rakOptions, gudangOptions });
         renderModal(title, modalContent, isEdit, id);
+        // M6.2-FIX v0.43 — inisialisasi section VARIAN (radio + builder + SKU)
+        initVarianSection(formData);
     }
 
     function buildFormHTML(data, opts) {
@@ -323,10 +387,12 @@ export function BarangModule(services) {
                 </div>
             </div>
             <div class="form-grid">
-                <!-- Gudang di PALING ATAS form (keputusan user — pilihan gudang
-                     utama saat tambah barang; tetap tersembunyi utk Jasa/Resep) -->
-                <div class="form-group" id="f-gudang-field" style="${data.behavior === "service" ? "display:none" : ""}">
-                    <label for="f-gudang">Gudang <span class="required">*</span></label>
+                <!-- Gudang di PALING ATAS form — M6.2-FIX v0.40: pilihan gudang
+                     SELALU tampil utk semua tipe barang (trading, jasa, resep
+                     simple & F&B). Rak/Etalase tetap model sebelumnya (hidden
+                     utk non-trading). -->
+                <div class="form-group" id="f-gudang-field">
+                    <label for="f-gudang">Gudang <small class="cn-muted">(wajib utk Barang Dagangan)</small></label>
                     <select id="f-gudang"><option value="">— Pilih Gudang —</option>${gudangOptions.map(g => `<option value="${g}" ${data.gudang === g ? "selected" : ""}>${g}</option>`).join("")}</select>
                 </div>
                 <div class="form-group">
@@ -344,11 +410,12 @@ export function BarangModule(services) {
                 <div class="form-group">
                     <label for="f-behavior">Tipe Barang</label>
                     <select id="f-behavior">
-                        <option value="trading" ${data.behavior === "service" || data.behavior === "recipe" ? "" : "selected"}>Barang Dagangan</option>
-                        <option value="service" ${data.behavior === "service" ? "selected" : ""}>Jasa / Service</option>
-                        <option value="recipe" ${data.behavior === "recipe" ? "selected" : ""}>Resep / Menu (V1: tanpa stok)</option>
+                        ${state.behaviorOptions.map(v => `<option value="${v}" ${data.behavior === v || (!data.behavior && v === "trading") ? "selected" : ""}>${BEHAVIOR_LABELS[v] || v}</option>`).join("")}
+                        ${data.behavior && !state.behaviorOptions.includes(data.behavior) ? `<option value="${data.behavior}" selected>${BEHAVIOR_LABELS[data.behavior] || data.behavior} (tipe saat ini)</option>` : ""}
                     </select>
-                    <small>Jasa & Resep tidak memakai stok/gudang (V1); resep = fondasi engine BOM V2</small>
+                    <small>${state.behaviorOptions.includes("recipe") || state.behaviorOptions.includes("recipe-fnb")
+                        ? "Resep Tanpa Stok = model simple (penyesuaian stok via stok opname). Resep Terhubung Recipe F&B = bahan dikonsumsi realtime saat terjual (Master → Recipe F&B)."
+                        : "Jasa tidak memakai stok/gudang."}</small>
                 </div>
                 <div class="form-group">
                     <label for="f-kategori">Kategori</label>
@@ -358,16 +425,28 @@ export function BarangModule(services) {
                     <label for="f-satuan">Satuan</label>
                     <select id="f-satuan">${renderOpts(satuanOptions, data.satuan, "__add_satuan__", "➕ Tambah Satuan")}</select>
                 </div>
-                <div class="form-group">
+                ${state.showDijual ? `
+                <div class="form-group" id="f-dijual-field">
+                    <label for="f-dijual">Dijual di Kasir</label>
+                    <select id="f-dijual">
+                        <option value="1" ${data.dijual !== false ? "selected" : ""}>Dijual</option>
+                        <option value="0" ${data.dijual === false ? "selected" : ""}>Tidak Dijual</option>
+                    </select>
+                    <small>Tidak Dijual = hanya bahan resep F&B (tidak tampil di kasir).</small>
+                </div>
+                ` : ""}
+                <div class="form-group" id="f-rak-field" style="${NON_TRADING_BEHAVIORS.includes(data.behavior) ? "display:none" : ""}">
                     <label for="f-rak">Rak / Etalase</label>
                     <select id="f-rak">${renderOpts(rakOptions, data.rak, "__add_rak__", "➕ Tambah Rak")}</select>
                 </div>
-                <div class="form-grid" id="f-trading-fields" style="${data.behavior === "service" ? "display:none" : ""}">
+                <div class="form-grid" id="f-trading-fields" style="${NON_TRADING_BEHAVIORS.includes(data.behavior) ? "display:none" : ""}">
                     <div class="form-group">
                         <label for="f-harga-beli">Harga Beli</label>
                         <input type="number" id="f-harga-beli" value="${data.harga_beli}" placeholder="0" min="0" />
                     </div>
-                    <div class="form-group">
+                    <!-- f-stok-field: disembunyikan saat VARIAN AKTIF (stok awal
+                         di-handle per SKU; stok utama = Σ stok SKU oleh server) -->
+                    <div class="form-group" id="f-stok-field">
                         <label for="f-stok">Stok Awal</label>
                         <input type="number" id="f-stok" value="${data.stok}" placeholder="0" min="0" />
                     </div>
@@ -376,14 +455,53 @@ export function BarangModule(services) {
                         <input type="number" id="f-stok-minimum" value="${data.stok_minimum}" placeholder="0" min="0" />
                     </div>
                 </div>
-                <div class="form-group">
+                <!-- M6.2-FIX v0.43 — VARIAN PRODUK (marketplace SKU): toggle
+                     geser (kiri = tanpa varian, kanan = dengan varian) +
+                     builder dimensi + tabel kombinasi (label di kiri tiap
+                     field + foto per SKU). Hanya utk Barang Dagangan & Resep
+                     simple (resep F&B punya varian sendiri via Recipe F&B).
+                     CSS varian di-inject DI DALAM modal (modal di-append ke
+                     document.body — style scoped .barang-page tidak sampai). -->
+                <style>${getVarianStyles()}</style>
+                <div class="form-group full-width" id="f-varian-field" style="display:none">
+                    <div class="varian-toggle">
+                        <!-- M6.2-FIX v0.43 — toggle mandiri (pola Bootstrap form-switch
+                             dari biaya-module.js, TANPA komponen @smart/ui Switch):
+                             checkbox + track hijau tua + knob putih; knob digerakkan
+                             via JS (inline style) → tidak bergantung CSS framework,
+                             dijamin tampil di semua browser. Judul "Varian Produk"
+                             di KANAN toggle; toggle pendek (44px). -->
+                        <label class="varian-switch" style="position:relative;display:inline-block;width:44px;height:20px;cursor:pointer;margin:0;flex-shrink:0;">
+                            <input type="checkbox" name="f-varian-mode" ${Array.isArray(data.varianDef) && data.varianDef.length ? "checked" : ""} style="opacity:0;position:absolute;width:0;height:0;" />
+                            <span class="varian-switch-track" style="position:absolute;inset:0;background:${state.varianSwitchColor};border-radius:10px;transition:background .2s ease;">
+                                <span class="varian-switch-knob" style="position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:transform .2s ease;"></span>
+                            </span>
+                        </label>
+                        <span style="font-size:0.85rem;font-weight:600;color:#1a1a2e;">Varian Produk</span>
+                    </div>
+                    <div id="f-varian-builder" style="display:none">
+                        <p class="cn-muted" style="margin:6px 0 8px">Definisikan dimensi varian — mis. <strong>Ukuran</strong> (S, M, L) atau <strong>Topping</strong> (Coklat, Keju). Tiap kombinasi nilai otomatis menjadi 1 SKU dengan harga, stok &amp; foto sendiri.</p>
+                        <div id="f-varian-defs"></div>
+                        <button type="button" class="foto-btn" id="f-varian-add-dim">➕ Tambah Dimensi</button>
+                        <div id="f-varian-skus-wrap" style="display:none">
+                            <div class="varian-sku-head">Kombinasi (SKU)</div>
+                            <p class="cn-muted" style="margin:0 0 6px;font-size:0.75rem">Harga = pelanggan umum · Harga Khusus = member/pelanggan terdaftar (dipakai kasir bila &gt; 0).</p>
+                            <div id="f-varian-skus"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- f-harga-jual-field & f-harga-khusus-field: disembunyikan saat
+                     VARIAN AKTIF — harga global diganti harga per SKU (Harga =
+                     umum, Harga Khusus = member). Nonaktif = tetap seperti dulu. -->
+                <div class="form-group" id="f-harga-jual-field">
                     <label for="f-harga-jual">Harga Jual</label>
                     <input type="number" id="f-harga-jual" value="${data.harga_jual}" placeholder="0" min="0" />
+                    <small>Pelanggan umum</small>
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="f-harga-khusus-field">
                     <label for="f-harga-khusus">Harga Khusus (multi price)</label>
                     <input type="number" id="f-harga-khusus" value="${data.harga_khusus}" placeholder="0 (kosong = pakai harga jual)" min="0" />
-                    <small>Dipakai layar kasir bila > 0 (PRD V1, multi price minimal)</small>
+                    <small>Dipakai layar kasir bila > 0 (PRD V1, multi price minimal) — untuk member/pelanggan</small>
                 </div>
                 <div class="form-group full-width">
                     <label for="f-foto">Foto Produk</label>
@@ -412,6 +530,356 @@ export function BarangModule(services) {
         return `<option value="">— Pilih —</option>
             ${options.map(v => `<option value="${v}" ${selected === v ? "selected" : ""}>${v}</option>`).join("")}
             <option value="${addVal}" style="color:#4f46e5;font-weight:500">${addText}</option>`;
+    }
+
+    // ── VARIAN PRODUK (M6.2-FIX v0.43) — builder dimensi + kombinasi SKU ──
+
+    /** Tipe barang yang mendukung varian marketplace SKU (per app). */
+    function varianSupported(behavior) {
+        return state.varianBehaviorOptions.includes(behavior);
+    }
+
+    /**
+     * Tampilkan/sembunyikan builder varian (switch geser Tanpa/Dengan Varian).
+     * Saat AKTIF → harga & stok di-handle per SKU: sembunyikan field global
+     * (Harga Jual / Harga Khusus / Stok Awal). Nonaktif → kembali seperti dulu.
+     */
+    function toggleVarianBuilder(on) {
+        const builder = document.getElementById("f-varian-builder");
+        if (builder) builder.style.display = on ? "block" : "none";
+        if (!on) _skuFotos = {};
+        if (on) renderVarianDefs();
+        syncVarianGlobalFields(on);
+    }
+
+    /**
+     * Sembunyikan/tampilkan field global yang digantikan harga/stok per SKU
+     * saat varian AKTIF (M6.2-FIX): Harga Jual (umum), Harga Khusus (member)
+     * & Stok Awal — nilainya diatur per kombinasi SKU di tabel varian.
+     * @param {boolean} on varian aktif?
+     */
+    function syncVarianGlobalFields(on) {
+        ["f-harga-jual-field", "f-harga-khusus-field", "f-stok-field"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = on ? "none" : "";
+        });
+    }
+
+    /**
+     * CSS section VARIAN — di-inject DI DALAM konten modal (modal di-append
+     * ke document.body, di luar #barang-page → style scoped .barang-page
+     * tidak menjangkau isi modal; pola sama dgn modalStyles v28f).
+     * Switch: hijau (#10b981) saat on, lebih panjang (96px ≈ lebar judul
+     * "Varian Produk") agar kontras dgn background.
+     */
+    function getVarianStyles() {
+        return `
+            #f-varian-field .varian-toggle { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.5rem; }
+            #f-varian-field .varian-dim-row { display:flex; gap:0.5rem; margin-bottom:0.5rem; align-items:center; }
+            #f-varian-field .varian-dim-row input { flex:1; min-width:0; }
+            #f-varian-field .varian-dim-remove {
+                flex-shrink:0; width:34px; height:34px; border:1px solid #fecaca; border-radius:6px;
+                background:#fef2f2; color:#dc2626; cursor:pointer; font-size:0.9rem;
+            }
+            #f-varian-field .varian-sku-head {
+                margin-top:12px; margin-bottom:6px; font-size:0.85rem; font-weight:600; color:#1a1a2e;
+            }
+            #f-varian-field .varian-sku-row {
+                margin-bottom:0.6rem; padding:0.6rem 0.7rem;
+                border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc;
+            }
+            /* Baris 1: nama + foto SKU; Baris 2: Kode SKU/Harga/Stok selebar modal */
+            #f-varian-field .varian-sku-top {
+                display:flex; align-items:center; justify-content:flex-start;
+                gap:8px; margin-bottom:0.6rem; min-width:0;
+            }
+            #f-varian-field .varian-sku-label {
+                font-size:0.85rem; font-weight:600; color:#1a1a2e;
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+            }
+            #f-varian-field .varian-sku-fields {
+                /* Kolom harga dibagi 2 @50%: Harga (umum) + Harga Khusus (member),
+                   di samping Kode SKU & Stok — M6.2-FIX */
+                display:grid; grid-template-columns:1.5fr 1fr 1fr 1fr;
+                gap:0.6rem; width:100%;
+            }
+            /* Harga, Harga Khusus & Stok: angka rata kanan (format ribuan id-ID) */
+            #f-varian-field .varian-sku-harga, #f-varian-field .varian-sku-harga-khusus, #f-varian-field .varian-sku-stok { text-align:right; }
+            #f-varian-field .varian-sku-foto-cell { position:relative; display:flex; align-items:center; flex-shrink:0; }
+            #f-varian-field .varian-sku-foto-btn {
+                width:38px; height:38px; border:1px dashed #cbd5e1; border-radius:8px;
+                background:#fff; cursor:pointer; overflow:hidden;
+                display:flex; align-items:center; justify-content:center; font-size:0.9rem;
+            }
+            #f-varian-field .varian-sku-foto-btn img { width:100%; height:100%; object-fit:cover; }
+            #f-varian-field .varian-sku-foto-clear {
+                position:absolute; top:-6px; right:-6px; width:16px; height:16px; border-radius:50%;
+                background:#dc2626; color:#fff; font-size:0.6rem; line-height:1; cursor:pointer;
+                border:none; display:flex; align-items:center; justify-content:center;
+            }
+            #f-varian-field .varian-field { display:flex; align-items:center; gap:12px; min-width:0; }
+            #f-varian-field .varian-field label {
+                flex-shrink:0; font-size:0.72rem; font-weight:600; color:#64748b; width:52px;
+                text-align:right; /* label rata kanan — jarak konsisten ke input */
+            }
+            #f-varian-field .varian-field input {
+                flex:1; min-width:0; padding:0.45rem 0.55rem;
+                border:1px solid #d1d5db; border-radius:6px; font-size:0.85rem; outline:none;
+                background:#fff; color:#1a1a2e;
+            }
+            #f-varian-field .varian-field input:focus {
+                border-color:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,0.1);
+            }
+            /* Responsif HP/tablet — baris field SKU menumpuk 1 kolom selebar modal,
+               mengikuti pola .smart-modal-body .form-grid (field lain di modal ini
+               juga turun ke 1 kolom di layar kecil): tiap field = label di atas
+               input, bukan lagi 3 kolom mepet seperti desktop. */
+            @media (max-width:1024px) {
+                #f-varian-field .varian-sku-fields { grid-template-columns:1fr; }
+                #f-varian-field .varian-field {
+                    display:block;
+                }
+                #f-varian-field .varian-field label {
+                    display:block; width:auto; text-align:left; font-size:0.8rem;
+                    margin-bottom:0.3rem;
+                }
+                #f-varian-field .varian-field input {
+                    width:100%; box-sizing:border-box;
+                }
+            }
+        `;
+    }
+
+    /** Sinkronkan visibility section varian dengan tipe barang terpilih. */
+    function syncVarianVisibility(behavior) {
+        const field = document.getElementById("f-varian-field");
+        if (!field) return;
+        const supported = varianSupported(behavior);
+        field.style.display = supported ? "" : "none";
+        if (!supported) {
+            const sw = document.querySelector('input[name="f-varian-mode"]');
+            if (sw) sw.checked = false;
+            toggleVarianBuilder(false);
+            syncVarianKnob();
+        }
+    }
+
+    /** Render baris dimensi (nama + nilai dipisah koma) dari _varianDefs. */
+    function renderVarianDefs() {
+        const wrap = document.getElementById("f-varian-defs");
+        if (!wrap) return;
+        if (!_varianDefs.length) _varianDefs.push({ nama: "", nilai: [] });
+        wrap.innerHTML = _varianDefs.map((d, i) => `
+            <div class="varian-dim-row" data-idx="${i}">
+                <input type="text" class="varian-dim-nama" value="${esc(d.nama || "")}" placeholder="Nama dimensi (mis. Ukuran)" />
+                <input type="text" class="varian-dim-nilai" value="${esc((d.nilai || []).join(", "))}" placeholder="Nilai, pisahkan koma (mis. S, M, L)" />
+                <button type="button" class="varian-dim-remove" data-idx="${i}" title="Hapus dimensi">🗑</button>
+            </div>
+        `).join("");
+        wrap.querySelectorAll(".varian-dim-nama").forEach((inp, i) => {
+            inp.addEventListener("input", () => { _varianDefs[i].nama = inp.value; renderVarianSkus(); });
+        });
+        wrap.querySelectorAll(".varian-dim-nilai").forEach((inp, i) => {
+            inp.addEventListener("input", () => {
+                _varianDefs[i].nilai = inp.value.split(",").map(s => s.trim()).filter(Boolean);
+                renderVarianSkus();
+            });
+        });
+        wrap.querySelectorAll(".varian-dim-remove").forEach(btn => {
+            btn.addEventListener("click", () => {
+                _varianDefs.splice(Number(btn.dataset.idx), 1);
+                if (!_varianDefs.length) _varianDefs.push({ nama: "", nilai: [] });
+                renderVarianDefs();
+            });
+        });
+        renderVarianSkus();
+    }
+
+    /** Produk kartesian nilai seluruh dimensi → array kombinasi. */
+    function varianCombinations(defs) {
+        const valid = (defs || [])
+            .filter(d => String(d.nama || "").trim() && (d.nilai || []).length);
+        if (!valid.length) return [];
+        return valid.reduce((acc, d) => {
+            const next = [];
+            acc.forEach(combo => d.nilai.forEach(v => next.push([...combo, v])));
+            return next;
+        }, [[]]);
+    }
+
+    /**
+     * Render tabel kombinasi (SKU) — 1 baris per kombinasi, tiap field
+     * (Kode SKU · Harga · Stok) berlabel di KIRI input (bukan placeholder),
+     * plus foto per SKU opsional. Prefill dari SKU lama saat edit.
+     */
+    function renderVarianSkus() {
+        const wrap = document.getElementById("f-varian-skus");
+        const outer = document.getElementById("f-varian-skus-wrap");
+        if (!wrap || !outer) return;
+        const combos = varianCombinations(_varianDefs);
+        outer.style.display = combos.length ? "" : "none";
+        if (!combos.length) { wrap.innerHTML = ""; return; }
+        wrap.innerHTML = combos.map((vals) => {
+            const label = vals.join(" / ");
+            const existing = _existingSkus.find(s => String(s.label || "").trim().toLowerCase() === label.toLowerCase());
+            const kode = existing && existing.kode ? String(existing.kode) : "";
+            const harga = existing ? (Number(existing.harga) || 0) : 0;
+            // M6.2-FIX — harga khusus per SKU (utk member), prefill saat edit
+            const hargaKhusus = existing ? (Number(existing.harga_khusus) || 0) : 0;
+            const stok = existing ? (Number(existing.stok) || 0) : 0;
+            const foto = _skuFotos[label] || (existing && existing.foto ? String(existing.foto) : "");
+            if (foto && !_skuFotos[label]) _skuFotos[label] = foto;
+            return `
+                <div class="varian-sku-row" data-label="${esc(label)}">
+                    <div class="varian-sku-top">
+                        <span class="varian-sku-label" title="${esc(label)}">${esc(label)}</span>
+                        <div class="varian-sku-foto-cell">
+                            <button type="button" class="varian-sku-foto-btn" title="Pilih foto varian">
+                                ${foto ? `<img src="${esc(foto)}" alt="Foto" />` : "📷"}
+                            </button>
+                            <input type="file" class="varian-sku-foto" accept="image/*" hidden />
+                            ${foto ? `<button type="button" class="varian-sku-foto-clear" title="Hapus foto">✕</button>` : ""}
+                        </div>
+                    </div>
+                    <div class="varian-sku-fields">
+                        <div class="varian-field">
+                            <label for="">Kode SKU</label>
+                            <input type="text" class="varian-sku-kode" value="${esc(kode)}" placeholder="cth: BRG-001-S" />
+                        </div>
+                        <div class="varian-field">
+                            <label for="">Harga</label>
+                            <input type="text" inputmode="numeric" class="varian-sku-harga" value="${formatThousand(harga)}" placeholder="0" />
+                        </div>
+                        <div class="varian-field">
+                            <label for="">Harga Khusus</label>
+                            <input type="text" inputmode="numeric" class="varian-sku-harga-khusus" value="${formatThousand(hargaKhusus)}" placeholder="0 (kosong = pakai Harga)" />
+                        </div>
+                        <div class="varian-field">
+                            <label for="">Stok</label>
+                            <input type="text" inputmode="numeric" class="varian-sku-stok" value="${formatThousand(stok)}" placeholder="0" />
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join("");
+        // Foto per SKU — pilih file → kompres → simpan per label → preview
+        wrap.querySelectorAll(".varian-sku-row").forEach(rowEl => {
+            const label = String(rowEl.dataset.label || "");
+            const fileInput = rowEl.querySelector(".varian-sku-foto");
+            const btn = rowEl.querySelector(".varian-sku-foto-btn");
+            if (btn && fileInput) {
+                btn.addEventListener("click", (e) => { e.preventDefault(); fileInput.click(); });
+                fileInput.addEventListener("change", async () => {
+                    const file = fileInput.files && fileInput.files[0];
+                    if (!file) return;
+                    if (!/^image\//.test(file.type)) { showToast("warning", "File harus berupa gambar"); return; }
+                    if (file.size > 3 * 1024 * 1024) { showToast("warning", "Ukuran gambar maksimal 3MB"); return; }
+                    try {
+                        _skuFotos[label] = await compressImage(file);
+                        renderVarianSkus();
+                    } catch { showToast("danger", "Gagal memproses gambar"); }
+                });
+            }
+            const clear = rowEl.querySelector(".varian-sku-foto-clear");
+            if (clear) {
+                clear.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    delete _skuFotos[label];
+                    renderVarianSkus();
+                });
+            }
+        });
+        // Harga, Harga Khusus & Stok — format ribuan (xxx.xxx) + align right
+        wrap.querySelectorAll(".varian-sku-harga, .varian-sku-harga-khusus, .varian-sku-stok").forEach(inp => bindThousandInput(inp));
+    }
+
+    /**
+     * Input angka format ribuan (id-ID, pemisah titik) — ketik hanya digit,
+     * reformat live, kosongkan bila tidak ada angka. Dipakai field Harga/Stok
+     * SKU (bukan <input type=number> agar format titik bisa tampil).
+     * @param {HTMLInputElement} input
+     */
+    function bindThousandInput(input) {
+        if (!input) return;
+        input.addEventListener("input", () => {
+            const digits = String(input.value).replace(/\D/g, "").slice(0, 15);
+            const formatted = digits ? formatThousand(digits) : "";
+            if (input.value !== formatted) input.value = formatted;
+        });
+        input.addEventListener("blur", () => {
+            const digits = String(input.value).replace(/\D/g, "");
+            input.value = digits ? formatThousand(digits) : "";
+        });
+    }
+
+    /** Baca dimensi dari state (nama + nilai) — utk payload submit. */
+    function readVarianDefs() {
+        return _varianDefs
+            .map(d => ({ nama: String(d.nama || "").trim(), nilai: (d.nilai || []).map(n => String(n || "").trim()).filter(Boolean) }))
+            .filter(d => d.nama && d.nilai.length);
+    }
+
+    /** Baca SKU dari baris tabel (foto/kode/harga/harga_khusus/stok) — utk payload submit. */
+    function readVarianSkus(barangKode) {
+        return Array.from(document.querySelectorAll(".varian-sku-row")).map((row, i) => {
+            const kodeInput = row.querySelector(".varian-sku-kode");
+            let kode = String(kodeInput?.value || "").trim();
+            if (!kode) kode = `${barangKode || "SKU"}-${i + 1}`; // auto-fill bila kosong
+            const label = String(row.dataset.label || "");
+            return {
+                kode,
+                label,
+                foto: _skuFotos[label] || "",
+                // Harga/Stok format ribuan ("15.000") → angka bulat utk payload
+                harga: Math.max(0, unformatThousand(row.querySelector(".varian-sku-harga")?.value)),
+                // M6.2-FIX — harga khusus per SKU utk member (0 = pakai harga)
+                harga_khusus: Math.max(0, unformatThousand(row.querySelector(".varian-sku-harga-khusus")?.value)),
+                stok: Math.max(0, unformatThousand(row.querySelector(".varian-sku-stok")?.value))
+            };
+        });
+    }
+
+    /**
+     * Inisialisasi section varian setelah modal form dirender.
+     * @param {object} data formData (bisa membawa varianDef/skus saat edit)
+     */
+    function initVarianSection(data) {
+        const field = document.getElementById("f-varian-field");
+        if (!field) return;
+        const hasVarian = Array.isArray(data.varianDef) && data.varianDef.length;
+        _existingSkus = Array.isArray(data.skus) ? data.skus : [];
+        _skuFotos = {};
+        (_existingSkus || []).forEach(s => { if (s && s.label && s.foto) _skuFotos[String(s.label)] = String(s.foto); });
+        _varianDefs = hasVarian
+            ? data.varianDef.map(d => ({ nama: d.nama || "", nilai: (d.nilai || []).map(String) }))
+            : [];
+        const sw = document.querySelector('input[name="f-varian-mode"]');
+        if (sw) sw.checked = hasVarian;
+        toggleVarianBuilder(hasVarian);
+        if (sw) {
+            sw.addEventListener("change", () => {
+                toggleVarianBuilder(sw.checked);
+                syncVarianKnob();
+            });
+        }
+        syncVarianKnob();
+        document.getElementById("f-varian-add-dim")?.addEventListener("click", () => {
+            _varianDefs.push({ nama: "", nilai: [] });
+            renderVarianDefs();
+        });
+        syncVarianVisibility(data.behavior || "trading");
+    }
+
+    /**
+     * Geser knob toggle varian via INLINE style (tanpa CSS :checked — pola
+     * biaya-module.js yang terbukti stabil): kanan = Dengan Varian, kiri =
+     * Tanpa Varian. Track selalu hijau tua (#15803d).
+     */
+    function syncVarianKnob() {
+        const sw = document.querySelector('input[name="f-varian-mode"]');
+        const knob = document.querySelector(".varian-switch-knob");
+        // Track 44×20, knob 16×16, padding 2px → geser = 44 - 2*2 - 16 = 24px
+        if (sw && knob) knob.style.transform = sw.checked ? "translateX(24px)" : "translateX(0)";
     }
 
     function renderModal(title, contentHTML, isEdit, editId) {
@@ -445,15 +913,18 @@ export function BarangModule(services) {
         document.getElementById("btn-scan-barcode")?.addEventListener("click", (e) => { e.preventDefault(); toggleScanner(); });
         document.getElementById("btn-switch-camera")?.addEventListener("click", switchCamera);
 
-        // SP-029 M3 + PRD V1 — Tipe non-trading (Jasa/Resep):
-        // sembunyikan field stok/gudang/harga beli
+        // SP-029 M3 + PRD V1 + M6.2-FIX v0.40 — Tipe non-trading (Jasa & semua
+        // Resep): sembunyikan stok/harga beli/rak-etalase. Gudang SELALU tampil
+        // utk semua tipe (keputusan user v0.40).
         document.getElementById("f-behavior")?.addEventListener("change", (e) => {
-            const isNonTrading = (e.target.value === "service" || e.target.value === "recipe");
+            const isNonTrading = NON_TRADING_BEHAVIORS.includes(e.target.value);
             const tradingFields = document.getElementById("f-trading-fields");
             if (tradingFields) tradingFields.style.display = isNonTrading ? "none" : "";
-            // Gudang (pindah ke atas form) ikut tersembunyi saat Jasa/Resep
-            const gudangField = document.getElementById("f-gudang-field");
-            if (gudangField) gudangField.style.display = isNonTrading ? "none" : "";
+            // Rak / Etalase tidak relevan utk Jasa & semua Resep
+            const rakField = document.getElementById("f-rak-field");
+            if (rakField) rakField.style.display = isNonTrading ? "none" : "";
+            // M6.2-FIX v0.43 — section varian hanya utk trading & resep simple
+            syncVarianVisibility(e.target.value);
         });
 
         // SP-029 M3-FIX — Foto produk: pilih file → kompres client-side → data URI
@@ -538,11 +1009,14 @@ export function BarangModule(services) {
         if (typeof checkKodeExists !== "function") { clearKodeError(); return; }
 
         try {
-            // Pass gudang agar validasi kode discope per gudang —
-            // kode yg sama di gudang berbeda dianggap valid (untuk multi-warehouse)
-            const result = await checkKodeExists(kodeVal, gudangVal);
+            // Pass gudang agar validasi kode discope per gudang — kode yg sama
+            // di gudang berbeda dianggap valid (multi-warehouse). Saat EDIT,
+            // kirim editId agar server mengecualikan barang itu sendiri — kode
+            // milik item yang sedang diedit TIDAK dianggap duplikat.
+            const result = await checkKodeExists(kodeVal, gudangVal, isEdit ? editId : null);
             if (result && result.exists) {
-                // Edit mode: if kode still belongs to current item, it's OK
+                // Defense tambahan (mis. fallback lokal): kalau kode masih milik
+                // item yang sedang diedit, bukan duplikat → lanjutkan.
                 if (isEdit && editId && String(result.id) === String(editId)) {
                     clearKodeError();
                     return;
@@ -586,10 +1060,11 @@ export function BarangModule(services) {
         if (!kode) { showToast("warning", "Kode barang wajib diisi (scan barcode/QR atau ketik manual)"); document.getElementById("f-kode")?.focus(); return; }
         const nama = document.getElementById("f-nama")?.value?.trim();
         if (!nama) { showToast("warning", "Nama barang wajib diisi"); document.getElementById("f-nama")?.focus(); return; }
-        // SP-029 M3 — Gudang wajib hanya untuk barang dagangan (trading)
+        // SP-029 M3 — Gudang wajib hanya untuk barang dagangan (trading).
+        // Jasa & semua Resep (simple / terhubung F&B) tidak memakai gudang/stok.
         const behavior = document.getElementById("f-behavior")?.value || "trading";
         const gudang = document.getElementById("f-gudang")?.value?.trim() || "";
-        if (behavior !== "service" && !gudang) { showToast("warning", "Gudang wajib dipilih"); document.getElementById("f-gudang")?.focus(); return; }
+        if (behavior === "trading" && !gudang) { showToast("warning", "Gudang wajib dipilih"); document.getElementById("f-gudang")?.focus(); return; }
 
         const data = {
             kode, nama,
@@ -598,13 +1073,26 @@ export function BarangModule(services) {
             satuan: document.getElementById("f-satuan")?.value || "",
             rak: document.getElementById("f-rak")?.value?.trim() || "",
             gudang,
+            // M6.2-FIX v0.40 — Dijual / Tidak Dijual (hanya ada saat F&B aktif)
+            ...(state.showDijual
+                ? { dijual: document.getElementById("f-dijual")?.value !== "0" }
+                : {}),
             harga_beli: Number(document.getElementById("f-harga-beli")?.value) || 0,
             harga_jual: Number(document.getElementById("f-harga-jual")?.value) || 0,
             harga_khusus: Number(document.getElementById("f-harga-khusus")?.value) || 0,
             stok: Number(document.getElementById("f-stok")?.value) || 0,
             stok_minimum: Number(document.getElementById("f-stok-minimum")?.value) || 0,
             deskripsi: document.getElementById("f-deskripsi")?.value?.trim() || "",
-            foto: _fotoDataUri
+            foto: _fotoDataUri,
+            // M6.2-FIX v0.43 — varian/SKU (switch geser: on = Dengan Varian;
+            // off = tanpa varian → kirim array kosong agar server menghapus
+            // varian lama)
+            varianDef: document.querySelector('input[name="f-varian-mode"]')?.checked
+                ? readVarianDefs()
+                : [],
+            skus: document.querySelector('input[name="f-varian-mode"]')?.checked
+                ? readVarianSkus(kode)
+                : []
         };
         try {
             if (isEdit && editId) { await updateBarang(editId, data); showToast("success", "Barang berhasil diperbarui"); }
@@ -841,6 +1329,10 @@ export function BarangModule(services) {
 .barang-page .stok-ok { color:#16a34a; }
 .barang-page .badge-jasa { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; background:#dcfce7; color:#166534; font-size:0.7rem; font-weight:600; vertical-align:middle; }
 .barang-page .badge-recipe { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; background:#fef3c7; color:#92400e; font-size:0.7rem; font-weight:600; vertical-align:middle; }
+.barang-page .badge-recipe-fnb { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; background:#cffafe; color:#0e7490; font-size:0.7rem; font-weight:600; vertical-align:middle; }
+.barang-page .badge-varian { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; background:#ede9fe; color:#6d28d9; font-size:0.7rem; font-weight:600; vertical-align:middle; }
+.barang-page .badge-dijual { display:inline-block; padding:1px 8px; border-radius:999px; background:#dcfce7; color:#166534; font-size:0.7rem; font-weight:600; }
+.barang-page .badge-tidak-dijual { display:inline-block; padding:1px 8px; border-radius:999px; background:#f1f5f9; color:#64748b; font-size:0.7rem; font-weight:600; }
 .barang-page .brg-hk { font-size:0.68rem; color:#b45309; font-weight:500; }
 .barang-page .brg-thumb { width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid #e5e7eb; background:#f8fafc; }
 .barang-page .brg-thumb-lg { width:96px; height:96px; }
@@ -877,6 +1369,7 @@ export function BarangModule(services) {
 .barang-page .btn-scan.active:hover { background:#4338ca; }
 .barang-page .page-info { text-align:center; font-size:0.85rem; color:var(--smart-text-secondary,#6b7280); padding:0.5rem 0 1rem; }
 .barang-page .required { color:#dc2626; }
+
 .barang-page .kode-error-container { margin-top:0.5rem; }
 .barang-page .kode-error-container .smart-alert { margin:0; padding:0.5rem 0.75rem; font-size:0.8rem; }
 .barang-page #f-kode.is-duplicate { border-color:#dc2626 !important; background:#fef2f2 !important; box-shadow:0 0 0 3px rgba(220,38,38,0.1) !important; }

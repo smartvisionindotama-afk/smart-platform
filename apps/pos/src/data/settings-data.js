@@ -20,6 +20,7 @@ import {
     apiGetFallback,
     buildQuery,
     normalizeList,
+    normalizeItem,
     isApiAvailable
 } from "./api.js";
 
@@ -177,11 +178,38 @@ async function deleteCompanyLocal(id) {
 
 // ── Company: Public API ──
 
+/**
+ * Profil company dari SERVER POS (F&B V1-FIX / Settings → Company).
+ * Console MENOLAK token POS (audience isolation SP-027 M3: console
+ * expectedAudience "console", token POS ber-audience "inventory") —
+ * GET/PUT /api/companies/:id di console selalu 401 → form edit kosong dan
+ * simpanan diam-diam jatuh ke fallback lokal (TIDAK tersimpan ke DB).
+ * Server POS membaca/menulis dokumen Company yang SAMA (DB bersama) dengan
+ * token POS yang valid. Fallback console tetap dipertahankan.
+ * @returns {Promise<object|null>} Profil company (id, code, name, ...) | null
+ */
+async function fetchCompanyProfile() {
+    try {
+        const res = await apiCall("GET", "/company-profile");
+        if (res && res.data) return normalizeItem(res.data);
+    } catch (err) {
+        console.warn("[Settings] Gagal ambil company-profile:", err?.message);
+    }
+    return null;
+}
+
 export async function listCompanies(params = {}) {
     const code = currentCompanyCode();
-    // Data company dilayani Console (SP-027 M2) — arahkan ke origin console;
-    // GET publik (tanpa perlu token inventory). Header company code tetap
-    // dikirim agar console memfilter ke company yang sedang aktif.
+    // POS context: data company dibaca dari server POS (lengkap: kontak,
+    // alamat, whatsapp, logo, legal, org) — bukan daftar publik console yang
+    // hanya memuat code/name/jenis/logo (payload tereduksi utk request tanpa
+    // token console yang valid).
+    const profile = await fetchCompanyProfile();
+    if (profile) {
+        const limit = params.limit || 10;
+        return { data: [profile], pagination: { page: 1, limit, total: 1, totalPages: 1 } };
+    }
+    // Fallback lama: daftar publik console (payload ringan).
     const options = {
         baseUrl: consoleBaseUrl(),
         ...(code ? { companyCode: code } : {})
@@ -214,6 +242,10 @@ export async function listAllCompanies(params = {}) {
 }
 
 export async function getCompany(id) {
+    // POS context: profil diambil dari server POS (data existing dari console
+    // via DB bersama) — form edit terisi otomatis, tanpa input ulang kode/nama.
+    const profile = await fetchCompanyProfile();
+    if (profile) return profile;
     return apiGetFallback("/api/companies", id, () => getCompanyLocal(id));
 }
 
@@ -222,6 +254,16 @@ export async function createCompany(data) {
 }
 
 export async function updateCompany(id, data) {
+    // POS context: simpan lewat server POS (whitelist; code/name diabaikan
+    // server — identitas dikelola Console). Sebelumnya PUT console selalu
+    // 401 → simpanan hanya di fallback lokal (TIDAK masuk DB).
+    const { code, name, ...payload } = data || {};
+    try {
+        const res = await apiCall("PUT", "/company-profile", payload);
+        if (res && res.data) return normalizeItem(res.data);
+    } catch (err) {
+        console.warn("[Settings] Gagal simpan company-profile:", err?.message);
+    }
     return apiUpdateFallback("/api/companies", id, data, () => updateCompanyLocal(id, data));
 }
 
@@ -262,7 +304,7 @@ export async function getCompanyByCode(code) {
 //  User (tenant-scoped by companyCode)
 // ═══════════════════════════════════════════════
 
-const ROLE_OPTIONS = ["supervisor", "operator", "admin", "owner"];
+const ROLE_OPTIONS = ["supervisor", "operator", "admin", "owner", "kasir", "chef"];
 
 const _userSeed = () => [
     { id: "1", username: "admin",    password: "admin123",    name: "Administrator",     email: "admin@smart.id",    role: "owner",    companyCode: "PT-001", active: true, createdAt: Date.now(), updatedAt: Date.now() },
@@ -610,7 +652,15 @@ export const PERMISSION_CATALOG = [
     "settings.company.edit", "settings.company.create", "settings.company.update", "settings.company.delete",
     "settings.user.manage",
     "settings.role.manage",
-    "settings.permission.manage"
+    "settings.permission.manage",
+    // M6.2 — F&B Recipe/BOM (Admin/Owner)
+    "pos.recipe.manage",
+    // F&B Customer Ordering V1 — QR Menu, Order Meja, Kitchen (kasir/chef/admin)
+    "pos.qr.manage",
+    "pos.order.view",
+    "pos.order.confirm",
+    "pos.kitchen.view",
+    "pos.kitchen.update"
 ];
 
 const _permSeed = () => ({
@@ -780,5 +830,77 @@ export async function setPosSettings(data) {
         posSettingsCache = res;
         return res;
     }
+    throw new Error("Server tidak tersedia");
+}
+
+// ═══════════════════════════════════════════════
+//  Transaction Capability (M6.1) — per company
+//  Source of truth: backend (Company.transactionTypes).
+//  Endpoint: GET/PUT /api/pos/settings/transaction-capabilities
+// ═══════════════════════════════════════════════
+
+/**
+ * Baca jenis transaksi yang diaktifkan untuk perusahaan (M6.1).
+ * @returns {Promise<{transactionTypes: string[]}>}
+ */
+export async function getTransactionCapabilities() {
+    const res = await apiCall("GET", "/pos/settings/transaction-capabilities");
+    if (res !== null) return res;
+    throw new Error("Server tidak tersedia");
+}
+
+/**
+ * Simpan jenis transaksi yang diaktifkan untuk perusahaan (M6.1).
+ * Menerima array (kanonik) ATAU object boolean (M6) — server menormalkan.
+ * Error server (mis. validasi) diteruskan ke UI.
+ * @param {string[]|object} payload [{ "retail", "fnb" } | { retail: true, fnb: true }]
+ * @returns {Promise<{transactionTypes: string[]}>}
+ */
+export async function setTransactionCapabilities(payload) {
+    const body = Array.isArray(payload)
+        ? { transactionTypes: payload }
+        : payload;
+    const res = await apiCall("PUT", "/pos/settings/transaction-capabilities", body);
+    if (res !== null) return res;
+    throw new Error("Server tidak tersedia");
+}
+
+// ═══════════════════════════════════════════════
+//  WhatsApp Gateway (F&B V1) — Settings → Konfigurasi WA
+//  Endpoint: GET/PUT /api/pos/settings/wa
+//  Secret key TIDAK dikembalikan server (hanya hasSecretKey) — admin
+//  mengganti dengan mengetik nilai baru; kosong = pertahankan existing.
+// ═══════════════════════════════════════════════
+
+/**
+ * Baca konfigurasi gateway WhatsApp (provider URL, secret ada/tidak, sender).
+ * @returns {Promise<{wa: {providerUrl: string, hasSecretKey: boolean, senderNumber: string}}>}
+ */
+export async function getWaSettings() {
+    const res = await apiCall("GET", "/pos/settings/wa");
+    if (res !== null) return res;
+    throw new Error("Server tidak tersedia");
+}
+
+/**
+ * Simpan konfigurasi gateway WhatsApp.
+ * @param {object} data { providerUrl?, secretKey?, senderNumber?, clearSecretKey? }
+ * @returns {Promise<{wa: object}>}
+ */
+export async function setWaSettings(data) {
+    const res = await apiCall("PUT", "/pos/settings/wa", data);
+    if (res !== null) return res;
+    throw new Error("Server tidak tersedia");
+}
+
+/**
+ * Test koneksi gateway WhatsApp — kirim pesan uji coba ke nomor tujuan.
+ * Memakai nilai form saat ini (bisa belum disimpan); tidak mengubah DB.
+ * @param {object} data { phone, message?, providerUrl?, secretKey?, senderNumber? }
+ * @returns {Promise<{ok: boolean, message: string}>}
+ */
+export async function testWaSettings(data) {
+    const res = await apiCall("POST", "/pos/settings/wa/test", data);
+    if (res !== null) return res;
     throw new Error("Server tidak tersedia");
 }

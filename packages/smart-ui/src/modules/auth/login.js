@@ -367,6 +367,9 @@ function getLoginStyles() {
     width: 100%;
     max-width: 400px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    /* Ukuran form diperkecil ~90% (skala seragam: lebar, padding, font,
+       input, logo) — berlaku di semua aplikasi yang memakai @smart/ui. */
+    zoom: 0.9;
 }
 .login-card .logo { text-align: center; margin-bottom: 8px; font-size: 2.5rem; display:flex; justify-content:center; }
 .login-card .login-logo-img { width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 3px solid #f1f5f9; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }

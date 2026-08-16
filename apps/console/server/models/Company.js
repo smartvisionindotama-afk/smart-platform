@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { DEFAULT_TRANSACTION_TYPES } from "../../../../packages/smart-core/src/transaction-types/transaction-types.js";
 
 const companySchema = new mongoose.Schema({
     // Tenant identity
@@ -16,6 +17,9 @@ const companySchema = new mongoose.Schema({
     address: { type: String, default: "" },
     phone: { type: String, default: "" },
     email: { type: String, default: "" },
+    // F&B QR Menu — nomor WhatsApp resto (diisi di Settings → Company POS).
+    // Dipakai halaman /m/:identifier utk redirect customer ke wa.me.
+    whatsapp: { type: String, default: "" },
 
     // Legal
     taxId: { type: String, default: "" },
@@ -63,6 +67,23 @@ const companySchema = new mongoose.Schema({
     jumlahKasir: { type: Number, default: 1, min: 0 },
     lisensiStatus: { type: String, default: "active", enum: ["active", "trial", "expired"] },
     lisensiExpiresAt: { type: Date, default: null },
+
+    // ── Transaction Capability (SP-029 — POS V1) ──
+    // Daftar capability jenis transaksi yang diaktifkan untuk perusahaan
+    // (mis. ["retail", "fnb"]). Source of truth: registry @smart/core
+    // (transaction-types). Default V1 = ["retail"] (backward compatible
+    // dengan perilaku POS saat ini); array kosong diperbolehkan (bisnis
+    // tanpa transaksi aktif). Field additive — company lama tanpa field ini
+    // tetap dapat membuka POS (fallback normalize di POS server/client).
+    transactionTypes: { type: [String], default: () => [...DEFAULT_TRANSACTION_TYPES] },
+
+    // ── WhatsApp Gateway (F&B V1 — Settings → Konfigurasi WA di POS) ──
+    // Konfigurasi gateway per-company utk notifikasi status order via WA
+    // (Sidobe). Diisi dari Settings → Konfigurasi WA (admin POS) — field
+    // additive; company lama tanpa field ini memakai fallback env SIDOBE_*.
+    waProviderUrl:  { type: String, default: "" },
+    waSecretKey:    { type: String, default: "" },
+    waSenderNumber: { type: String, default: "" },
 
     // Status
     active: { type: Boolean, default: true },

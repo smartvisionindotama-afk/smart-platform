@@ -38,6 +38,9 @@ dist/
 .env
 .env.*
 
+# F&B V1 — VAPID keys dev fallback (web-push)
+server/vapid-keys.json
+
 # Logs
 *.log
 npm-debug.log*

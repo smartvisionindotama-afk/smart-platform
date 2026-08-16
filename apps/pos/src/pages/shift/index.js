@@ -123,6 +123,7 @@ function renderTable(container) {
             <td>${s.waktuTutup ? new Date(s.waktuTutup).toLocaleString("id-ID") : "-"}</td>
             <td class="cn-text-right">Rp ${formatRupiah(s.kasAwal)}</td>
             <td class="cn-text-right">Rp ${formatRupiah(s.totalPenjualan)}</td>
+            <td class="cn-text-right ${Number(s.totalRefund) ? "cn-danger" : "cn-muted"}">${Number(s.totalRefund) ? `− ${formatRupiah(s.totalRefund)}` : "−"}</td>
             <td class="cn-text-right">Rp ${formatRupiah(s.penjualanTunai)}</td>
             <td class="cn-text-right">Rp ${formatRupiah(s.penjualanNonTunai)}</td>
             <td class="cn-text-right">Rp ${formatRupiah(s.expectedCash)}</td>
@@ -138,7 +139,7 @@ function renderTable(container) {
             <table class="dp-table">
                 <thead><tr>
                     <th>Kasir</th><th>Buka</th><th>Tutup</th><th>Kas Awal</th>
-                    <th>Penjualan</th><th>Tunai</th><th>Non-Tunai</th><th>Expected</th><th>Actual</th><th>Selisih</th><th>Status</th>
+                    <th>Penjualan</th><th>Refund</th><th>Tunai</th><th>Non-Tunai</th><th>Expected</th><th>Actual</th><th>Selisih</th><th>Status</th>
                 </tr></thead>
                 <tbody>${rows}</tbody>
             </table>
@@ -349,7 +350,8 @@ function closeShiftModal(container, target = {}) {
                         <div class="shift-summary-row"><span>Saldo Awal</span><strong>Rp ${formatRupiah(res.kasAwal)}</strong></div>
                         <div class="shift-summary-row"><span>Penjualan Tunai</span><strong>Rp ${formatRupiah(res.penjualanTunai)}</strong></div>
                         <div class="shift-summary-row"><span>Penjualan Non-Tunai</span><strong>Rp ${formatRupiah(res.penjualanNonTunai)}</strong></div>
-                        <div class="shift-summary-row shift-summary-sub"><span>Total Penjualan (${res.totalTransaksi} transaksi)</span><strong>Rp ${formatRupiah(res.totalPenjualan)}</strong></div>
+                        ${Number(res.totalRefund) ? `<div class="shift-summary-row shift-summary-refund"><span>Refund (order dibatalkan)</span><strong>− Rp ${formatRupiah(res.totalRefund)}</strong></div>` : ""}
+                        <div class="shift-summary-row shift-summary-sub"><span>Total Penjualan (${res.totalTransaksi} transaksi)${Number(res.totalRefund) ? " — sudah dipotong refund" : ""}</span><strong>Rp ${formatRupiah(res.totalPenjualan)}</strong></div>
                         <div class="shift-summary-row shift-summary-expected"><span>Kas Diharapkan (saldo awal + tunai)</span><strong>Rp ${formatRupiah(res.expectedCash)}</strong></div>
                     `;
                 }

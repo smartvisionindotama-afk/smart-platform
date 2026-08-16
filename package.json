@@ -26,5 +26,8 @@
     "prettier": "^3.9.5",
     "vitest": "^4.1.10"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
 }

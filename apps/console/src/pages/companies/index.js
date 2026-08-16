@@ -9,7 +9,7 @@
  */
 
 import { Table, Modal, Input, Select, Switch, showToast } from "@smart/ui";
-import { COMPANY_TYPES } from "@smart/core";
+import { COMPANY_TYPES, TRANSACTION_TYPES } from "@smart/core";
 import {
     listCompanies,
     getCompany,
@@ -225,6 +225,7 @@ async function openDetailModal(container, id) {
             <div class="cn-detail-item"><span class="cn-detail-label">Mode Lokasi</span><span class="cn-detail-value">${company.lokasiMode === "multi" ? "Multi Lokasi" : "Single Lokasi"}</span></div>
             <div class="cn-detail-item"><span class="cn-detail-label">Kasir</span><span class="cn-detail-value">${company.jumlahKasir ?? 1} kasir</span></div>
             <div class="cn-detail-item"><span class="cn-detail-label">Lisensi</span><span class="cn-detail-value">${esc(company.lisensiStatus || "active")}</span></div>
+            <div class="cn-detail-item"><span class="cn-detail-label">Jenis Transaksi Kasir</span><span class="cn-detail-value">${transactionTypesBadges(company.transactionTypes)}</span></div>
             <div class="cn-detail-item"><span class="cn-detail-label">Dibuat</span><span class="cn-detail-value">${formatDateTime(company.createdAt)}</span></div>
             <div class="cn-detail-item full"><span class="cn-detail-label">Alamat</span><span class="cn-detail-value">${esc(company.address || "—")}</span></div>
             <div class="cn-detail-item full"><span class="cn-detail-label">Registered Apps</span><span class="cn-detail-value">${apps.length ? apps.map(a => esc(a.name)).join(", ") : "Belum ada aplikasi"}</span></div>
@@ -242,6 +243,22 @@ async function openDetailModal(container, id) {
     });
     document.body.appendChild(overlay);
     document.getElementById("cn-company-detail-close").addEventListener("click", () => overlay.remove());
+}
+
+/**
+ * Badge daftar transaction capability yang diaktifkan (SP-029 POS V1).
+ * Fallback: company lama tanpa field → default V1 (retail).
+ * @param {string[]|undefined} list
+ * @returns {string}
+ */
+function transactionTypesBadges(list) {
+    const enabled = Array.isArray(list) && list.length ? list : ["retail"];
+    return enabled.length
+        ? enabled.map(k => {
+            const meta = TRANSACTION_TYPES.find(t => t.key === k);
+            return `<span class="smart-badge smart-badge-info" title="${esc(meta ? meta.description : "")}">${esc(meta ? meta.label : k)}</span>`;
+        }).join(" ")
+        : `<span class="cn-muted">— (tidak ada jenis transaksi aktif)</span>`;
 }
 
 const SUB_STATUS_LABEL = {
@@ -520,6 +537,24 @@ async function openEditModal(container, id = null) {
         value: company?.lisensiStatus || "active"
     });
 
+    // ── SP-029 POS V1 — Transaction Capability: checkbox "Jenis Transaksi Kasir" ──
+    // Available Capabilities dari registry @smart/core (satu sumber kebenaran).
+    // Company lama tanpa field transactionTypes → default V1 (retail) di server;
+    // di sini default checked = retail (konsisten dengan fallback server).
+    const transactionTypeToggles = TRANSACTION_TYPES.map(cap => {
+        const checked = company
+            ? (Array.isArray(company.transactionTypes)
+                ? company.transactionTypes.includes(cap.key)
+                : cap.key === "retail")
+            : cap.key === "retail";
+        const sw = Switch({
+            label: cap.label,
+            name: `cn-cmp-tt-${cap.key}`,
+            checked
+        });
+        return `<div class="cn-tt-item" title="${esc(cap.description)}">${sw.outerHTML}<span class="cn-tt-desc">${esc(cap.description)}</span></div>`;
+    }).join("");
+
     const provSelect = regionSelect("Provinsi", "cn-cmp-prov");
     const kabSelect = regionSelect("Kabupaten/Kota", "cn-cmp-kab");
     const kecSelect = regionSelect("Kecamatan", "cn-cmp-kec");
@@ -565,6 +600,11 @@ async function openEditModal(container, id = null) {
             <span class="cn-detail-label">Akses Aplikasi</span>
             <div class="cn-apps-toggles">${appToggles}</div>
         </div>
+        <div class="cn-apps-access">
+            <span class="cn-detail-label">Jenis Transaksi Kasir</span>
+            <p class="cn-muted" style="margin:2px 0 8px;font-size:0.82rem">Tentukan jenis transaksi yang boleh dilakukan kasir (Transaction Capability V1).</p>
+            <div class="cn-apps-toggles">${transactionTypeToggles}</div>
+        </div>
     `;
 
     const footer = `
@@ -601,7 +641,11 @@ async function openEditModal(container, id = null) {
             lokasiMode: q("cn-cmp-lokasi-mode")?.value || "single",
             jumlahGudang: parseInt(q("cn-cmp-jumlah-gudang")?.value, 10) || 1,
             jumlahKasir: parseInt(q("cn-cmp-jumlah-kasir")?.value, 10) || 1,
-            lisensiStatus: q("cn-cmp-lisensi")?.value || "active"
+            lisensiStatus: q("cn-cmp-lisensi")?.value || "active",
+            // SP-029 POS V1 — capability yang dicentang (checkbox)
+            transactionTypes: TRANSACTION_TYPES
+                .filter(cap => document.querySelector(`[name="cn-cmp-tt-${cap.key}"]`)?.checked)
+                .map(cap => cap.key)
         };
         if (!data.code || !data.name) {
             showToast("danger", "Kode dan nama perusahaan wajib diisi");

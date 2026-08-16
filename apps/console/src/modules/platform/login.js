@@ -252,6 +252,8 @@ function getStyles() {
     box-shadow: 0 20px 60px rgba(0,0,0,0.4);
     position: relative;
     overflow: hidden;
+    /* Ukuran form login superadmin diperkecil ~90% (skala seragam). */
+    zoom: 0.9;
 }
 .sa-login-card::before {
     content: '';

@@ -13,6 +13,11 @@
  */
 
 import { apiCall } from "../data/api.js";
+import {
+    DEFAULT_TRANSACTION_TYPES,
+    isTransactionTypeEnabled as isCapabilityEnabled,
+    normalizeTransactionTypes
+} from "@smart/core";
 
 const COMPANY_CONFIG_KEY = "smart_company_config";
 
@@ -73,8 +78,31 @@ export function normalizeCompanyConfig(raw = {}) {
         jumlahGudang: Math.max(1, parseInt(src.jumlahGudang, 10) || 1),
         jumlahKasir: Math.max(1, parseInt(src.jumlahKasir, 10) || 1),
         lisensiStatus,
-        lisensiExpiresAt: src.lisensiExpiresAt || null
+        lisensiExpiresAt: src.lisensiExpiresAt || null,
+        // Transaction Capability (SP-029 POS V1) — backward compatible:
+        // company lama tanpa field → default V1 ["retail"] (perilaku POS
+        // saat ini). Array kosong yang tersimpan eksplisit dipertahankan.
+        transactionTypes: Array.isArray(src.transactionTypes)
+            ? normalizeTransactionTypes(src.transactionTypes)
+            : [...DEFAULT_TRANSACTION_TYPES]
     };
+}
+
+/**
+ * Daftar transaction capability yang diaktifkan perusahaan.
+ * @returns {string[]}
+ */
+export function getEnabledTransactionTypes() {
+    return getCompanyConfig().transactionTypes || [...DEFAULT_TRANSACTION_TYPES];
+}
+
+/**
+ * Apakah sebuah transaction capability aktif untuk perusahaan ini?
+ * @param {string} key Key capability (mis. "retail", "fnb")
+ * @returns {boolean}
+ */
+export function isTransactionTypeEnabled(key) {
+    return isCapabilityEnabled(getCompanyConfig().transactionTypes, key);
 }
 
 /**
@@ -113,4 +141,13 @@ export function filterMenusByLokasi(items, lokasiMode) {
     return walk(items);
 }
 
-export default { getCompanyConfig, saveCompanyConfig, refreshCompanyConfig, normalizeCompanyConfig, lisensiLabel, filterMenusByLokasi };
+export default {
+    getCompanyConfig,
+    saveCompanyConfig,
+    refreshCompanyConfig,
+    normalizeCompanyConfig,
+    getEnabledTransactionTypes,
+    isTransactionTypeEnabled,
+    lisensiLabel,
+    filterMenusByLokasi
+};

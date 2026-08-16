@@ -9,8 +9,15 @@
  * memuat daftar via GET /api/companies/business-types (fallback konstanta
  * yang harus dijaga tetap sinkron).
  *
+ * Field transactionTypes (Transaction Capability — SP-029 POS V1) ikut
+ * dinormalisasi di sini; validasi ketat (unknown/duplikat ditolak, kosong
+ * diizinkan) dilakukan route companies POST/PUT — lihat validateTransactionTypes
+ * (registry @smart/core, satu sumber kebenaran).
+ *
  * @module console/server/config/business-types
  */
+
+import { validateTransactionTypes } from "../../../../packages/smart-core/src/transaction-types/transaction-types.js";
 
 export const BUSINESS_TYPES = [
     "Retail",
@@ -54,6 +61,13 @@ export function normalizeCompanyConfigFields(data = {}) {
     }
     if (out.lisensiExpiresAt !== undefined && out.lisensiExpiresAt === "") {
         out.lisensiExpiresAt = null;
+    }
+    // Transaction Capability (SP-029 POS V1): bila valid, simpan daftar
+    // ternormalisasi (dedupe, urut); bila tidak valid dibiarkan apa adanya
+    // — route yang menolak (400) agar error-nya eksplisit.
+    if (out.transactionTypes !== undefined) {
+        const check = validateTransactionTypes(out.transactionTypes);
+        if (check.ok) out.transactionTypes = check.value;
     }
     return out;
 }

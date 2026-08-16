@@ -37,6 +37,15 @@ export { esc, escHtml, escAttr } from "./utils/escape.js";
 export { formatDate, formatDateID, formatDateTime, timeAgo } from "./utils/date.js";
 
 // ═══════════════════════════════════════════════════════════════
+//  Transaction Capability Registry (SP-029 — POS V1)
+//  Satu-satunya sumber kebenaran capability jenis transaksi POS.
+//  Dipakai Console (admin), POS server (validasi/gate) & POS client
+//  (filter menu/route).
+// ═══════════════════════════════════════════════════════════════
+
+export * from "./transaction-types/transaction-types.js";
+
+// ═══════════════════════════════════════════════════════════════
 //  @deprecated — Backward Compatible Exports
 //  Aplikasi baru HARUS menggunakan SMART.*
 // ═══════════════════════════════════════════════════════════════
