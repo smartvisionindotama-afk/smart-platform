@@ -71,14 +71,18 @@ const menus = [
     {
         title: "Laporan",
         icon: "📈",
-        page: "report",
-        permission: "inventory.report.view"
-    },
-    {
-        title: "Laporan Kasir",
-        icon: "🧾",
-        page: "report-pos",
-        permission: "inventory.report.view"
+        children: [
+            { title: "Kasir",            icon: "🧾", page: "report-pos",         permission: "inventory.report.view" },
+            { title: "Stok",             icon: "📦", page: "report-stock",       permission: "inventory.report.view" },
+            { title: "Pembelian",        icon: "🛒", page: "report-purchase",    permission: "inventory.report.view" },
+            { title: "Penjualan",        icon: "💰", page: "report-sales",       permission: "inventory.report.view" },
+            { title: "Nilai Inventori",  icon: "💎", page: "report-value",       permission: "inventory.report.view" },
+            { title: "Mutasi Stok",      icon: "🔄", page: "report-mutation",    permission: "inventory.report.view" },
+            { title: "Supplier",         icon: "🚚", page: "report-supplier",    permission: "inventory.report.view" },
+            { title: "Customer",         icon: "👤", page: "report-customer",    permission: "inventory.report.view" },
+            { title: "Laba-Rugi",        icon: "💹", page: "report-labarugi",    permission: "inventory.report.view" },
+            { title: "Piutang",          icon: "📋", page: "report-piutang",     permission: "inventory.report.view" }
+        ]
     },
 
     // ── F&B (Customer Ordering V1) — hanya tampil bila capability fnb aktif ──

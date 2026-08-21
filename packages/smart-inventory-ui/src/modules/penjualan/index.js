@@ -3433,19 +3433,21 @@ function getStyles() {
         .smart-modal-body { overflow-y:auto !important; flex:1 1 auto; min-height:0; }
 
         /* Tabs */
-        .ps-tabs { display:flex; gap:0; margin-bottom:1.25rem; border-bottom:2px solid #e5e7eb; }
+        .ps-tabs { display:flex; gap:0; margin-bottom:1.25rem; border-bottom:2px solid rgba(148,163,184,0.28); }
+        .ps-tabs .ps-tab:hover { color:var(--primary,#667eea); }
+        .ps-tabs .ps-tab.active { color:var(--primary,#667eea); border-bottom-color:var(--primary,#667eea); }
         /* M3-FIX v19 — radio pajak transaksi (POS app) */
         .ps-tax-box {
             display:flex; align-items:center; gap:14px; flex-wrap:wrap;
-            margin:0 0 1rem; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px;
-            background:#f8fafc; font-size:0.85rem;
+            margin:0 0 1rem; padding:10px 14px; border:1px solid rgba(148,163,184,0.28); border-radius:10px;
+            background:rgba(255,255,255,0.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); font-size:0.85rem;
         }
         .ps-tax-label { font-weight:700; color:#0f172a; }
         .ps-tax-radio { display:inline-flex; align-items:center; gap:5px; cursor:pointer; color:#334155; }
-        .ps-tax-radio input { accent-color:#10b981; }
+        .ps-tax-radio input { accent-color:var(--primary,#667eea); }
         .ps-tax-hint { color:#94a3b8; font-size:0.75rem; }
         /* M3-FIX v21 — Gudang-Kasir settings */
-        .ps-gudang-box { display:flex; flex-direction:column; gap:10px; margin:0 0 1rem; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; font-size:0.85rem; }
+        .ps-gudang-box { display:flex; flex-direction:column; gap:10px; margin:0 0 1rem; padding:10px 14px; border:1px solid rgba(148,163,184,0.28); border-radius:10px; background:rgba(255,255,255,0.45); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); font-size:0.85rem; }
         .ps-gudang-title { font-weight:700; color:#0f172a; }
         .ps-gudang-info { color:#334155; }
         .ps-gudang-hint { color:#94a3b8; font-size:0.75rem; }
@@ -3456,12 +3458,12 @@ function getStyles() {
         .ps-gudang-map-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
         .ps-gudang-w { flex:1.2; }
         .ps-gudang-k { flex:1; }
-        .ps-gudang-del { flex-shrink:0; width:34px; height:34px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; color:#b45309; cursor:pointer; font-size:0.9rem; transition:all 0.15s; }
+        .ps-gudang-del { flex-shrink:0; width:34px; height:34px; border:1px solid rgba(148,163,184,0.28); border-radius:8px; background:rgba(255,255,255,0.58); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:#b45309; cursor:pointer; font-size:0.9rem; transition:all 0.15s; }
         .ps-gudang-del:hover { background:#fef2f2; border-color:#fca5a5; color:#b91c1c; }
         .ps-gudang-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .ps-tab { padding:0.65rem 1.25rem; cursor:pointer; border:none; background:none; font-size:0.92rem; font-weight:600; color:#6b7280; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.2s; }
-        .ps-tab:hover { color:#059669; }
-        .ps-tab.active { color:#059669; border-bottom-color:#059669; }
+        .ps-tab:hover { color:var(--primary,#667eea); }
+        .ps-tab.active { color:var(--primary,#667eea); border-bottom-color:var(--primary,#667eea); }
 
         /* Retur items header */
         .prj-items-header { display:grid; grid-template-columns:100px 180px 50px 60px 80px 70px 90px auto; gap:0.25rem; align-items:center; padding:0.35rem 0; font-size:0.7rem; font-weight:600; color:#64748b; text-transform:uppercase; border-bottom:1px solid #e2e8f0; }
@@ -3475,13 +3477,15 @@ function getStyles() {
         .penjualan-page .search-wrapper { position:relative; display:flex; align-items:center; }
         .penjualan-page .search-wrapper .search-icon { position:absolute; left:0.75rem; font-size:0.9rem; pointer-events:none; opacity:0.5; }
         .penjualan-page .search-wrapper input { padding:0.5rem 0.75rem 0.5rem 2.2rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.875rem; width:240px; outline:none; }
-        .penjualan-page .search-wrapper input:focus { border-color:#059669; box-shadow:0 0 0 3px rgba(5,150,105,0.1); }
+        .penjualan-page .search-wrapper input:focus { border-color:var(--primary,#667eea); box-shadow:0 0 0 3px rgba(102,126,234,0.15); }
 
         /* Table */
-        .ps-table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-        .ps-table th { background:#f8fafc; padding:0.6rem 0.75rem; border-bottom:2px solid #e2e8f0; font-size:0.75rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.3px; text-align:left; white-space:nowrap; }
-        .ps-table td { padding:0.55rem 0.75rem; border-bottom:1px solid #f1f5f9; font-size:0.85rem; }
-        .ps-table tr:hover td { background:#f8fafc; }
+        #ps-table-area, #prj-table-area { background:rgba(255,255,255,0.58); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border:2px solid rgb(255,255,255); border-radius:28px; box-shadow:0 8px 16px rgba(0,0,0,0.08); overflow:hidden; padding:14px; }
+        .ps-table { width:100%; border-collapse:collapse; background:transparent !important; border-radius:0; overflow:visible; box-shadow:none; }
+        .ps-table th { background:transparent !important; padding:0.6rem 0.75rem; border-bottom:2px solid rgba(148,163,184,0.28); font-size:0.75rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.3px; text-align:left; white-space:nowrap; }
+        .ps-table td { padding:0.55rem 0.75rem; border-bottom:1px solid rgba(148,163,184,0.28); font-size:0.85rem; background:transparent !important; }
+        .ps-table tr:nth-child(even) td { background:rgba(255,255,255,0.2) !important; }
+        .ps-table tr:hover td { background:rgba(255,255,255,0.4) !important; }
         .ps-table .ps-text-right { text-align:right; }
         .ps-mgmt-actions { display:flex; gap:0.3rem; flex-wrap:wrap; }
         .ps-action-btn { padding:0.25rem 0.5rem; border:1px solid #e2e8f0; border-radius:4px; background:#fff; font-size:0.75rem; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
@@ -3489,7 +3493,7 @@ function getStyles() {
         .ps-action-edit:hover { border-color:#f59e0b; color:#d97706; }
         .ps-action-delete:hover { border-color:#ef4444; color:#dc2626; }
         .ps-action-deliver:hover { border-color:#3b82f6; color:#2563eb; }
-        .ps-action-invoice:hover { border-color:#059669; color:#047857; }
+        .ps-action-invoice:hover { border-color:var(--primary,#667eea); color:var(--primary,#667eea); }
         .ps-action-pay:hover { border-color:#8b5cf6; color:#7c3aed; }
         .ps-action-sj:hover { border-color:#0ea5e9; color:#0284c7; }
 
@@ -3520,7 +3524,7 @@ function getStyles() {
         .ps-item-remove:hover { background: #fecaca; }
         .ps-col-action { text-align: left; }
         .ps-item-row input { width:100%; padding:0.3rem; border:1px solid #e2e8f0; border-radius:4px; font-size:0.8rem; background:#fff; }
-        .ps-item-row input:focus { border-color:#059669; outline:none; box-shadow:0 0 0 2px rgba(5,150,105,0.1); }
+        .ps-item-row input:focus { border-color:var(--primary,#667eea); outline:none; box-shadow:0 0 0 2px rgba(102,126,234,0.15); }
         .ps-item-satuan { background:#f8fafc; cursor:default; color:#64748b; }
         .ps-add-item { margin: 0.5rem 0; }
         .ps-add-item-btn { padding: 0.35rem 0.75rem; border: 1px dashed #93c5fd; border-radius: 6px; background: #eff6ff; color: #2563eb; cursor: pointer; font-size: 0.8rem; transition: all 0.12s; }
@@ -3528,14 +3532,14 @@ function getStyles() {
         .ps-empty-items { padding:1rem; text-align:center; color:#94a3b8; font-size:0.85rem; border:1px dashed #e2e8f0; border-radius:6px; background:#f8fafc; }
         .ps-add-item { margin-top:0.5rem; }
         .ps-add-item-btn { border:1px dashed #cbd5e1; background:#fff; padding:0.4rem 1rem; border-radius:6px; font-size:0.85rem; color:#64748b; cursor:pointer; transition:all 0.15s; }
-        .ps-add-item-btn:hover { border-color:#059669; color:#059669; background:#f0fdf4; }
+        .ps-add-item-btn:hover { border-color:var(--primary,#667eea); color:var(--primary,#667eea); background:rgba(102,126,234,0.08); }
 
         /* Totals */
         .ps-totals { margin-left:auto; width:300px; margin-top:1rem; padding-top:0.75rem; border-top:1px solid #e2e8f0; }
         .ps-total-row { display:flex; justify-content:space-between; align-items:center; padding:0.3rem 0; font-size:0.85rem; color:#475569; }
         .ps-total-row input { width:100px; padding:0.25rem 0.5rem; border:1px solid #e2e8f0; border-radius:4px; font-size:0.85rem; text-align:right; }
-        .ps-total-row input:focus { border-color:#059669; outline:none; }
-        .ps-grand-total { font-weight:700; font-size:1rem; color:#059669; border-top:2px solid #059669; padding-top:0.5rem; margin-top:0.25rem; }
+        .ps-total-row input:focus { border-color:var(--primary,#667eea); outline:none; }
+        .ps-grand-total { font-weight:700; font-size:1rem; color:var(--primary,#667eea); border-top:2px solid var(--primary,#667eea); padding-top:0.5rem; margin-top:0.25rem; }
 
         /* Loading / Error */
         .ps-loading { text-align:center; padding:2rem; color:#64748b; }
@@ -3545,7 +3549,7 @@ function getStyles() {
         .ps-form .form-group { display:flex; flex-direction:column; gap:0.25rem; }
         .ps-form .form-group label { font-size:0.8rem; font-weight:600; color:#475569; }
         .ps-form .form-group input, .ps-form .form-group select, .ps-form .form-group textarea { padding:0.45rem 0.6rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.85rem; outline:none; }
-        .ps-form .form-group input:focus, .ps-form .form-group select:focus, .ps-form .form-group textarea:focus { border-color:#059669; box-shadow:0 0 0 3px rgba(5,150,105,0.1); }
+        .ps-form .form-group input:focus, .ps-form .form-group select:focus, .ps-form .form-group textarea:focus { border-color:var(--primary,#667eea); box-shadow:0 0 0 3px rgba(102,126,234,0.15); }
         .ps-form .form-group select { background:#fff; }
         .ps-form .form-group textarea { resize:vertical; }
         .ps-diskon-input { width:100px; text-align:right; }

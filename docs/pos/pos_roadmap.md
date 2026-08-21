@@ -20,6 +20,8 @@
 | 1.2 | 2026-08-10 | Freebuff | Audit final V1 — sinkron checklist Acceptance Criteria §18 (checklist tercentang sesuai implementasi live: sales-breakdown by item/category/cashier/payment, payment report, cashier report; item diskon = backlog; Hold (T5) & UI retur kasir (T13) = backlog butuh approval PO) |
 | 1.3 | 2026-08-10 | Freebuff | T5 Hold/Resume DIIMPLEMENTASIKAN (M3-FIX v16, approval PO) — §7.5 diperbarui: status `held` (additive) + `POST /:id/hold` & `POST /:id/resume` (permission `pos.transaction.hold`) + filter `?status=held` + tombol/badge/modal di layar kasir; stok tidak berubah saat hold/resume; transaksi held tidak masuk laporan/omzet |
 | 1.4 | 2026-08-14 | Freebuff | Sinkronisasi milestone F&B SP-029 POS V1 — M6.1 Transaction Capability Foundation ✅ + M6.2 F&B Recipe/BOM Engine ✅ diimplementasikan (dokumen: `TRANSACTION-CAPABILITY-V1.md` & `M6-CAPABILITY-RECIPE.md`); §9.2 Recipe diperbarui (dua model resep: `recipe` simple vs `recipe-fnb` terhubung — konsumsi realtime), §10 Transaction Engine diperbarui (bukan lagi NO-OP), §15.1 backlog ditambah M6.3 Table/Order, M6.4 KDS, M6.5 QR Ordering (fondasi capability `fnb` + engine BOM siap dipasang) |
+| 1.5 | 2026-08-17 | Freebuff | Sinkronisasi **F&B Customer Ordering V1** — M6.3 Table & Order Management ✅ + M6.4 KDS ✅ + M6.5 Customer QR Ordering ✅ diimplementasikan (pos_execution v0.46, `pos_execution_3.md`) + pendukung: Payment Proof, Role-Based Notification bell, Web Push, WhatsApp Notify, Company Payment Settings (QRIS + Rekening), Company Profile fix, Shift Refund, PWA; §15.1 diperbarui (M6.3–M6.5 keluar dari backlog) |
+| 1.6 | 2026-08-21 | Freebuff | **Sinkronisasi Laporan & Settings Inventory dengan POS**: (1) Settings Company inventory — server `/api/company-profile` (GET/PUT, full data: nama/alamat/telp/email/logo), `identityLocked: true` (code/name readonly); (2) Laporan — judul dinamis per tab (`TAB_TITLES`), `setActiveTab()` no-DOM, sidebar sub-menu (9 laporan), tabs disembunyikan; (3) Laporan Kasir POS — fix data kosong (selector `.laporan-page`), default tanggal 1→hari ini, fix double print, kop cetak lengkap (nama+alamat+telp+email via `/company-profile`); (4) Semua laporan POS & Inventory — `getCompanyInfo()` via `apiCall("GET", "/company-profile")` (server sendiri, bukan Console API payload ringan); (5) Hapus `<script>window.print()>` dari `buildPrintHTML` (single print via `printToWindow`); (6) Logout icon SVG Feather di inventory; (7) Sidebar accordion inventory (Master/Transaksi toggle); (8) Logo/theme color POS → `#3b4e9f` (indigo) |
 
 ---
 
@@ -685,8 +687,8 @@ Menghindari duplikasi kode.
 
 Seluruh desain V1 harus mempertimbangkan roadmap berikutnya:
 
-- Recipe Engine
-- Kitchen Display
+- Recipe Engine (✅ M6.2 — BOM engine + varian)
+- Table & Order, Kitchen Display, QR Ordering (✅ M6.3 – M6.5, F&B Customer Ordering V1)
 - Digital Product Engine
 - Accounting Integration
 - AI Assistant
@@ -1008,7 +1010,7 @@ Nomor transaksi ✅ · Tanggal ✅ · Kasir ✅ · Item ✅ · Qty ✅ · Harga 
 - Dukungan transaksi asal: Sales Order (`sumber: "so"`) **dan** transaksi kasir KWT (`sumber: "pos"`).
 - Validasi: qty retur ≤ qty transaksi asal; transaksi asal berstatus `void` / `order` **ditolak** (400).
 - Stok **behavior-aware**: saat retur dikonfirmasi (`draft → returned`), hanya item `trading` yang stoknya bertambah; service/recipe/manufactured/digital tidak memengaruhi stok (PRD §8–9, keputusan C1). Hapus retur berstatus `returned` → reversal stok trading.
-- Workflow retur dari layar kasir (T13, backlog opsional V1) — V1 via halaman Penjualan tab "↩️ Retur Penjualan".
+- Workflow retur dari layar kasir (T13, backlog opsional V1) — V1 via halaman Penjualan tab "↩️ Retur Penjualan". F&B V1 (v0.46): kasir SUDAH bisa memproses retur/refund dari layar kasir untuk order meja/QR Menu — tombol **💰 REFUND** di modal detail Order Meja (sidebar 🍽️) dan di modal pembatalan dari bell kasir (`refundTableOrder`, pengurang penjualan shift). Yang masih backlog (T13, butuh approval PO): tombol retur untuk transaksi RETAIL reguler langsung dari layar kasir.
 
 ## 7.8.1 Definisi Void vs Retur vs Koreksi
 
@@ -1095,8 +1097,10 @@ foundation NO-OP (`behavior: recipe` dijual tanpa kurangi stok, keputusan PO
   `recipeId`; kasir modal **Pilih Varian**; konsumsi per varian.
 - API `/api/recipes` di-gate `requireTransactionType("fnb")` + permission
   `pos.recipe.manage` (Admin/Owner; kasir tidak).
-- **Backlog lanjutan** (bukan scope M6.2, butuh approval PO): Modifier, Topping,
-  Table/Order (M6.3), KDS (M6.4), QR Ordering (M6.5) — lihat §15.1.
+- **F&B Customer Ordering V1 (2026-08-17, v0.46):** Table/Order (M6.3), KDS (M6.4),
+  QR Ordering (M6.5) **sudah diimplementasikan** — lihat §15.1 & `docs/pos/pos_execution_3.md`.
+- **Backlog lanjutan** (bukan scope M6.2/M6.3–M6.5, butuh approval PO): Modifier,
+  Topping, pindah/gabung/pecah meja — lihat §15.1.
 
 ## 9.3 Service
 
@@ -1227,18 +1231,17 @@ V1 (MVP) terdiri dari: Platform Integration ✅ · POS Core (search, cart, payme
 
 ## 15.1 Non-MVP / Backlog — JANGAN implementasi tanpa approval PO
 
-> **Status SP-029 (2026-08-14):** M6.1 Transaction Capability Foundation ✅ dan
-> M6.2 F&B Recipe/BOM Engine ✅ sudah diimplementasikan (dokumen:
-> `docs/pos/TRANSACTION-CAPABILITY-V1.md` & `docs/pos/M6-CAPABILITY-RECIPE.md`).
-> Berikut backlog F&B lanjutan (M6.3–M6.5) + backlog versi lain — JANGAN
-> implementasi tanpa approval PO.
+> **Status SP-029 (2026-08-17):** M6.1 Transaction Capability Foundation ✅, M6.2
+> F&B Recipe/BOM Engine ✅, **M6.3 Table & Order Management ✅, M6.4 Kitchen
+> Display System ✅, M6.5 Customer QR Ordering ✅** — kelimanya sudah
+> diimplementasikan sebagai **F&B Customer Ordering V1** (pos_execution v0.46,
+> `docs/pos/pos_execution_3.md`; dokumen fondasi: `TRANSACTION-CAPABILITY-V1.md`
+> & `M6-CAPABILITY-RECIPE.md`). Berikut backlog versi lain — JANGAN implementasi
+> tanpa approval PO.
 
 | Versi | Fitur |
 |-------|-------|
-| M6.3 | **Table & Order Management** — meja, order per meja, pindah/gabung/pecah meja; fondasi capability `fnb` + engine BOM M6.2 siap dipasang |
-| M6.4 | **Kitchen Display System (KDS) / Kitchen Order** — tampilan dapur utk order F&B, status memasak/selesai |
-| M6.5 | **Customer QR Ordering** — pelanggan scan QR meja → order langsung (fondasi M6.1/M6.2) |
-| V2 | Recipe Engine penuh lanjutan (Modifier, Topping), Production |
+| V2 | Recipe Engine penuh lanjutan (Modifier, Topping), Production; pindah/gabung/pecah meja (M6.3 lanjutan) |
 | V3 | Digital Product Engine (Pulsa, Paket Data, Token PLN, PPOB, Digiflazz), Provider abstraction |
 | V4+ | Loyalty, Membership, Voucher, Gift Card, Delivery, Marketplace, Mobile POS, Offline Sync, Omnichannel |
 
@@ -1278,7 +1281,7 @@ V1 dianggap selesai hanya jika seluruh berikut terpenuhi:
 
 ## 18.2 POS
 
-- [x] Login ✅ · Dashboard ✅ (kasir/owner versi) · Kasir ✅ · Barcode ✅ · Search ✅ · Cart ✅ · Multi price ✅ (harga_khusus, C2) · Discount ✅ (transaksi; item → backlog) · Payment ✅ (cash/transfer/qris/card) · Receipt ✅ (metode bayar & diskon) · **Hold ⬜ backlog (T5, butuh approval PO)** · Void ✅ (admin, permission `pos.transaction.void`) · Return ✅ (engine behavior-aware + `sumber=pos`; **UI tombol kasir ⬜ backlog T13**) · Shift ✅
+- [x] Login ✅ · Dashboard ✅ (kasir/owner versi) · Kasir ✅ · Barcode ✅ · Search ✅ · Cart ✅ · Multi price ✅ (harga_khusus, C2) · Discount ✅ (transaksi; item → backlog) · Payment ✅ (cash/transfer/qris/card) · Receipt ✅ (metode bayar & diskon) · **Hold ⬜ backlog (T5, butuh approval PO)** · Void ✅ (admin, permission `pos.transaction.void`) · Return ✅ (engine behavior-aware + `sumber=pos`; **UI tombol kasir: retur/refund order F&B ✅ (v0.46 — REFUND di Order Meja & bell kasir), retur transaksi retail reguler ⬜ backlog T13**) · Shift ✅
 
 ## 18.3 Inventory
 

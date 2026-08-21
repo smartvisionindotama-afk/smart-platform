@@ -14,7 +14,7 @@ import { PembelianPage, initPembelianPage } from "../pages/pembelian";
 import { PenjualanPage, initPenjualanPage } from "../pages/penjualan";
 import { TransferPage, initTransferPage } from "../pages/transfer";
 import { InventoryPage, initInventoryPage } from "../pages/inventory";
-import { LaporanPage, initLaporanPage } from "../pages/report";
+import { LaporanPage, initLaporanPage, setActiveTab } from "../pages/report";
 import { CompanyPage, initCompanyPage } from "../pages/settings/company";
 import { UserSettingsPage, initUserSettingsPage } from "../pages/settings/user";
 import { RolePage, initRolePage } from "../pages/settings/role";
@@ -27,6 +27,8 @@ import { OrderMejaPage, initOrderMejaPage } from "../pages/order-meja";
 import { KitchenPage, initKitchenPage } from "../pages/kitchen";
 import { PaymentSettingsPage, initPaymentSettingsPage } from "../pages/settings/payment";
 import { WaSettingsPage, initWaSettingsPage } from "../pages/settings/wa";
+
+
 
 
 export const routes = {
@@ -135,9 +137,49 @@ export const routes = {
         permission: "inventory.inventory.view"
     },
 
-    // ── Report ──
-    report: {
-        component: LaporanPage,
+    // ── Report (per-tab routes) ──
+    "report-stock": {
+        component: () => { setActiveTab("stock"); return LaporanPage(); },
+        init: initLaporanPage,
+        permission: "inventory.report.view"
+    },
+    "report-purchase": {
+        component: () => { setActiveTab("purchase"); return LaporanPage(); },
+        init: initLaporanPage,
+        permission: "inventory.report.view"
+    },
+    "report-sales": {
+        component: () => { setActiveTab("sales"); return LaporanPage(); },
+        init: initLaporanPage,
+        permission: "inventory.report.view"
+    },
+    "report-value": {
+        component: () => { setActiveTab("value"); return LaporanPage(); },
+        init: initLaporanPage,
+        permission: "inventory.report.view"
+    },
+    "report-mutation": {
+        component: () => { setActiveTab("mutation"); return LaporanPage(); },
+        init: initLaporanPage,
+        permission: "inventory.report.view"
+    },
+    "report-supplier": {
+        component: () => { setActiveTab("supplier"); return LaporanPage(); },
+        init: initLaporanPage,
+        permission: "inventory.report.view"
+    },
+    "report-customer": {
+        component: () => { setActiveTab("customer"); return LaporanPage(); },
+        init: initLaporanPage,
+        permission: "inventory.report.view"
+    },
+    "report-labarugi": {
+        component: () => { setActiveTab("labarugi"); return LaporanPage(); },
+        init: initLaporanPage,
+        permission: "inventory.report.view"
+    },
+    "report-piutang": {
+        component: () => { setActiveTab("piutang"); return LaporanPage(); },
         init: initLaporanPage,
         permission: "inventory.report.view"
     },

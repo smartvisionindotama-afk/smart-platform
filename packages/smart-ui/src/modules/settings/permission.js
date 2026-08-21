@@ -7,7 +7,7 @@
  * @module @smart/ui/modules/settings/permission
  */
 
-import { Modal, Toast, Table, EmptyState, Alert, Skeleton } from "../../index.js";
+import { Modal, Toast, Table, EmptyState, Alert, Skeleton, UI } from "../../index.js";
 import { esc } from "@smart/core";
 
 /**
@@ -61,6 +61,8 @@ export function SettingsPermissionModule({ getRolesWithPermissions, getRolePermi
             tableArea.innerHTML = "";
             if (state.items.length === 0) {
                 tableArea.appendChild(EmptyState({ icon: "🛡️", title: "Belum ada role", description: "Tambahkan role terlebih dahulu" }));
+            } else if (window.innerWidth < 768) {
+                renderPermCards(tableArea);
             } else {
                 const table = Table({
                     columns: [
@@ -82,6 +84,32 @@ export function SettingsPermissionModule({ getRolesWithPermissions, getRolePermi
             tableArea.innerHTML = "";
             tableArea.appendChild(Alert({ variant: "danger", message: "Gagal memuat data", dismissible: true }));
         } finally { state.loading = false; }
+    }
+
+    function renderPermCards(container) {
+        const list = UI.CardList(state.items, (item) => {
+            return `
+                <div class="sm-card-header-row">
+                    <div class="sm-card-name">${esc(item.label)}</div>
+                    <span class="sm-card-code">${esc(item.name)}</span>
+                </div>
+                <div class="sm-card-divider"></div>
+                <div class="sm-card-details">
+                    <div class="sm-card-detail-row"><span class="sm-card-label">Level</span><span class="sm-card-value"><span class="badge-level">${item.level}</span></span></div>
+                    <div class="sm-card-detail-row"><span class="sm-card-label">Total Izin</span><span class="sm-card-value"><strong>${item.permissionCount}</strong></span></div>
+                </div>
+                <div class="sm-card-footer-row">
+                    <div class="sm-card-footer-left"></div>
+                    <div class="sm-card-footer-right">
+                        <button class="sm-card-btn sm-card-btn-edit perm-manage-btn" data-manage="${item.name}">🔑 Atur Izin (${item.permissionCount})</button>
+                    </div>
+                </div>
+            `;
+        });
+        container.appendChild(list);
+        container.querySelectorAll("[data-manage]").forEach(btn => {
+            btn.addEventListener("click", () => openPermissionEditor(btn.dataset.manage));
+        });
     }
 
     async function openPermissionEditor(roleName) {

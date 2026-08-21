@@ -27,6 +27,14 @@ import { cancelOrderItems } from "../services/order-cancel.js";
 
 const router = Router();
 
+/** Parse "YYYY-MM-DD" → Date lokal (server tz) pukul 00:00. null bila invalid. */
+function parseDate(raw) {
+    const m = String(raw || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+}
+
 /** Simpan notifikasi bell KASIR (order dibatalkan) — best effort, TIDAK
  *  pernah menggagalkan pembatalan order. */
 async function pushCancelledNotification(order) {
@@ -51,25 +59,55 @@ async function pushCancelledNotification(order) {
     }
 }
 
-/** GET /orders — daftar order kitchen (aktif: new/preparing/ready), terbaru dulu.
+/**
+ * GET /orders — daftar order kitchen (F&B M6-FIX: board + riwayat), terbaru dulu.
  * HANYA order yang mengandung item RECIPE / RECIPE-FNB (hasKitchenItems) —
- * order barang dagangan/jasa murni TIDAK masuk kitchen (F&B V1). */
+ * order barang dagangan/jasa murni TIDAK masuk kitchen (F&B V1).
+ *
+ * Filter tanggal (permintaan user):
+ *   ?today=1            → BOARD (default): HANYA order HARI INI (semua status).
+ *                         Order dari tanggal sebelumnya — termasuk yang masih
+ *                         aktif/belum selesai — TIDAK tampil di board, hanya
+ *                         lewat tab Riwayat.
+ *   ?from=YYYY-MM-DD&to=YYYY-MM-DD → RIWAYAT: rentang tanggal (semua status),
+ *                         dipakai tab "Riwayat" + filter tanggal di halaman.
+ *   tanpa keduanya      → perilaku lama: hanya order aktif (new/preparing/ready).
+ *   ?status=new|preparing|ready → filter status spesifik (mode aktif saja).
+ */
 router.get("/orders", security.permission("pos.kitchen.view"), async (req, res) => {
     try {
         const companyCode = req.headers["x-company-code"];
         if (!companyCode) return res.status(400).json({ error: "Company code required" });
-        const q = {
-            companyCode,
-            hasKitchenItems: true,
-            kitchenStatus: { $in: ["new", "preparing", "ready"] }
-        };
-        // Filter status spesifik opsional: ?status=new|preparing|ready
-        const status = String(req.query.status || "").trim().toLowerCase();
-        if (["new", "preparing", "ready"].includes(status)) q.kitchenStatus = status;
+        const q = { companyCode, hasKitchenItems: true };
+
+        const todayFlag = String(req.query.today || "").trim();
+        const fromRaw = String(req.query.from || "").trim();
+        const toRaw = String(req.query.to || "").trim();
+        const isToday = todayFlag === "1" || todayFlag === "true";
+        const hasRange = Boolean(fromRaw || toRaw);
+
+        if (isToday) {
+            // BOARD (default): HANYA order yang dibuat hari ini (semua status).
+            const startToday = new Date();
+            startToday.setHours(0, 0, 0, 0);
+            q.createdAt = { $gte: startToday };
+        } else if (hasRange) {
+            const range = {};
+            const from = parseDate(fromRaw);
+            const to = parseDate(toRaw);
+            if (from) range.$gte = from;
+            if (to) range.$lt = new Date(to.getTime() + 86400000);
+            if (Object.keys(range).length) q.createdAt = range;
+        } else {
+            q.kitchenStatus = { $in: ["new", "preparing", "ready"] };
+            // Filter status spesifik opsional: ?status=new|preparing|ready
+            const status = String(req.query.status || "").trim().toLowerCase();
+            if (["new", "preparing", "ready"].includes(status)) q.kitchenStatus = status;
+        }
 
         const orders = await TableOrder.find(q)
             .sort({ orderNumber: -1 })
-            .limit(100)
+            .limit(300)
             .lean();
         res.json({ data: orders });
     } catch (err) {

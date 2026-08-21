@@ -7,7 +7,7 @@
  * @module @smart/ui/modules/settings/user
  */
 
-import { Modal, Toast, Table, Pagination, EmptyState, Alert, Skeleton } from "../../index.js";
+import { Modal, Toast, Table, Pagination, EmptyState, Alert, Skeleton, UI } from "../../index.js";
 import { initPasswordToggle } from "../auth/password-toggle.js";
 import { esc } from "@smart/core";
 
@@ -220,6 +220,8 @@ export function SettingsUserModule({ listUsers, getUser, createUser, updateUser,
                     actionText: (state.search || blocked) ? "" : "Tambah User",
                     onAction: (state.search || blocked) ? null : () => openForm("create")
                 }));
+            } else if (window.innerWidth < 768) {
+                renderUserCards(tableArea);
             } else {
                 const table = Table({
                     columns: [
@@ -252,6 +254,31 @@ export function SettingsUserModule({ listUsers, getUser, createUser, updateUser,
             tableArea.innerHTML = "";
             tableArea.appendChild(Alert({ variant: "danger", message: "Gagal memuat data", dismissible: true }));
         } finally { state.loading = false; }
+    }
+
+    function renderUserCards(container) {
+        const list = UI.CardList(state.items, (item) => {
+            return `
+                <div class="sm-card-header-row">
+                    <div class="sm-card-name">${esc(item.name)}</div>
+                </div>
+                <div class="sm-card-details">
+                    <div class="sm-card-detail-row"><span class="sm-card-label">Username</span><span class="sm-card-value">${esc(item.username)}</span></div>
+                    <div class="sm-card-detail-row"><span class="sm-card-label">Email</span><span class="sm-card-value">${esc(item.email || "-")}</span></div>
+                    <div class="sm-card-detail-row"><span class="sm-card-label">Role</span><span class="sm-card-value"><span class="badge-role">${esc(item.role)}</span></span></div>
+                    <div class="sm-card-detail-row"><span class="sm-card-label">Status</span><span class="sm-card-value">${item.active ? '<span style="color:#16a34a">Aktif</span>' : '<span style="color:#dc2626">Nonaktif</span>'}</span></div>
+                </div>
+                <div class="sm-card-footer-row">
+                    <div class="sm-card-footer-left"></div>
+                    <div class="sm-card-footer-right">
+                        <button class="sm-card-btn sm-card-btn-edit" data-edit="${item.id}">✏️ Edit</button>
+                        <button class="sm-card-btn sm-card-btn-delete" data-delete="${item.id}">🗑️ Hapus</button>
+                    </div>
+                </div>
+            `;
+        });
+        container.appendChild(list);
+        UI.attachCardEvents(container, (id) => openForm("edit", id), (id) => confirmDelete(id));
     }
 
     function showSkeleton(container) {

@@ -77,11 +77,11 @@ export function QrMenuPage() {
             .qm-icon-btn { width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border:1px solid #e2e8f0; border-radius:8px; background:#fff; cursor:pointer; font-size:0.95rem; transition:all .15s; }
             .qm-icon-btn:hover { background:#eef2ff; border-color:#c7d2fe; }
             .qm-icon-btn-danger:hover { background:#fef2f2; border-color:#fecaca; }
-            .qm-icon-btn-primary { background:#059669; border-color:#059669; color:#fff; }
-            .qm-icon-btn-primary:hover { background:#047857; border-color:#047857; }
+            .qm-icon-btn-primary { background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); border-color:transparent; color:#fff; box-shadow:0 4px 12px rgba(72,106,224,0.35); }
+            .qm-icon-btn-primary:hover { background:linear-gradient(135deg, #a935f4 0%, #3f80ff 100%); }
             [data-theme="dark"] .qm-icon-btn { background:#1e293b; border-color:#334155; color:#e2e8f0; }
             [data-theme="dark"] .qm-icon-btn:hover { background:#334155; border-color:#475569; }
-            [data-theme="dark"] .qm-icon-btn-primary { background:#059669; border-color:#059669; color:#fff; }
+            [data-theme="dark"] .qm-icon-btn-primary { background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); border-color:transparent; color:#fff; }
             .qm-note { font-size:0.75rem; color:var(--smart-text-secondary,#64748b); line-height:1.45; }
             </style>
             <div class="page-header">
@@ -252,7 +252,7 @@ async function previewQr(container, id) {
     }
     const content = `
         <div style="text-align:center;padding:8px 0">
-            <div style="font-size:1.4rem;font-weight:700;color:#059669;margin-bottom:4px">${esc(table.nomorMeja)}</div>
+            <div style="font-size:1.4rem;font-weight:700;color:#667eea;margin-bottom:4px">${esc(table.nomorMeja)}</div>
             <div style="margin:10px auto;width:220px;height:220px;display:flex;align-items:center;justify-content:center;border:1px solid #e2e8f0;border-radius:12px;background:#fff">
                 ${dataUrl ? `<img src="${dataUrl}" alt="QR Menu ${esc(table.nomorMeja)}" style="width:200px;height:200px" />` : `<span class="cn-muted">QR</span>`}
             </div>
@@ -397,7 +397,7 @@ async function printQrList(container, tables) {
     .qm-print-logo { display: flex; justify-content: center; margin-bottom: 5mm; }
     .qm-print-logo img { width: 55mm; height: 55mm; }
     .qm-print-title { font-size: 13pt; font-weight: 700; letter-spacing: 2px; margin-bottom: 3mm; color:#334155; }
-    .qm-print-meja { font-size: 19pt; font-weight: 700; color: #059669; margin-bottom: 3mm; }
+    .qm-print-meja { font-size: 19pt; font-weight: 700; color: #667eea; margin-bottom: 3mm; }
     .qm-print-hint { font-size: 9pt; color: #475569; line-height: 1.5; }
 </style>
 </head>

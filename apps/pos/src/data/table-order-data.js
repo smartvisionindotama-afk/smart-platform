@@ -67,15 +67,40 @@ export async function refundTableOrder(id) {
     throw new Error("Server tidak tersedia");
 }
 
+/**
+ * HAPUS order meja (tab "Semua") — HANYA order yang belum lunas
+ * (paymentStatus != paid); order lunas/refund adalah catatan keuangan dan
+ * ditolak server (409). Notifikasi/bukti/subscription order ikut dibersihkan.
+ * @param {string} id
+ * @returns {Promise<object>}
+ */
+export async function deleteTableOrder(id) {
+    const res = await apiCall("DELETE", `/table-orders/${encodeURIComponent(id)}`);
+    if (res !== null) return res;
+    throw new Error("Server tidak tersedia");
+}
+
 // ── Kitchen (chef) ──
 
 /**
- * Daftar order kitchen (chef): new + preparing + ready.
- * @param {{ status?: string }} [params]
+ * Daftar order kitchen (chef).
+ * Params (opsional, dilempar apa adanya ke query string):
+ *   - board:  { today: 1 }            → HANYA order HARI INI (semua status);
+ *                                       order dari tanggal sebelumnya hanya
+ *                                       tampil lewat riwayat
+ *   - riwayat: { from: "YYYY-MM-DD", to: "YYYY-MM-DD" } → rentang tanggal
+ *   - status: "new"|"preparing"|"ready" (mode aktif saja)
+ * @param {{ today?: number|string, from?: string, to?: string, status?: string }} [params]
  * @returns {Promise<{data: object[]}>}
  */
 export async function listKitchenOrders(params = {}) {
-    const qs = params.status ? `?status=${encodeURIComponent(params.status)}` : "";
+    const parts = [];
+    for (const [k, v] of Object.entries(params || {})) {
+        if (v !== undefined && v !== null && v !== "") {
+            parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+        }
+    }
+    const qs = parts.length ? `?${parts.join("&")}` : "";
     const res = await apiCall("GET", `/kitchen/orders${qs}`);
     if (res !== null) return res;
     throw new Error("Server tidak tersedia");

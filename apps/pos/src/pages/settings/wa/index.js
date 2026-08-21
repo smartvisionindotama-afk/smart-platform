@@ -59,12 +59,12 @@ export function WaSettingsPage() {
             .cn-alert-info { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
             .cn-alert-danger { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
             .cn-alert-success { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
-            .cn-spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--smart-border,#e2e8f0); border-top-color:var(--smart-primary,#059669); border-radius:50%; animation:wa-spin 0.7s linear infinite; vertical-align:-2px; margin-right:6px; }
+            .cn-spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--smart-border,#e2e8f0); border-top-color:var(--smart-primary,#667eea); border-radius:50%; animation:wa-spin 0.7s linear infinite; vertical-align:-2px; margin-right:6px; }
             @keyframes wa-spin { to { transform:rotate(360deg); } }
             [data-theme="dark"] .wa-card { background:var(--smart-card-bg,#1e293b); border-color:var(--smart-border,#334155); }
             [data-theme="dark"] .wa-field label { color:#e2e8f0; }
             [data-theme="dark"] .wa-field input { background:#0f172a; border-color:#334155; color:#e2e8f0; }
-            [data-theme="dark"] .cn-alert-info { background:#064e3b33; border-color:#065f46; color:#a7f3d0; }
+            [data-theme="dark"] .cn-alert-info { background:#3730a333; border-color:#4338ca; color:#c7d2fe; }
             [data-theme="dark"] .cn-alert-danger { background:#7f1d1d33; border-color:#991b1b; color:#fecaca; }
             [data-theme="dark"] .cn-alert-success { background:#14532d33; border-color:#166534; color:#bbf7d0; }
             </style>

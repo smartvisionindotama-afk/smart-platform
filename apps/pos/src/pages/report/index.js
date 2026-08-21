@@ -9,31 +9,28 @@ import {
     getLaporanStock, getLaporanPurchase, getLaporanSales,
     getInventoryValueReport, getStockMutationReport,
     getSupplierReport, getCustomerReport,
-    getLaporanLabarugi, getLaporanPiutang,
-    getCompanyByCode
+    getLaporanLabarugi, getLaporanPiutang
 } from "../../data/index.js";
+import { apiCall } from "../../data/api.js";
 
 /**
  * Fetch company info for print layout.
+ * Uses /api/company-profile (POS server) for full data (name, address,
+ * phone, email, logo) — NOT getCompanyByCode() which returns lightweight
+ * payload from Console (code/name/logo only).
  */
 async function getCompanyInfo() {
     try {
-        const companyCode =
-            (typeof globalThis !== "undefined" && globalThis.SMART?.Session?.get?.("company.code"))
-            || (typeof globalThis !== "undefined" && globalThis.SMART?.Company?.getCode?.())
-            || null;
-
-        if (companyCode) {
-            const company = await getCompanyByCode(companyCode);
-            if (company) {
-                return {
-                    name: company.name || company.companyName,
-                    address: company.address || "",
-                    phone: company.phone || "",
-                    email: company.email || "",
-                    logo: company.logo || ""
-                };
-            }
+        const result = await apiCall("GET", "/company-profile");
+        if (result?.data) {
+            const c = result.data;
+            return {
+                name: c.name || "",
+                address: c.address || "",
+                phone: c.phone || "",
+                email: c.email || "",
+                logo: c.logo || ""
+            };
         }
     } catch (e) {
         console.warn("[Report] getCompanyInfo failed:", e);
@@ -41,7 +38,7 @@ async function getCompanyInfo() {
     return {};
 }
 
-const { LaporanPage, initLaporanPage } = LaporanModule({
+const { LaporanPage, initLaporanPage, setActiveTab } = LaporanModule({
     getLaporanStock, getLaporanPurchase, getLaporanSales,
     getInventoryValueReport, getStockMutationReport,
     getSupplierReport, getCustomerReport,
@@ -50,4 +47,4 @@ const { LaporanPage, initLaporanPage } = LaporanModule({
     isPos: true // M6-FIX — mode POS: label "No. Nota" / "Total Nota" (bukan SO)
 });
 
-export { LaporanPage, initLaporanPage };
+export { LaporanPage, initLaporanPage, setActiveTab };

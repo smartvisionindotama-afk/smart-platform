@@ -175,16 +175,18 @@ Capability **tidak hanya hide/show UI**:
 
 ## Future extension (F&B — milestone berikutnya)
 
-Capability `fnb` akan menjadi pintu untuk workflow F&B:
+Capability `fnb` menjadi pintu untuk workflow F&B:
 
-- Recipe / BOM
-- Table Management
-- Kitchen Display System (KDS) / Kitchen Order
-- Customer QR Ordering
+- Recipe / BOM (✅ M6.2 — lihat `M6-CAPABILITY-RECIPE.md`)
+- Table Management (✅ M6.3)
+- Kitchen Display System (KDS) / Kitchen Order (✅ M6.4)
+- Customer QR Ordering (✅ M6.5)
 
-Semua fitur tersebut **belum diimplementasikan pada task ini** — yang
-dibangun hanya fondasi capability agar fitur-fitur tersebut dapat dipasang
-sebagai workflow F&B nanti. Tidak dibuat aplikasi terpisah
+> **Update (2026-08-17, v0.46):** M6.3 – M6.5 sudah diimplementasikan sebagai
+> **F&B Customer Ordering V1** — lihat `docs/pos/pos_execution_3.md`.
+> Task ini (M6.1) memang sengaja hanya membangun **fondasi capability**
+> (registry transaction-types + gate) agar fitur-fitur tersebut dapat dipasang
+> sebagai workflow F&B tanpa aplikasi terpisah.
 (`pos-retail`, `pos-fnb`, dst) — semua tetap satu POS engine dengan
 capability.
 

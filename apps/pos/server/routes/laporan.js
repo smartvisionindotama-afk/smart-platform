@@ -241,6 +241,10 @@ router.get("/sales", async (req, res) => {
         if (dateQ === null) return res.status(400).json({ error: "Format tanggal tidak valid" });
 
         const query = { ...companyQuery(req), ...dateQ };
+        // SINKRON (permintaan user): laporan Penjualan harus sejalan dengan
+        // Laporan Kasir & Laba-Rugi — transaksi VOID dikeluarkan (kasir hanya
+        // menghitung status=paid; laba-rugi delivered/invoiced/paid).
+        query.status = { $ne: "void" };
         if (search) {
             query.$or = [
                 { nomor: { $regex: search, $options: "i" } },
@@ -266,6 +270,9 @@ router.get("/sales", async (req, res) => {
             totalItem: all.reduce((s, p) => s + (p.items || []).reduce((si, i) => si + (i.qty || 0), 0), 0),
             totalPajak: all.reduce((s, p) => s + (p.pajak || 0), 0),
             totalRetur: all.reduce((s, p) => s + (Number(p.retur) || 0), 0),
+            // SINKRON — Total Penjualan BRUTO = Σ grandTotal (tanpa retur &
+            // pajak): angka yang sama dengan Laporan Kasir & Laba-Rugi.
+            totalBruto: all.reduce((s, p) => s + (p.grandTotal || 0), 0),
             // Net Sales = grandTotal − retur − pajak (grandTotal sudah include
             // pajak yang dipungut dari pembeli) — M6-FIX v2.
             totalPenjualan: all.reduce((s, p) => s + ((p.grandTotal || 0) - (Number(p.retur) || 0) - (p.pajak || 0)), 0)

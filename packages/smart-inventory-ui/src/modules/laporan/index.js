@@ -31,9 +31,11 @@ import { Modal, Pagination, EmptyState, showToast, UI, printToWindow } from "@sm
 import { esc, formatNumber as fmtNum, formatRupiahID as fmtRupiah, formatDate } from "@smart/core";
 
 let services = {};
+let _hideTabs = false;
 
 export function LaporanModule(deps = {}) {
     services = deps;
+    _hideTabs = deps.hideTabs === true;
 
 // ═══════════════════════════════════════════════
 //  State
@@ -97,6 +99,30 @@ const TAB_LABELS = {
     customer: "👤 Customer",
     labarugi: "💹 Laba-Rugi",
     piutang: "📋 Piutang"
+};
+
+const TAB_TITLES = {
+    stock: "📦 Laporan Stok",
+    purchase: "🛒 Laporan Pembelian",
+    sales: "💰 Laporan Penjualan",
+    value: "💎 Laporan Nilai Inventori",
+    mutation: "🔄 Laporan Mutasi Stok",
+    supplier: "🚚 Laporan Supplier",
+    customer: "👤 Laporan Customer",
+    labarugi: "💹 Laporan Laba-Rugi",
+    piutang: "📋 Laporan Piutang"
+};
+
+const TAB_SUBTITLES = {
+    stock: "Daftar seluruh barang beserta stok, nilai beli & jual",
+    purchase: "Rekapitulasi pembelian per supplier",
+    sales: "Rekapitulasi penjualan per pelanggan",
+    value: "Total nilai inventori per gudang & kategori",
+    mutation: "Riwayat masuk, keluar, dan mutasi stok",
+    supplier: "Ringkasan aktivitas per supplier",
+    customer: "Ringkasan aktivitas per pelanggan",
+    labarugi: "Laporan laba/rugi (HPP vs penjualan)",
+    piutang: "Tagihan yang belum lunas"
 };
 
 function statusBadge(status) {
@@ -169,20 +195,24 @@ function removeModal(overlay) {
 // ═══════════════════════════════════════════════
 
 function LaporanPage() {
+    const title = TAB_TITLES[state.activeTab] || "📈 Laporan";
+    const subtitle = TAB_SUBTITLES[state.activeTab] || "Rekap stok, transaksi, dan partner bisnis";
     return `
         <div id="${pageId}" class="laporan-page">
             <style>${getStyles()}</style>
             <div class="lpr-header">
                 <div>
-                    <h1>📈 Laporan</h1>
-                    <div class="lpr-header-sub">Rekap stok, transaksi, dan partner bisnis</div>
+                    <h1>${title}</h1>
+                    <div class="lpr-header-sub">${subtitle}</div>
                 </div>
             </div>
+            ${_hideTabs ? "" : `
             <div class="lpr-tabs" id="lpr-tabs">
                 ${Object.entries(TAB_LABELS).map(([key, label]) => `
                     <button class="lpr-tab ${state.activeTab === key ? "active" : ""}" data-tab="${key}">${label}</button>
                 `).join("")}
             </div>
+            `}
             <div id="lpr-content" class="lpr-content">${renderActiveTab()}</div>
         </div>
     `;
@@ -195,6 +225,16 @@ function LaporanPage() {
 function initLaporanPage() {
     attachTabEvents();
     loadActiveTab();
+}
+
+/**
+ * Set active tab tanpa依赖 DOM (untuk mode hideTabs).
+ * Panggil SEBELUM initLaporanPage() supaya state sudah benar saat render.
+ */
+function setActiveTab(tabName) {
+    if (TAB_LABELS[tabName]) {
+        state.activeTab = tabName;
+    }
 }
 
 function attachTabEvents() {
@@ -214,6 +254,14 @@ function attachTabEvents() {
 function renderContent() {
     const contentEl = document.getElementById("lpr-content");
     if (contentEl) contentEl.innerHTML = renderActiveTab();
+    // Update header title + subtitle berdasarkan activeTab
+    const headerEl = document.getElementById(pageId);
+    if (headerEl) {
+        const h1 = headerEl.querySelector(".lpr-header h1");
+        const sub = headerEl.querySelector(".lpr-header .lpr-header-sub");
+        if (h1) h1.textContent = TAB_TITLES[state.activeTab] || "📈 Laporan";
+        if (sub) sub.textContent = TAB_SUBTITLES[state.activeTab] || "Rekap stok, transaksi, dan partner bisnis";
+    }
     attachTabContentEvents();
 }
 
@@ -414,9 +462,10 @@ function renderSalesTab() {
     const summaryHTML = renderSummaryCards(s.summary, [
         { icon: "🧾", label: isPos ? "Total Nota" : "Total SO", value: sum => fmtNum(sum.totalTransaksi) },
         { icon: "📦", label: "Total Item", value: sum => fmtNum(sum.totalItem) },
+        { icon: "💰", label: "Total Penjualan (Bruto)", value: sum => fmtRupiah(sum.totalBruto), color: "primary" },
         { icon: "🧾", label: "Total Pajak", value: sum => fmtRupiah(sum.totalPajak), color: "success" },
         { icon: "↩️", label: "Total Retur", value: sum => fmtRupiah(sum.totalRetur), color: "warning" },
-        { icon: "💰", label: isPos ? "Net Sales" : "Total Penjualan (Neto)", value: sum => fmtRupiah(sum.totalPenjualan), color: "primary" }
+        { icon: "📈", label: isPos ? "Net Sales" : "Total Penjualan (Neto)", value: sum => fmtRupiah(sum.totalPenjualan) }
     ]);
 
     const rowsHTML = (s.data || []).map(p => {
@@ -1135,7 +1184,87 @@ function bindDateRange(startId, endId, onStartChange, onEndChange) {
 //  Print
 // ═══════════════════════════════════════════════
 
-async function buildPrintHTML(title, subtitle, headers, rows, summaryRows = []) {
+// Baris data per halaman cetak — setiap halaman diakhiri baris SUBTOTAL,
+// dan tabel ditutup baris TOTAL di halaman terakhir (permintaan user).
+const PRINT_ROWS_PER_PAGE = 25;
+
+/** Bagi array jadi potongan berukuran `size` (utk subtotal per halaman). */
+function chunkArr(arr, size) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
+
+/**
+ * Hitung subtotal per kolom numerik untuk sekumpulan baris.
+ * `rowItems` = [{ html, values: number[] }] — values sejajar indeks kolom.
+ * Mengembalikan MAP ber-`index` kolom tabel (bukan array posisional) supaya
+ * pemanggil bisa membaca `result[c.index]` — indeks kolom TIDAK selalu
+ * berurutan 0..n (kolom non-numerik disisipi di antaranya).
+ * @param {Array<{html: string, values?: number[]}>} rowItems
+ * @param {Array<{index: number, type?: "rupiah"|"number"}>} numericColumns
+ * @returns {Object<number, number>}
+ */
+function sumColumns(rowItems, numericColumns) {
+    const out = {};
+    for (const c of numericColumns) {
+        out[c.index] = rowItems.reduce((s, r) => s + (Number(r.values?.[c.index]) || 0), 0);
+    }
+    return out;
+}
+
+/** Format nilai subtotal/total sesuai tipe kolom. */
+function fmtColumnValue(value, col) {
+    if (col.type === "rupiah") return fmtRupiah(value);
+    return fmtNum(value);
+}
+
+/**
+ * Render tabel cetak DI-CHUNK (per halaman) — tiap chunk jadi satu tabel
+ * dengan baris SUBTOTAL di akhir (tfoot), dipisah page-break; chunk terakhir
+ * diberi baris TOTAL. thead otomatis berulang per tabel/halaman.
+ * @param {Array<{label: string, align?: string}>} headers
+ * @param {Array<{html: string, values?: number[]}>} rowItems
+ * @param {Array<{index: number, label?: string, type?: "rupiah"|"number"}>} numericColumns
+ * @param {number} rowsPerPage
+ * @returns {string}
+ */
+function renderChunkedTables(headers, rowItems, numericColumns = [], rowsPerPage = PRINT_ROWS_PER_PAGE) {
+    const chunks = chunkArr(rowItems || [], rowsPerPage);
+    if (!chunks.length) {
+        return `<table class="rpt-table">
+            <thead><tr>${headers.map(h => `<th ${h.align ? `style="text-align:${h.align}"` : ""}>${esc(h.label)}</th>`).join("")}</tr></thead>
+            <tbody><tr><td colspan="${headers.length}" style="text-align:center;color:#94a3b8;padding:14px">Tidak ada data</td></tr></tbody>
+        </table>`;
+    }
+    const grandVals = sumColumns(rowItems, numericColumns);
+    const colspanLabel = Math.max(1, headers.length - numericColumns.length);
+    return chunks.map((chunk, ci) => {
+        const isLast = ci === chunks.length - 1;
+        const subtotalVals = sumColumns(chunk, numericColumns);
+        const subRow = numericColumns.length ? `
+            <tr class="rpt-subtotal">
+                <td colspan="${colspanLabel}">Subtotal Halaman ${ci + 1}</td>
+                ${numericColumns.map(c => `<td style="text-align:right">${fmtColumnValue(subtotalVals[c.index], c)}</td>`).join("")}
+            </tr>` : "";
+        const grandRow = (isLast && numericColumns.length) ? `
+            <tr class="rpt-grand">
+                <td colspan="${colspanLabel}">TOTAL</td>
+                ${numericColumns.map(c => `<td style="text-align:right">${fmtColumnValue(grandVals[c.index], c)}</td>`).join("")}
+            </tr>` : "";
+        const foot = (subRow || grandRow) ? `<tfoot>${subRow}${grandRow}</tfoot>` : "";
+        return `
+            <table class="rpt-table">
+                <thead><tr>${headers.map(h => `<th ${h.align ? `style="text-align:${h.align}"` : ""}>${esc(h.label)}</th>`).join("")}</tr></thead>
+                <tbody>${chunk.map(r => r.html).join("")}</tbody>
+                ${foot}
+            </table>
+            ${isLast ? "" : `<div class="rpt-page-break"></div>`}
+        `;
+    }).join("");
+}
+
+async function buildPrintHTML(title, subtitle, headers, rows, summaryRows = [], numericColumns = [], rowsPerPage = PRINT_ROWS_PER_PAGE) {
     const company = await getCompanyInfo();
     const companyName = company.name || company.companyName || "Perusahaan";
     const companyAddress = company.address || "";
@@ -1186,6 +1315,11 @@ async function buildPrintHTML(title, subtitle, headers, rows, summaryRows = []) 
         .rpt-sign-space { height:52px; }
         .rpt-sign-name { font-size:0.85rem; font-weight:600; border-top:1px solid #94a3b8; padding-top:4px; min-width:150px; }
         .rpt-meta { font-size:0.7rem; color:#94a3b8; margin-top:4px; }
+        /* Subtotal per halaman + TOTAL akhir (permintaan user) */
+        .rpt-table { page-break-inside: avoid; }
+        .rpt-page-break { page-break-after: always; }
+        .rpt-subtotal td { background:#f8fafc; font-weight:700; border-top:2px solid #cbd5e1; color:#334155; }
+        .rpt-grand td { background:#eef2ff; font-weight:800; border-top:2px solid #4f46e5; color:#3730a3; }
         @media print { body { padding:0; } }
         @page { margin:14mm; }
     </style>
@@ -1206,10 +1340,7 @@ async function buildPrintHTML(title, subtitle, headers, rows, summaryRows = []) 
         </div>
     </div>
     ${summaryHTML}
-    <table>
-        <thead><tr>${headers.map(h => `<th ${h.align ? `style="text-align:${h.align}"` : ""}>${esc(h.label)}</th>`).join("")}</tr></thead>
-        <tbody>${rows}</tbody>
-    </table>
+    ${renderChunkedTables(headers, (rows || []).map(r => (r && typeof r === "object" && r.html !== undefined) ? r : { html: r, values: [] }), numericColumns, rowsPerPage)}
     <div class="rpt-footer">
         <div class="rpt-sign">
             <div class="rpt-sign-label">Dicetak oleh</div>
@@ -1217,14 +1348,14 @@ async function buildPrintHTML(title, subtitle, headers, rows, summaryRows = []) 
             <div class="rpt-sign-name">${esc(printedBy)}</div>
         </div>
     </div>
-    <script>window.print();<\/script>
 </body>
 </html>`;
 }
 
 async function printStock() {
     const s = state.stock;
-    const rows = (s.data || []).map(b => `
+    const rows = (s.data || []).map(b => ({
+        html: `
         <tr>
             <td>${esc(b.kode)}</td>
             <td>${esc(b.nama)}</td>
@@ -1236,7 +1367,9 @@ async function printStock() {
             <td style="text-align:right">${fmtRupiah(b.nilaiBeli)}</td>
             <td style="text-align:right">${fmtRupiah(b.nilaiJual)}</td>
         </tr>
-    `).join("");
+    `,
+        values: [0, 0, 0, 0, Number(b.stok) || 0, Number(b.stok_minimum) || 0, Number(b.harga_beli) || 0, Number(b.nilaiBeli) || 0, Number(b.nilaiJual) || 0]
+    }));
 
     const html = await buildPrintHTML(
         "Laporan Stok",
@@ -1252,6 +1385,10 @@ async function printStock() {
             { label: "Total Stok", value: fmtNum(s.summary?.totalStok) },
             { label: "Nilai (Beli)", value: fmtRupiah(s.summary?.totalNilaiBeli) },
             { label: "Nilai (Jual)", value: fmtRupiah(s.summary?.totalNilaiJual) }
+        ],
+        [
+            { index: 4, type: "number" }, { index: 5, type: "number" },
+            { index: 6, type: "rupiah" }, { index: 7, type: "rupiah" }, { index: 8, type: "rupiah" }
         ]
     );
     printToWindow(html, "mencetak Laporan Stok", false);
@@ -1262,7 +1399,8 @@ async function printPurchase() {
     const rows = (s.data || []).map(p => {
         const retur = Number(p.retur) || 0;
         const totalNet = (Number(p.grandTotal) || 0) - retur;
-        return `
+        return {
+            html: `
         <tr>
             <td>${esc(p.nomor)}</td>
             <td>${formatDate(p.tanggal)}</td>
@@ -1271,8 +1409,10 @@ async function printPurchase() {
             <td style="text-align:right">${fmtRupiah(totalNet)}</td>
             <td>${esc(p.status)}</td>
         </tr>
-    `;
-    }).join("");
+    `,
+            values: [0, 0, 0, retur, totalNet, 0]
+        };
+    });
 
     const range = (state.purchaseStart || state.purchaseEnd)
         ? `${state.purchaseStart || "awal"} s/d ${state.purchaseEnd || "sekarang"}`
@@ -1290,6 +1430,9 @@ async function printPurchase() {
             { label: "Total Item", value: fmtNum(s.summary?.totalItem) },
             { label: "Total Retur", value: fmtRupiah(s.summary?.totalRetur) },
             { label: "Total Pembelian (Neto)", value: fmtRupiah(s.summary?.totalPembelian) }
+        ],
+        [
+            { index: 3, type: "rupiah" }, { index: 4, type: "rupiah" }
         ]
     );
     printToWindow(html, "mencetak Laporan Pembelian", false);
@@ -1303,7 +1446,8 @@ async function printSales() {
         // Net Sales = grandTotal − retur − pajak (POS; grandTotal include pajak)
         const totalNet = (Number(p.grandTotal) || 0) - retur - (isPos ? (Number(p.pajak) || 0) : 0);
         if (isPos) {
-            return `
+            return {
+                html: `
             <tr>
                 <td>${formatDate(p.tanggal)}</td>
                 <td>${esc(p.nomor)}</td>
@@ -1314,9 +1458,12 @@ async function printSales() {
                 <td style="text-align:right">${fmtRupiah(p.pajak || 0)}</td>
                 <td style="text-align:right"><strong>${fmtRupiah(totalNet)}</strong></td>
             </tr>
-        `;
+        `,
+                values: [0, 0, 0, (p.items || []).length, Number(p.grandTotal) || 0, retur, Number(p.pajak) || 0, totalNet]
+            };
         }
-        return `
+        return {
+            html: `
         <tr>
             <td>${esc(p.nomor)}</td>
             <td>${formatDate(p.tanggal)}</td>
@@ -1326,8 +1473,10 @@ async function printSales() {
             <td style="text-align:right">${fmtRupiah(totalNet)}</td>
             <td>${esc(p.status)}</td>
         </tr>
-    `;
-    }).join("");
+    `,
+            values: [0, 0, 0, Number(p.pajak) || 0, retur, totalNet, 0]
+        };
+    });
 
     const range = (state.salesStart || state.salesEnd)
         ? `${state.salesStart || "awal"} s/d ${state.salesEnd || "sekarang"}`
@@ -1351,33 +1500,59 @@ async function printSales() {
         [
             { label: isPos ? "Total Nota" : "Total SO", value: fmtNum(s.summary?.totalTransaksi) },
             { label: "Total Item", value: fmtNum(s.summary?.totalItem) },
+            { label: "Total Penjualan (Bruto)", value: fmtRupiah(s.summary?.totalBruto) },
             { label: "Total Pajak", value: fmtRupiah(s.summary?.totalPajak) },
             { label: "Total Retur", value: fmtRupiah(s.summary?.totalRetur) },
             { label: isPos ? "Net Sales" : "Total Penjualan (Neto)", value: fmtRupiah(s.summary?.totalPenjualan) }
-        ]
+        ],
+        isPos
+            ? [
+                { index: 3, type: "number" },
+                { index: 4, type: "rupiah" }, { index: 5, type: "rupiah" },
+                { index: 6, type: "rupiah" }, { index: 7, type: "rupiah" }
+            ]
+            : [
+                { index: 3, type: "rupiah" }, { index: 4, type: "rupiah" }, { index: 5, type: "rupiah" }
+            ]
     );
     printToWindow(html, "mencetak Laporan Penjualan", false);
 }
 
+const VALUE_TABLE_HEADERS = [
+    { label: "Gudang" },
+    { label: "Stok", align: "right" },
+    { label: "Nilai Beli", align: "right" },
+    { label: "Nilai Jual", align: "right" }
+];
+const VALUE_TABLE_NUMERIC = [
+    { index: 1, type: "number" }, { index: 2, type: "rupiah" }, { index: 3, type: "rupiah" }
+];
+
 async function printValue() {
     const v = state.invValue;
     if (!v) return;
-    const whRows = (v.byWarehouse || []).map(w => `
+    const whRows = (v.byWarehouse || []).map(w => ({
+        html: `
         <tr>
             <td>${esc(w.gudang)}</td>
             <td style="text-align:right">${fmtNum(w.totalStok)}</td>
             <td style="text-align:right">${fmtRupiah(w.nilaiBeli)}</td>
             <td style="text-align:right">${fmtRupiah(w.nilaiJual)}</td>
         </tr>
-    `).join("");
-    const katRows = (v.byKategori || []).map(k => `
+    `,
+        values: [0, Number(w.totalStok) || 0, Number(w.nilaiBeli) || 0, Number(w.nilaiJual) || 0]
+    }));
+    const katRows = (v.byKategori || []).map(k => ({
+        html: `
         <tr>
             <td>${esc(k.kategori)}</td>
             <td style="text-align:right">${fmtNum(k.totalStok)}</td>
             <td style="text-align:right">${fmtRupiah(k.nilaiBeli)}</td>
             <td style="text-align:right">${fmtRupiah(k.nilaiJual)}</td>
         </tr>
-    `).join("");
+    `,
+        values: [0, Number(k.totalStok) || 0, Number(k.nilaiBeli) || 0, Number(k.nilaiJual) || 0]
+    }));
 
     const company = await getCompanyInfo();
     const companyName = company.name || company.companyName || "Perusahaan";
@@ -1415,6 +1590,9 @@ async function printValue() {
         tr:nth-child(even) td { background:#fafbfc; }
         .rpt-section-title { font-size:0.95rem; font-weight:700; color:#374151; margin:16px 0 8px; }
         .rpt-page-break { page-break-before: always; }
+        .rpt-table { page-break-inside: avoid; }
+        .rpt-subtotal td { background:#f8fafc; font-weight:700; border-top:2px solid #cbd5e1; color:#334155; }
+        .rpt-grand td { background:#eef2ff; font-weight:800; border-top:2px solid #4f46e5; color:#3730a3; }
         .rpt-footer { margin-top:20px; display:flex; justify-content:flex-end; }
         .rpt-sign { text-align:center; }
         .rpt-sign-label { font-size:0.75rem; color:#64748b; }
@@ -1446,16 +1624,10 @@ async function printValue() {
         <div class="rpt-summary-item"><span class="rpt-summary-label">Total Nilai (Jual)</span><span class="rpt-summary-value">${fmtRupiah(v.totalNilaiJual)}</span></div>
     </div>
     <div class="rpt-section-title">🏭 Nilai per Gudang</div>
-    <table>
-        <thead><tr><th>Gudang</th><th style="text-align:right">Stok</th><th style="text-align:right">Nilai Beli</th><th style="text-align:right">Nilai Jual</th></tr></thead>
-        <tbody>${whRows}</tbody>
-    </table>
+    ${renderChunkedTables(VALUE_TABLE_HEADERS, whRows, VALUE_TABLE_NUMERIC)}
     <div class="rpt-page-break"></div>
     <div class="rpt-section-title">🏷️ Nilai per Kategori</div>
-    <table>
-        <thead><tr><th>Kategori</th><th style="text-align:right">Stok</th><th style="text-align:right">Nilai Beli</th><th style="text-align:right">Nilai Jual</th></tr></thead>
-        <tbody>${katRows}</tbody>
-    </table>
+    ${renderChunkedTables(VALUE_TABLE_HEADERS.map(h => ({ ...h, label: h.label === "Gudang" ? "Kategori" : h.label })), katRows, VALUE_TABLE_NUMERIC)}
     <div class="rpt-footer">
         <div class="rpt-sign">
             <div class="rpt-sign-label">Dicetak oleh</div>
@@ -1463,7 +1635,6 @@ async function printValue() {
             <div class="rpt-sign-name">${esc(printedBy)}</div>
         </div>
     </div>
-    <script>window.print();<\/script>
 </body>
 </html>`;
     printToWindow(html, "mencetak Nilai Inventori", false);
@@ -1471,7 +1642,8 @@ async function printValue() {
 
 async function printMutation() {
     const s = state.mutation;
-    const rows = (s.data || []).map(m => `
+    const rows = (s.data || []).map(m => ({
+        html: `
         <tr>
             <td>${esc(m.nomor)}</td>
             <td>${formatDate(m.tanggal)}</td>
@@ -1480,7 +1652,9 @@ async function printMutation() {
             <td style="text-align:right">${fmtNum(m.qty)}</td>
             <td style="text-align:right">${m.total ? fmtRupiah(m.total) : "-"}</td>
         </tr>
-    `).join("");
+    `,
+        values: [0, 0, 0, 0, Number(m.qty) || 0, Number(m.total) || 0]
+    }));
 
     const range = (state.mutationStart || state.mutationEnd)
         ? `${state.mutationStart || "awal"} s/d ${state.mutationEnd || "sekarang"}`
@@ -1497,6 +1671,9 @@ async function printMutation() {
             { label: "Total Mutasi", value: fmtNum(s.summary?.totalMutasi) },
             { label: "Qty Masuk", value: fmtNum(s.summary?.totalMasuk) },
             { label: "Qty Keluar", value: fmtNum(s.summary?.totalKeluar) }
+        ],
+        [
+            { index: 4, type: "number" }, { index: 5, type: "rupiah" }
         ]
     );
     printToWindow(html, "mencetak Mutasi Stok", false);
@@ -1504,14 +1681,17 @@ async function printMutation() {
 
 async function printSupplier() {
     const s = state.supplier;
-    const rows = (s.data || []).map(x => `
+    const rows = (s.data || []).map(x => ({
+        html: `
         <tr>
             <td>${esc(x.supplier)}</td>
             <td>${esc(x.nama)}</td>
             <td style="text-align:center">${fmtNum(x.jumlahPO)}</td>
             <td style="text-align:right">${fmtRupiah(x.totalPembelian)}</td>
         </tr>
-    `).join("");
+    `,
+        values: [0, 0, Number(x.jumlahPO) || 0, Number(x.totalPembelian) || 0]
+    }));
 
     const html = await buildPrintHTML(
         "Laporan Supplier",
@@ -1523,6 +1703,9 @@ async function printSupplier() {
         [
             { label: "Total PO", value: fmtNum(s.summary?.totalPO) },
             { label: "Total Pembelian", value: fmtRupiah(s.summary?.totalPembelian) }
+        ],
+        [
+            { index: 2, type: "number" }, { index: 3, type: "rupiah" }
         ]
     );
     printToWindow(html, "mencetak Laporan Supplier", false);
@@ -1531,14 +1714,17 @@ async function printSupplier() {
 async function printCustomer() {
     const isPos = services.isPos === true;
     const s = state.customer;
-    const rows = (s.data || []).map(x => `
+    const rows = (s.data || []).map(x => ({
+        html: `
         <tr>
             <td>${esc(x.pelanggan)}</td>
             <td>${esc(x.nama)}</td>
             <td style="text-align:center">${fmtNum(x.jumlahSO)}</td>
             <td style="text-align:right">${fmtRupiah(x.totalPenjualan)}</td>
         </tr>
-    `).join("");
+    `,
+        values: [0, 0, Number(x.jumlahSO) || 0, Number(x.totalPenjualan) || 0]
+    }));
 
     const html = await buildPrintHTML(
         "Laporan Pelanggan",
@@ -1550,6 +1736,9 @@ async function printCustomer() {
         [
             { label: isPos ? "Total Nota" : "Total SO", value: fmtNum(s.summary?.totalSO) },
             { label: "Total Penjualan", value: fmtRupiah(s.summary?.totalPenjualan) }
+        ],
+        [
+            { index: 2, type: "number" }, { index: 3, type: "rupiah" }
         ]
     );
     printToWindow(html, "mencetak Laporan Pelanggan", false);
@@ -1563,7 +1752,8 @@ async function printLabarugi() {
         : "Semua periode";
 
     if (state.labarugiView === "rekap") {
-        const rows = (state.labarugiRekap || []).map(r => `
+        const rows = (state.labarugiRekap || []).map(r => ({
+            html: `
             <tr>
                 <td>${esc(r.label)}</td>
                 <td style="text-align:center">${fmtNum(r.jumlahSO)}</td>
@@ -1572,7 +1762,9 @@ async function printLabarugi() {
                 <td style="text-align:right">${fmtRupiah(r.laba)}</td>
                 <td style="text-align:right">${r.penjualan > 0 ? Math.round((r.laba / r.penjualan) * 1000) / 10 + "%" : "-"}</td>
             </tr>
-        `).join("");
+        `,
+            values: [0, Number(r.jumlahSO) || 0, Number(r.penjualan) || 0, Number(r.hpp) || 0, Number(r.laba) || 0, 0]
+        }));
         const html = await buildPrintHTML(
             "Laporan Laba-Rugi (Rekap)",
             range,
@@ -1587,13 +1779,18 @@ async function printLabarugi() {
                 { label: "Harga Pokok", value: fmtRupiah(s.summary?.totalHPP) },
                 { label: "Laba Kotor", value: fmtRupiah(s.summary?.totalLabaKotor) },
                 { label: "Margin", value: `${s.summary?.margin ?? 0}%` }
+            ],
+            [
+                { index: 1, type: "number" },
+                { index: 2, type: "rupiah" }, { index: 3, type: "rupiah" }, { index: 4, type: "rupiah" }
             ]
         );
         printToWindow(html, "mencetak Laporan Laba-Rugi", false);
         return;
     }
 
-    const rows = (s.data || []).map(r => `
+    const rows = (s.data || []).map(r => ({
+        html: `
         <tr>
             <td>${esc(r.nomor)}</td>
             <td>${formatDate(r.tanggal)}</td>
@@ -1602,7 +1799,9 @@ async function printLabarugi() {
             <td style="text-align:right">${fmtRupiah(r.hpp)}</td>
             <td style="text-align:right">${fmtRupiah(r.labaKotor)}</td>
         </tr>
-    `).join("");
+    `,
+        values: [0, 0, 0, Number(r.nilaiPenjualan) || 0, Number(r.hpp) || 0, Number(r.labaKotor) || 0]
+    }));
     const html = await buildPrintHTML(
         "Laporan Laba-Rugi (Detail)",
         range,
@@ -1616,6 +1815,9 @@ async function printLabarugi() {
             { label: "Nilai Penjualan", value: fmtRupiah(s.summary?.totalPenjualan) },
             { label: "Harga Pokok", value: fmtRupiah(s.summary?.totalHPP) },
             { label: "Laba Kotor", value: fmtRupiah(s.summary?.totalLabaKotor) }
+        ],
+        [
+            { index: 3, type: "rupiah" }, { index: 4, type: "rupiah" }, { index: 5, type: "rupiah" }
         ]
     );
     printToWindow(html, "mencetak Laporan Laba-Rugi", false);
@@ -1624,7 +1826,8 @@ async function printLabarugi() {
 async function printPiutang() {
     const isPos = services.isPos === true;
     const s = state.piutang;
-    const rows = (s.data || []).map(p => `
+    const rows = (s.data || []).map(p => ({
+        html: `
         <tr>
             <td>${esc(p.nomor)}</td>
             <td>${formatDate(p.tanggal)}</td>
@@ -1635,7 +1838,9 @@ async function printPiutang() {
             <td style="text-align:center">${esc(p.sisaHariLabel)}</td>
             <td style="text-align:center">${p.overdue ? "OVERDUE" : "Belum tempo"}</td>
         </tr>
-    `).join("");
+    `,
+        values: [0, 0, 0, Number(p.grandTotal) || 0, 0, 0, 0, 0]
+    }));
 
     const range = (state.piutangStart || state.piutangEnd)
         ? `${state.piutangStart || "awal"} s/d ${state.piutangEnd || "sekarang"}`
@@ -1654,6 +1859,9 @@ async function printPiutang() {
             { label: "Total Piutang", value: fmtRupiah(s.summary?.totalPiutang) },
             { label: "Belum Jatuh Tempo", value: fmtRupiah(s.summary?.totalBelumJatuhTempo) },
             { label: "Total Overdue", value: fmtRupiah(s.summary?.totalOverdue) }
+        ],
+        [
+            { index: 3, type: "rupiah" }
         ]
     );
     printToWindow(html, "mencetak Laporan Piutang", false);
@@ -1672,8 +1880,8 @@ function getStyles() {
 
 .lpr-tabs { display:flex; gap:0; margin-bottom:1.25rem; border-bottom:2px solid #e5e7eb; overflow-x:auto; }
 .lpr-tab { padding:0.65rem 1.15rem; cursor:pointer; border:none; background:none; font-size:0.88rem; font-weight:600; color:#6b7280; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.2s; white-space:nowrap; }
-.lpr-tab:hover { color:#4f46e5; }
-.lpr-tab.active { color:#4f46e5; border-bottom-color:#4f46e5; }
+.lpr-tab:hover { color:var(--primary,#667eea); }
+.lpr-tab.active { color:var(--primary,#667eea); border-bottom-color:var(--primary,#667eea); }
 
 .lpr-content { min-height: 200px; }
 .lpr-loading { text-align:center; padding:3rem; color:#9ca3af; }
@@ -1684,21 +1892,21 @@ function getStyles() {
 .lpr-search { position:relative; display:flex; align-items:center; }
 .lpr-search-icon { position:absolute; left:0.7rem; font-size:0.85rem; opacity:0.5; pointer-events:none; }
 .lpr-search input { padding:0.5rem 0.75rem 0.5rem 2.1rem; border:1px solid var(--smart-border,#d1d5db); border-radius:6px; font-size:0.85rem; width:240px; max-width:60vw; outline:none; background:var(--smart-input-bg,#fff); color:var(--smart-text-primary,#1a1a2e); transition:border 0.15s, box-shadow 0.15s; }
-.lpr-search input:focus { border-color:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+.lpr-search input:focus { border-color:var(--primary,#667eea); box-shadow:0 0 0 3px rgba(102,126,234,0.15); }
 .lpr-date-range { display:flex; align-items:center; gap:0.4rem; }
 .lpr-date-range input { padding:0.45rem 0.6rem; border:1px solid var(--smart-border,#d1d5db); border-radius:6px; font-size:0.82rem; outline:none; background:var(--smart-input-bg,#fff); color:var(--smart-text-primary,#1a1a2e); }
-.lpr-date-range input:focus { border-color:#4f46e5; }
+.lpr-date-range input:focus { border-color:var(--primary,#667eea); }
 .lpr-date-range span { font-size:0.8rem; color:#9ca3af; }
 .lpr-btn { padding:0.5rem 1rem; border-radius:6px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; font-size:0.85rem; font-weight:600; transition:all 0.15s; }
-.lpr-btn-print { background:#4f46e5; color:#fff; border-color:#4f46e5; }
-.lpr-btn-print:hover { background:#4338ca; }
+.lpr-btn-print { background:linear-gradient(135deg, var(--primary,#667eea), var(--accent,#764ba2)); color:#fff; border:none; }
+.lpr-btn-print:hover { opacity:0.9; }
 
 .lpr-summary-grid { display:grid; grid-template-columns:repeat(6, 1fr); gap:0.7rem; margin-bottom:1.25rem; }
-.lpr-summary-card { background:var(--smart-card-bg,#fff); border:1px solid #e5e7eb; border-radius:10px; padding:0.85rem 1rem; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+.lpr-summary-card { background:rgba(255,255,255,0.58); border:2px solid rgb(255,255,255); border-radius:28px; padding:0.85rem 1rem; box-shadow:0 8px 16px rgba(0,0,0,0.08); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
 .lpr-summary-icon { font-size:1.2rem; margin-bottom:0.3rem; }
 .lpr-summary-value { font-size:1.25rem; font-weight:700; color:#111827; word-break:break-all; }
 .lpr-summary-label { font-size:0.72rem; color:#6b7280; margin-top:0.15rem; }
-.lpr-value-success { color:#059669; }
+.lpr-value-success { color:var(--primary,#667eea); }
 .lpr-value-danger { color:#dc2626; }
 .lpr-value-warning { color:#d97706; }
 .lpr-value-primary { color:#4f46e5; }
@@ -1707,15 +1915,16 @@ function getStyles() {
 .lpr-sort-label { font-size:0.8rem; color:#6b7280; }
 .lpr-sort-select { padding:0.4rem 0.6rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.82rem; outline:none; background:#fff; }
 
-.lpr-table-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:10px; overflow-x:auto; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+.lpr-table-wrap { background:rgba(255,255,255,0.58); border:2px solid rgb(255,255,255); border-radius:28px; overflow-x:auto; box-shadow:0 8px 16px rgba(0,0,0,0.08); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); padding:14px; }
 .lpr-table { width:100%; border-collapse:collapse; font-size:0.84rem; }
-.lpr-table th { padding:0.6rem 0.75rem; background:#f8fafc; font-size:0.74rem; font-weight:700; color:#64748b; text-transform:uppercase; text-align:left; border-bottom:2px solid #e2e8f0; white-space:nowrap; letter-spacing:0.3px; }
-.lpr-table td { padding:0.55rem 0.75rem; border-bottom:1px solid #f1f5f9; }
-.lpr-table tbody tr:hover td { background:#f8fafc; }
+.lpr-table th { padding:0.6rem 0.75rem; background:transparent !important; font-size:0.74rem; font-weight:700; color:#64748b; text-transform:uppercase; text-align:left; border-bottom:2px solid rgba(148,163,184,0.28); white-space:nowrap; letter-spacing:0.3px; }
+.lpr-table td { padding:0.55rem 0.75rem; border-bottom:1px solid rgba(148,163,184,0.28); background:transparent !important; }
+.lpr-table tbody tr:nth-child(even) td { background:rgba(255,255,255,0.2) !important; }
+.lpr-table tbody tr:hover td { background:rgba(255,255,255,0.4) !important; }
 .lpr-table .lpr-empty { text-align:center; color:#9ca3af; padding:2rem; font-size:0.88rem; }
 
 .lpr-value-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-.lpr-section { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:1rem; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
+.lpr-section { background:rgba(255,255,255,0.58); border:2px solid rgb(255,255,255); border-radius:28px; padding:1rem; box-shadow:0 8px 16px rgba(0,0,0,0.08); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
 .lpr-section-title { font-size:0.88rem; font-weight:700; color:#374151; margin-bottom:0.7rem; }
 
 .lpr-status-badge, .lpr-mut-badge, .lpr-stok-badge { display:inline-block; padding:0.15rem 0.5rem; border-radius:9999px; font-size:0.7rem; font-weight:600; white-space:nowrap; }
@@ -1734,15 +1943,15 @@ function getStyles() {
 
 .lpr-pagination { display:flex; gap:0.3rem; justify-content:center; margin-top:1rem; flex-wrap:wrap; align-items:center; }
 .lpr-page-btn { min-width:32px; height:32px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; cursor:pointer; font-size:0.82rem; transition:all 0.15s; }
-.lpr-page-btn:hover { border-color:#4f46e5; color:#4f46e5; }
-.lpr-page-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; }
+.lpr-page-btn:hover { border-color:var(--primary,#667eea); color:var(--primary,#667eea); }
+.lpr-page-btn.active { background:var(--primary,#667eea); color:#fff; border-color:var(--primary,#667eea); }
 .lpr-page-info { font-size:0.78rem; color:#9ca3af; margin-left:0.5rem; }
 
 /* ── View Toggle (Laba-Rugi Detail/Rekap) ── */
 .lpr-view-toggle { display:flex; gap:0.25rem; background:#f1f5f9; border-radius:8px; padding:0.2rem; }
 .lpr-view-btn { padding:0.38rem 0.85rem; border:none; border-radius:6px; background:transparent; cursor:pointer; font-size:0.82rem; font-weight:600; color:#64748b; transition:all 0.15s; }
-.lpr-view-btn:hover { color:#4f46e5; }
-.lpr-view-btn.active { background:#fff; color:#4f46e5; box-shadow:0 1px 3px rgba(0,0,0,0.12); }
+.lpr-view-btn:hover { color:var(--primary,#667eea); }
+.lpr-view-btn.active { background:rgba(255,255,255,0.58); color:var(--primary,#667eea); box-shadow:0 8px 16px rgba(0,0,0,0.08); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); }
 
 /* ── Term (Piutang) ── */
 .lpr-term { display:flex; align-items:center; gap:0.35rem; }
@@ -1752,7 +1961,7 @@ function getStyles() {
 .lpr-term-unit { font-size:0.78rem; color:#9ca3af; }
 
 /* ── Laba-Rugi cell ── */
-.lpr-laba-cell { font-weight:700; color:#059669; }
+.lpr-laba-cell { font-weight:700; color:var(--primary,#667eea); }
 .lpr-laba-cell.neg { color:#dc2626; }
 
 /* ── Piutang badge ── */
@@ -1783,5 +1992,5 @@ function getStyles() {
 `;
 }
 
-return { LaporanPage, initLaporanPage };
+return { LaporanPage, initLaporanPage, setActiveTab };
 }

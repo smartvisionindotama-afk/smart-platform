@@ -54,7 +54,7 @@ export function PaymentSettingsPage() {
             .cn-alert-danger { padding:10px 14px; border-radius:8px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; font-size:0.82rem; margin-bottom:12px; }
             .cn-alert-info { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
             [data-theme="dark"] .pay-card { background:var(--smart-card-bg,#1e293b); border-color:var(--smart-border,#334155); }
-            [data-theme="dark"] .cn-alert-info { background:#064e3b33; border-color:#065f46; color:#a7f3d0; }
+            [data-theme="dark"] .cn-alert-info { background:#3730a333; border-color:#4338ca; color:#c7d2fe; }
             </style>
             <div class="page-header">
                 <div>

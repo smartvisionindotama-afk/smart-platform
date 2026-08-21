@@ -2530,10 +2530,10 @@ function getStyles() {
         .smart-modal-body { overflow-y:auto !important; flex:1 1 auto; min-height:0; }
 
         /* Tabs */
-        .pd-tabs { display:flex; gap:0; margin-bottom:1.25rem; border-bottom:2px solid #e5e7eb; }
+        .pd-tabs { display:flex; gap:0; margin-bottom:1.25rem; border-bottom:2px solid rgba(148,163,184,0.28); }
         .pd-tab { padding:0.65rem 1.25rem; cursor:pointer; border:none; background:none; font-size:0.92rem; font-weight:600; color:#6b7280; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.2s; }
-        .pd-tab:hover { color:#4f46e5; }
-        .pd-tab.active { color:#4f46e5; border-bottom-color:#4f46e5; }
+        .pd-tab:hover { color:var(--primary,#667eea); }
+        .pd-tab.active { color:var(--primary,#667eea); border-bottom-color:var(--primary,#667eea); }
 
         /* Retur items header */
         .pr-items-header { display:grid; grid-template-columns:101px 180px 50px 60px 80px 70px 120px auto; gap:0.25rem; padding:0.25rem 0; font-size:0.75rem; font-weight:600; color:#6b7280; border-bottom:1px solid #e2e8f0; }
@@ -2552,10 +2552,13 @@ function getStyles() {
         .pembelian-page .smart-btn-primary { background:linear-gradient(135deg, #1e1b4b, #7c3aed); color:#fff; }
         .pembelian-page .smart-btn-primary:hover { opacity:0.9; }
 
-        .pd-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-        .pd-table th { background: #f8fafc; padding: 0.6rem 0.75rem; text-align: left; font-weight: 600; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-        .pd-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
-        .pd-table tbody tr:hover { background: #f8fafc; }
+        #pd-table-area, #pr-table-area { background:rgba(255,255,255,0.58); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border:2px solid rgb(255,255,255); border-radius:28px; box-shadow:0 8px 16px rgba(0,0,0,0.08); overflow:hidden; padding:14px; }
+        .pd-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background:transparent !important; }
+        .pd-table th { background: transparent !important; padding: 0.6rem 0.75rem; text-align: left; font-weight: 600; border-bottom: 2px solid rgba(148,163,184,0.28); white-space: nowrap; }
+        .pd-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(148,163,184,0.28); vertical-align: middle; background:transparent !important; }
+        .pd-table tbody tr:nth-child(even) td { background:rgba(255,255,255,0.2) !important; }
+        .pd-table tbody tr:hover { background:rgba(255,255,255,0.4) !important; }
+        .pd-table tbody tr:hover td { background:rgba(255,255,255,0.4) !important; }
         .pd-text-right { text-align: right; }
 
         .pd-mgmt-actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }

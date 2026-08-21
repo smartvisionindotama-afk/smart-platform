@@ -366,26 +366,16 @@ Inventory dinyatakan selesai apabila:
 
 ✅ Pembelian berjalan
 
-✅ Penjualan berjalan
-
-✅ Mutasi berjalan
-
+✅ Penjualan berjalan✅ Mutasi berjalan (via Transfer + Laporan Mutasi)
+✅ Adjustment berjalan (via Opname Reconcile)
 ✅ Opname berjalan
-
 ✅ Laporan berjalan
-
 ✅ Hak Akses berjalan
-
 ✅ MongoDB berjalan
-
 ✅ Repository Pattern digunakan
-
 ✅ Semua menu dapat diakses
-
 ✅ Tidak ada error Javascript
-
 ✅ Lint bersih
-
 ✅ Build sukses
 
 10. EXECUTION ORDER (MANDATORY)
@@ -399,6 +389,6 @@ Sprint 3	Gudang, Supplier, Pelanggan	✅
 Sprint 4	User, Role, Permission	✅
 Sprint 5	Pembelian	✅
 Sprint 6	Penjualan	✅
-Sprint 7	Transfer, Mutasi, Adjustment, Opname	🔄 Transfer ✅ • Opname ✅ • Mutasi ⬜ • Adjustment ⬜
+Sprint 7	Transfer, Mutasi, Adjustment, Opname	✅ Transfer ✅ • Mutasi ✅ (via Transfer + Laporan Mutasi) • Adjustment ✅ (via Opname Reconcile) • Opname ✅
 Sprint 8	Laporan	✅ Laporan Stok ✅ • Pembelian ✅ • Penjualan ✅ • Nilai Inventori ✅ • Mutasi ✅ • Supplier ✅ • Customer ✅
-Sprint 9	Audit Log, Setting, Final Testing	⬜
+Sprint 9	Audit Log, Setting, Final Testing	✅ Audit Log ✅ (Activity Log di Dashboard) • Settings ✅ (Company, User, Role, Permission) • Company Profile via server inventory ✅ • Settings Company Identity Locked ✅ • Sidebar Accordion ✅ • Logout Icon SVG ✅ • Laporan sub-menu ✅ • Laporan tabs removed ✅ • Laporan title dinamis ✅ • Kop laporan lengkap (nama/alamat/telp/email) ✅

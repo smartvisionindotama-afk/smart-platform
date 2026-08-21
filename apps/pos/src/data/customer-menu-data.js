@@ -45,10 +45,32 @@ export async function fetchQrMenu(identifier) {
  * @param {string} [catatanOrder]
  * @param {string} [customerWhatsapp] Nomor WA customer — dipakai kirim
  *        notifikasi status order via WhatsApp (Sidobe). Opsional.
- * @returns {Promise<object>} { order: { orderId, orderToken, ... } }
+ * @param {boolean} [waSchedule] true = jadwalkan pembuatan order SERVER-side
+ *        (checkout via WhatsApp): server membuat order setelah delay —
+ *        reliable walau tab browser customer dibekukan OS/browser. Response:
+ *        { scheduled, delayMs, order: { orderToken } }.
+ * @returns {Promise<object>} { order: { orderId, orderToken, ... } } — atau
+ *        { scheduled, delayMs, order: { orderToken } } saat waSchedule=true.
  */
-export async function createQrOrder(identifier, items, paymentMethod, catatanOrder = "", customerWhatsapp = "") {
-    return request("POST", "/qr/orders", { qrIdentifier: identifier, items, paymentMethod, catatanOrder, customerWhatsapp });
+export async function createQrOrder(identifier, items, paymentMethod, catatanOrder = "", customerWhatsapp = "", waSchedule = false) {
+    return request("POST", "/qr/orders", {
+        qrIdentifier: identifier,
+        items,
+        paymentMethod,
+        catatanOrder,
+        customerWhatsapp,
+        waSchedule: !!waSchedule
+    });
+}
+
+/**
+ * Batalkan order WA yang masih terjadwal (belum dibuat server).
+ * Sudah dibuat server → 404 (order tetap berjalan).
+ * @param {string} orderToken
+ * @returns {Promise<object>} { ok: true }
+ */
+export async function cancelScheduledQrOrder(orderToken) {
+    return request("DELETE", `/qr/orders/wa/${encodeURIComponent(orderToken)}`);
 }
 
 /**

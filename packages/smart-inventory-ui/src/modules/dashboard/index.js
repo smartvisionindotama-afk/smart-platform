@@ -419,6 +419,7 @@ function getStyles() {
 .dashboard-page .activity-action.delete { background: #fee2e2; color: #991b1b; }
 @media (max-width: 768px) {
     .dashboard-page { padding: 0.75rem 0.25rem; }
+    .dashboard-page .page-header { padding-top:20px; }
     .dashboard-page .stats-grid { grid-template-columns: 1fr 1fr; }
     .dashboard-page .stat-icon { width: 40px; height: 40px; font-size: 1.5rem; }
     .dashboard-page .stat-info h3 { font-size: 1.2rem; }

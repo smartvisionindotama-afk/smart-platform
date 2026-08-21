@@ -36,6 +36,17 @@
     border-top: 1px solid rgba(255,255,255,0.06);
 }
 
+/* Dark mode primary buttons */
+[data-theme="dark"] .smart-btn-primary,
+[data-theme="dark"] button[class*="btn-primary"] {
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+}
+
+[data-theme="dark"] .smart-btn-primary:hover,
+[data-theme="dark"] button[class*="btn-primary"]:hover {
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+}
+
 [data-theme="dark"] .smart-modal-close:hover {
     background: rgba(255,255,255,0.08);
 }
@@ -46,6 +57,14 @@
 
 [data-theme="dark"] #logout-btn {
     border-color: rgba(255,255,255,0.15) !important;
+}
+
+/* ── Text gradient (SITAMPAN style) ── */
+.text-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 /* Dark mode on page-specific elements */
@@ -84,8 +103,8 @@
        (mis. tabel Laporan 10 kolom dengan th nowrap) — sebelumnya flex menekan
        sidebar karena default flex-shrink:1. */
     flex-shrink: 0;
-    /* SMART Kasir — hijau emerald (konsisten dengan workspace pos) */
-    background: linear-gradient(to bottom, #157058 0%, #059669 100%);
+    /* Gradient biru (atas) → ungu (bawah) */
+    background: linear-gradient(to bottom, #3f80ff 0%, #a935f4 100%);
     color: #fff;
     padding: var(--space-lg);
     overflow-y: auto;
@@ -102,10 +121,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-bottom: var(--space-md);
-    border-bottom: 1px solid var(--border);
-    margin-bottom: var(--space-md);
-    gap: 10px;
+    gap: 8px;
+    margin-bottom: 38px;
 }
 
 .sidebar-logo-wrapper {
@@ -120,6 +137,8 @@
     flex-shrink: 0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
+
+
 
 .sidebar-logo-img {
     width: 100%;
@@ -188,7 +207,7 @@
 }
 
 .sidebar-group-header:hover {
-    background: var(--sidebar-hover, rgba(255, 255, 255, 0.08));
+    background: rgba(255, 255, 255, 0.15);
     opacity: 1;
 }
 
@@ -206,8 +225,11 @@
 
 .sidebar-children {
     list-style: none;
-    padding-left: 12px;
-    margin: 2px 0;
+    padding-left: 8px;
+    margin: 4px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
 }
 
 /* ── Sidebar leaf item ── */
@@ -222,11 +244,10 @@
     color: var(--sidebar-text);
     opacity: 0.75;
     transition: background 0.15s ease, opacity 0.15s ease;
-    margin: 2px 0;
 }
 
 .sidebar-item:hover {
-    background: var(--sidebar-hover, rgba(255, 255, 255, 0.23));
+    background: rgba(255, 255, 255, 0.08);
     opacity: 1;
 }
 
@@ -522,7 +543,7 @@
 }
 
 .sidebar-footer {
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-top: none;
     padding-top: var(--space-md);
     margin-top: auto;
 }
@@ -535,7 +556,7 @@
     padding: 8px 10px;
     border: none;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.06);
+    background: none;
     color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
     font-size: 0.8rem;
@@ -543,7 +564,7 @@
 }
 
 .sidebar-collapse-btn:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.15);
     color: #fff;
 }
 
@@ -637,9 +658,7 @@
     z-index: 200;
     padding: 7px 14px;
     border-radius: 8px;
-    background: rgba(30, 27, 75, 0.92);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(30, 27, 75, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: #fff;
     font-size: 0.8rem;
@@ -769,13 +788,11 @@
     z-index: 250;
     min-width: 190px;
     max-width: 240px;
-    background: rgba(30, 27, 75, 0.95);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
+    background: rgba(59, 78, 159, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 14px;
     padding: 6px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 10px 30px rgba(59, 78, 159, 0.45);
     opacity: 0;
     visibility: hidden;
     transform: translateY(-8px) scale(0.96);
@@ -796,9 +813,9 @@
     top: 20px;
     width: 12px;
     height: 12px;
-    background: rgba(30, 27, 75, 0.95);
-    border-left: 1px solid rgba(255, 255, 255, 0.12);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(59, 78, 159, 0.95);
+    border-left: 1px solid rgba(255, 255, 255, 0.22);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.22);
     transform: rotate(45deg);
     border-radius: 2px;
 }
@@ -850,6 +867,7 @@
 /* Dark mode popup */
 [data-theme="dark"] .sidebar-popup {
     background: rgba(30, 41, 59, 0.95);
+    border-color: rgba(255, 255, 255, 0.08);
 }
 [data-theme="dark"] .sidebar-popup-arrow {
     background: rgba(30, 41, 59, 0.95);
@@ -1092,5 +1110,454 @@
 
     .smart-modal-body .form-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   GLASSMORPHISM + GRADIENT BACKGROUND (SITAMPAN-inspired)
+   Mode cepat — hanya override visual, tidak mengubah struktur.
+   Sidebar & topbar emerald TIDAK diubah (branding SMART Kasir).
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Gradient Background (light mode only) ──
+   SITAMPAN-inspired: multi-layer radial gradient biru muda + pink + cyan
+   pada background content — sama persis dengan kesehatan/index.html. */
+[data-theme="light"] .content,
+.content {
+    background:
+        radial-gradient(130% 95% at 18% 8%, rgba(194, 213, 255, 0.9) 0%, rgba(194, 213, 255, 0.05) 42%),
+        radial-gradient(130% 90% at 92% 92%, rgba(255, 156, 208, 0.78) 0%, rgba(255, 156, 208, 0.05) 52%),
+        radial-gradient(120% 110% at 10% 88%, rgba(76, 197, 255, 0.75) 0%, rgba(76, 197, 255, 0.05) 52%),
+        linear-gradient(180deg, #edf3ff 0%, #bcd1ff 36%, #9ad9ff 100%) !important;
+}
+
+/* Dark mode: keep existing dark bg, no gradient */
+[data-theme="dark"] .content {
+    background: var(--content-bg, #0f172a) !important;
+}
+
+/* ── Topbar glass (subtle — emerald feel preserved) ── */
+.topbar {
+    background: rgba(255, 255, 255, 0.78) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
+}
+
+[data-theme="dark"] .topbar {
+    background: rgba(30, 41, 59, 0.88) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+/* ── Glass cards — tinggi opacity utk readability (POS punya banyak teks) ── */
+.content .glass-card,
+.content .stat-card,
+.content .card {
+    background: rgba(255, 255, 255, 0.78) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.6) !important;
+    border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(31, 38, 135, 0.06);
+}
+
+[data-theme="dark"] .content .glass-card,
+[data-theme="dark"] .content .stat-card,
+[data-theme="dark"] .content .card {
+    background: rgba(30, 41, 59, 0.85) !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Glass modals — opacity tinggi utk form readability ── */
+.smart-modal-overlay .smart-modal-dialog {
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.smart-modal-header {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
+}
+
+.smart-modal-body {
+    background: rgba(255, 255, 255, 0.82) !important;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.smart-modal-footer {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-top: 1px solid rgba(255, 255, 255, 0.5) !important;
+}
+
+[data-theme="dark"] .smart-modal-header,
+[data-theme="dark"] .smart-modal-body,
+[data-theme="dark"] .smart-modal-footer {
+    background: rgba(30, 41, 59, 0.92) !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* ── Glass form inputs — lebih opaque utk ketik nyaman ── */
+.smart-modal-body input,
+.smart-modal-body select,
+.smart-modal-body textarea {
+    background: rgba(255, 255, 255, 0.7) !important;
+    border: 1px solid rgba(209, 213, 219, 0.6) !important;
+    border-radius: 10px;
+}
+
+.smart-modal-body input:focus,
+.smart-modal-body select:focus,
+.smart-modal-body textarea:focus {
+    background: rgba(255, 255, 255, 0.88) !important;
+    border-color: var(--primary, #667eea) !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18) !important;
+}
+
+[data-theme="dark"] .smart-modal-body input,
+[data-theme="dark"] .smart-modal-body select,
+[data-theme="dark"] .smart-modal-body textarea {
+    background: rgba(51, 65, 85, 0.6) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+
+
+/* ── Settings page glass ── */
+.settings-page {
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 14px;
+    padding: 1.5rem;
+}
+
+[data-theme="dark"] .settings-page {
+    background: rgba(30, 41, 59, 0.5);
+}
+
+/* ── Subtle glow on primary buttons (SITAMPAN purple-blue) ── */
+.smart-btn-primary,
+button[class*="btn-primary"] {
+    background: linear-gradient(90deg, #b036ff 0%, #3f83ff 100%) !important;
+    border-color: rgba(255, 255, 255, 0.72) !important;
+    color: #fff !important;
+    box-shadow: 0 10px 20px rgba(72, 106, 224, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.smart-btn-primary:hover,
+button[class*="btn-primary"]:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(72, 106, 224, 0.45);
+    filter: brightness(0.98);
+}
+
+/* ── Tables glass ── */
+/* Wrapper: kontainer scrollable tabel — transparan supaya glass parent menembus */
+.smart-table-wrapper {
+    background: transparent !important;
+}
+
+/* Header row — lebih opaque untuk readability */
+.smart-table thead th,
+.smart-table thead .smart-table-th {
+    background: rgba(255, 255, 255, 0.72) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 2px solid rgba(209, 213, 219, 0.4);
+}
+
+/* Body rows — transparan agar glass parent menembus */
+.smart-table tbody .smart-table-tr,
+.smart-table tbody tr {
+    background: transparent !important;
+}
+
+/* Striped rows — sedikit lebih gelap */
+.smart-table-striped tbody .smart-table-tr:nth-child(even),
+.smart-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Hover — efek glass lebih terang */
+.smart-table-hoverable tbody .smart-table-tr:hover,
+.smart-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* Cell borders — subtle */
+.smart-table .smart-table-td,
+.smart-table td {
+    border-bottom: 1px solid rgba(209, 213, 219, 0.3);
+}
+
+/* ── Dark mode tables ── */
+[data-theme="dark"] .smart-table-wrapper {
+    background: rgba(30, 41, 59, 0.8) !important;
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .smart-table thead th,
+[data-theme="dark"] .smart-table thead .smart-table-th {
+    background: rgba(30, 41, 59, 0.85) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .smart-table-striped tbody .smart-table-tr:nth-child(even),
+[data-theme="dark"] .smart-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .smart-table-hoverable tbody .smart-table-tr:hover,
+[data-theme="dark"] .smart-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-theme="dark"] .smart-table .smart-table-td,
+[data-theme="dark"] .smart-table td {
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+/* ── Dropdown glass ── */
+.smart-dropdown-menu {
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.55) !important;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(31, 38, 135, 0.1);
+}
+
+[data-theme="dark"] .smart-dropdown-menu {
+    background: rgba(30, 41, 59, 0.92) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ── Badge pills glass ── */
+.smart-badge {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+/* ── Pagination glass ── */
+.smart-pagination button {
+    background: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.55) !important;
+    border-radius: 8px;
+}
+
+.smart-pagination button:hover {
+    background: rgba(255, 255, 255, 0.78) !important;
+}
+
+[data-theme="dark"] .smart-pagination button {
+    background: rgba(51, 65, 85, 0.5) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ── Empty state glass ── */
+.smart-empty-state {
+    background: rgba(255, 255, 255, 0.55);
+    border: 1.5px dashed rgba(148, 163, 184, 0.4);
+    border-radius: 14px;
+}
+
+[data-theme="dark"] .smart-empty-state {
+    background: rgba(30, 41, 59, 0.5);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PAGE CONTAINER GLASS — Efek glass untuk SEMUA kontainer halaman
+   Agar background gradient SITAMPAN terlihat menembus konten.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Dashboard page ── */
+.dashboard-page {
+    background: rgba(255, 255, 255, 0.72) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 18px;
+    padding: 1.5rem;
+    box-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);
+}
+
+/* ── CRUD pages (Barang, Kategori, Supplier, User, dll) ── */
+.crud-page {
+    padding: 0 !important;
+}
+
+/* ── Table containers — glass effect desktop ── */
+.table-container {
+    background: rgba(255, 255, 255, 0.58);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 2px solid rgb(255, 255, 255);
+    border-radius: 28px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    padding: 14px;
+}
+.table-container .smart-table-wrapper { background: transparent !important; }
+.table-container .smart-table-wrapper .smart-table,
+.table-container .smart-table-wrapper .smart-table thead,
+.table-container .smart-table-wrapper .smart-table tbody,
+.table-container .smart-table-wrapper .smart-table tr,
+.table-container .smart-table-wrapper .smart-table th,
+.table-container .smart-table-wrapper .smart-table td { background: transparent !important; }
+.table-container .smart-table-wrapper .smart-table th,
+.table-container .smart-table-wrapper .smart-table td { border-color: rgba(148,163,184,0.28); }
+
+/* ── Settings pages — glass effect ── */
+.company-inline-detail,
+.crud-page .form-card,
+.crud-page .card {
+    background: rgba(255, 255, 255, 0.58) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 2px solid rgb(255, 255, 255);
+    border-radius: 14px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Page headers ── */
+.page-header {
+    background: rgba(255, 255, 255, 0.58);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 2px solid rgb(255, 255, 255);
+    border-radius: 28px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Search wrappers ── */
+.search-wrapper input {
+    background: rgba(255, 255, 255, 0.65) !important;
+    border: 1px solid rgba(255, 255, 255, 0.6) !important;
+    border-radius: 10px !important;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.search-wrapper input:focus {
+    background: rgba(255, 255, 255, 0.85) !important;
+    border-color: var(--primary, #667eea) !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15) !important;
+}
+
+/* ── Laporan tabs — disembunyikan (sudah jadi sub menu sidebar) ── */
+.lpr-tabs { display: none !important; }
+
+/* ── Dark mode overrides ── */
+[data-theme="dark"] .dashboard-page {
+    background: rgba(15, 23, 42, 0.88) !important;
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .crud-page {
+    background: rgba(15, 23, 42, 0.88) !important;
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .table-container {
+    background: rgba(30, 41, 59, 0.85) !important;
+    border-color: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .page-header {
+    background: rgba(30, 41, 59, 0.7) !important;
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .search-wrapper input {
+    background: rgba(51, 65, 85, 0.6) !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ── Responsive adjustments ── */
+@media (max-width: 640px) {
+    .dashboard-page,
+    .crud-page {
+        padding: 1rem !important;
+        border-radius: 14px;
+    }
+
+    .table-container {
+        border-radius: 10px;
+    }
+
+    .page-header {
+        padding: 0.75rem 1rem;
+        border-radius: 12px;
+    }
+}
+
+/* ── Settings pages — samakan padding dengan master barang ── */
+.settings-page .page-header,
+.crud-page .page-header {
+    padding-left: 0;
+    padding-right: 0;
+}
+.settings-page .table-container,
+.crud-page .table-container {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* ── POS Mobile: glass effect pindah dari .table-container ke .sm-card ── */
+@media (max-width: 768px) {
+    /* Container: hapus glass, jadikan transparan */
+    .table-container {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+    /* Card: terapkan glass effect */
+    .sm-card {
+        background: rgba(255, 255, 255, 0.58) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.6) !important;
+        border-radius: 14px !important;
+        box-shadow: 0 4px 16px rgba(31, 38, 135, 0.06) !important;
+    }
+    /* Settings cards: glass di mobile */
+    .company-inline-detail,
+    .crud-page .form-card,
+    .crud-page .card {
+        background: rgba(255, 255, 255, 0.58) !important;
+        backdrop-filter: blur(8px) !important;
+        -webkit-backdrop-filter: blur(8px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.6) !important;
+        border-radius: 14px !important;
+        box-shadow: 0 4px 16px rgba(31, 38, 135, 0.06) !important;
+    }
+    /* Dark mode */
+    [data-theme="dark"] .sm-card,
+    [data-theme="dark"] .company-inline-detail,
+    [data-theme="dark"] .crud-page .form-card,
+    [data-theme="dark"] .crud-page .card {
+        background: rgba(30, 41, 59, 0.85) !important;
+        border-color: rgba(255, 255, 255, 0.06) !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
     }
 }

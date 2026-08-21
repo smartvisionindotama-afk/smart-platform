@@ -105,14 +105,20 @@ export async function apiFetch(method, url, body = null, options = {}) {
         const res = await authorizedFetch(url, fetchOptions);
         if (!res.ok) {
             const err = await res.json().catch(() => ({ error: res.statusText }));
-            throw new Error(err.error || `API Error: ${res.status}`);
+            const msg = err.error || `API Error: ${res.status}`;
+            // 4xx client errors (400/409/422) → throw to caller (show user message)
+            if (res.status >= 400 && res.status < 500) {
+                throw new Error(msg);
+            }
+            // 5xx server errors → return null to trigger local fallback
+            console.warn(`[API] ${method} ${url} failed (${res.status}):`, msg);
+            return null;
         }
         return res.json();
     } catch (err) {
-        // All errors → return null to trigger local fallback.
-        // This includes network errors (TypeError), HTTP errors (4xx, 5xx),
-        // and any unexpected errors — so the app stays functional even if
-        // the backend is down or returns an error.
+        // Re-throw client errors (4xx) so caller can show error message
+        if (err.message && !err.message.startsWith("API Error:")) throw err;
+        // Network errors & server errors → return null to trigger local fallback
         console.warn(`[API] ${method} ${url} failed:`, err.message);
         return null;
     }

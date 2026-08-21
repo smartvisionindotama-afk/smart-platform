@@ -23,7 +23,9 @@ const { BarangPage, initBarangPage } = BarangModule({
     formatRupiah, checkKodeExists
 }, {
     // POS — hanya tampilkan kolom Dijual/Tidak Dijual saat F&B aktif
-    showDijual: isTransactionTypeEnabled("fnb")
+    showDijual: isTransactionTypeEnabled("fnb"),
+    // POS mendukung varian untuk semua tipe barang
+    varianBehaviorOptions: ["trading", "service", "recipe", "recipe-fnb"]
 });
 
 export { BarangPage, initBarangPage };

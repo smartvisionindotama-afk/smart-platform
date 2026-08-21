@@ -7,7 +7,7 @@
  * @module @smart/ui/modules/settings/role
  */
 
-import { Modal, Toast, Table, Pagination, EmptyState, Alert, Skeleton } from "../../index.js";
+import { Modal, Toast, Table, Pagination, EmptyState, Alert, Skeleton, UI } from "../../index.js";
 import { esc } from "@smart/core";
 
 /**
@@ -85,6 +85,8 @@ export function SettingsRoleModule({ listRoles, getRole, createRole, updateRole,
             tableArea.innerHTML = "";
             if (state.items.length === 0) {
                 tableArea.appendChild(EmptyState({ icon: "🔑", title: "Belum ada role", description: state.search ? `Tidak ditemukan "${state.search}"` : "Klik Tambah Role", actionText: state.search ? "" : "Tambah Role", onAction: state.search ? null : () => openForm("create") }));
+            } else if (window.innerWidth < 768) {
+                renderRoleCards(tableArea);
             } else {
                 const table = Table({
                     columns: [
@@ -114,6 +116,30 @@ export function SettingsRoleModule({ listRoles, getRole, createRole, updateRole,
             tableArea.innerHTML = "";
             tableArea.appendChild(Alert({ variant: "danger", message: "Gagal memuat data", dismissible: true }));
         } finally { state.loading = false; }
+    }
+
+    function renderRoleCards(container) {
+        const list = UI.CardList(state.items, (item) => {
+            return `
+                <div class="sm-card-header-row">
+                    <div class="sm-card-name">${esc(item.label)}</div>
+                    <span class="sm-card-code">${esc(item.name)}</span>
+                </div>
+                <div class="sm-card-divider"></div>
+                <div class="sm-card-details">
+                    <div class="sm-card-detail-row"><span class="sm-card-label">Level</span><span class="sm-card-value"><span class="badge-level">${item.level}</span></span></div>
+                </div>
+                <div class="sm-card-footer-row">
+                    <div class="sm-card-footer-left"></div>
+                    <div class="sm-card-footer-right">
+                        <button class="sm-card-btn sm-card-btn-edit" data-edit="${item.id}">✏️ Edit</button>
+                        <button class="sm-card-btn sm-card-btn-delete" data-delete="${item.id}">🗑️ Hapus</button>
+                    </div>
+                </div>
+            `;
+        });
+        container.appendChild(list);
+        UI.attachCardEvents(container, (id) => openForm("edit", id), (id) => confirmDelete(id));
     }
 
     function showSkeleton(container) {

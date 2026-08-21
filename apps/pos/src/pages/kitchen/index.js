@@ -15,9 +15,10 @@
  */
 
 import { showToast, Modal } from "@smart/ui";
-import { esc, formatDateTime } from "@smart/core";
+import { Auth, esc, formatDateTime } from "@smart/core";
 import { listKitchenOrders, updateKitchenStatus, getKitchenOrder, cancelKitchenOrder, cancelKitchenOrderItems } from "../../data/table-order-data.js";
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from "../../data/notification-data.js";
+import { getCompanyByCode } from "../../data/index.js";
 import { speak, playAlertTone } from "../../utils/audio-notify.js";
 import { posDashboardCSS } from "../pos-styles.js";
 
@@ -25,22 +26,58 @@ const state = {
     loading: true,
     error: "",
     orders: [],
+    // view: "board" (HANYA order hari ini) | "history" (riwayat per tanggal)
+    view: "board",
+    historyDate: todayISO(),
     // Auto-refresh tiap 15 detik — kitchen display live sederhana (tanpa WS).
     timer: null
 };
 
-const KITCHEN_LABEL = { new: "Baru", preparing: "Dibuat", ready: "Siap" };
-const KITCHEN_CLS = { new: "kc-new", preparing: "kc-preparing", ready: "kc-ready" };
+/** Tanggal hari ini lokal (server WIB) format "YYYY-MM-DD" — filter riwayat. */
+function todayISO() {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${m}-${day}`;
+}
+
+const KITCHEN_LABEL = {
+    new: "Baru", preparing: "Dibuat", ready: "Siap",
+    served: "Disajikan", collected: "Diambil", cancelled: "Dibatalkan"
+};
+const KITCHEN_CLS = {
+    new: "kc-new", preparing: "kc-preparing", ready: "kc-ready",
+    served: "kc-done", collected: "kc-done", cancelled: "kc-done"
+};
+
+/**
+ * Mode chef STANDALONE: halaman Kitchen dirender TANPA AppShell/sidebar
+ * (role chef di-boot langsung via renderKitchenApp di main.js) — chef hanya
+ * melihat halaman ini, tidak ada menu navigasi ke halaman lain. Admin/owner
+ * yang membuka halaman Kitchen tetap memakai AppShell normal (ada sidebar).
+ * @returns {boolean}
+ */
+function isChefStandalone() {
+    try {
+        const user = Auth.user && Auth.user();
+        return Boolean(user && String(user.role || "").toLowerCase() === "chef");
+    } catch {
+        return false;
+    }
+}
+
+const LOGOUT_ICON = `<svg class="kc-logout-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`;
 
 export function KitchenPage() {
+    const standalone = isChefStandalone();
     return `
-        <div class="page-container pos-dash-page">
+        <div class="page-container pos-dash-page ${standalone ? "kc-standalone" : ""}">
             <style>${posDashboardCSS()}
             .kc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
             .kc-card { border:1px solid var(--smart-border,#e2e8f0); border-radius:12px; background:var(--smart-card-bg,#fff); overflow:hidden; }
             .kc-card.kc-new { border-left:4px solid #3b82f6; }
             .kc-card.kc-preparing { border-left:4px solid #f59e0b; }
-            .kc-card.kc-ready { border-left:4px solid #10b981; }
+            .kc-card.kc-ready { border-left:4px solid #667eea; }
             .kc-head { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid var(--smart-border,#e2e8f0); }
             .kc-meja { font-weight:700; font-size:1.1rem; }
             .kc-orderid { font-size:0.78rem; color:var(--smart-text-secondary,#64748b); }
@@ -59,7 +96,7 @@ export function KitchenPage() {
             .kc-status { font-size:0.72rem; font-weight:700; padding:2px 10px; border-radius:999px; }
             .kc-status-new { background:#dbeafe; color:#1e40af; }
             .kc-status-preparing { background:#fef3c7; color:#92400e; }
-            .kc-status-ready { background:#dcfce7; color:#166534; }
+            .kc-status-ready { background:#e0e7ff; color:#3730a3; }
             .kc-foot { padding:10px 14px; border-top:1px solid var(--smart-border,#e2e8f0); display:flex; gap:8px; }
             .kc-foot .smart-btn { flex:1; }
             /* F&B V1 — tombol BATALKAN kecil di samping TERIMA/PESANAN SIAP:
@@ -72,9 +109,9 @@ export function KitchenPage() {
             [data-theme="dark"] .kc-card { background:var(--smart-card-bg,#1e293b); border-color:var(--smart-border,#334155); }
             [data-theme="dark"] .kc-status-new { background:#1e40af33; color:#93c5fd; }
             [data-theme="dark"] .kc-status-preparing { background:#92400e33; color:#fcd34d; }
-            [data-theme="dark"] .kc-status-ready { background:#065f4633; color:#6ee7b7; }
+            [data-theme="dark"] .kc-status-ready { background:#3730a333; color:#a5b4fc; }
             .cn-alert-danger { padding:10px 14px; border-radius:8px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; font-size:0.82rem; margin-bottom:12px; }
-            .kc-live-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981; margin-right:6px; animation:kc-pulse 1.6s infinite; }
+            .kc-live-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#667eea; margin-right:6px; animation:kc-pulse 1.6s infinite; }
             @keyframes kc-pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
             /* Role-Based Notification Bell (F&B V1) — order baru masuk */
             .kc-bell-btn {
@@ -100,6 +137,50 @@ export function KitchenPage() {
             .kc-order-detail-note { font-size:0.76rem; color:var(--smart-text-secondary,#64748b); }
             [data-theme="dark"] .kc-bell-btn { background:var(--smart-card-bg,#1e293b); border-color:var(--smart-border,#334155); color:#e2e8f0; }
             [data-theme="dark"] .kc-bell-btn:hover { background:#334155; }
+            /* F&B M6-FIX — tombol Riwayat (toggle) + bar filter tanggal */
+            .kc-history-btn {
+                display:inline-flex; align-items:center; gap:6px;
+                padding:7px 11px; border:1px solid var(--smart-border,#e2e8f0); border-radius:8px;
+                background:var(--smart-card-bg,#fff); color:var(--smart-text,#1e293b); cursor:pointer;
+                font-size:0.88rem; font-weight:600; white-space:nowrap; transition:background 0.15s;
+            }
+            .kc-history-btn:hover { background:#f1f5f9; }
+            .kc-history-btn.active { background:#dbeafe; border-color:#93c5fd; color:#1e40af; }
+            [data-theme="dark"] .kc-history-btn { background:var(--smart-card-bg,#1e293b); border-color:var(--smart-border,#334155); color:#e2e8f0; }
+            [data-theme="dark"] .kc-history-btn:hover { background:#334155; }
+            [data-theme="dark"] .kc-history-btn.active { background:#1e40af33; border-color:#1e40af; color:#93c5fd; }
+            .kc-history-bar {
+                display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+                margin-bottom:12px; padding:10px 12px;
+                border:1px solid var(--smart-border,#e2e8f0); border-radius:10px;
+                background:var(--smart-card-bg,#fff);
+            }
+            .kc-history-bar label { font-size:0.8rem; font-weight:600; color:var(--smart-text-secondary,#64748b); }
+            .kc-history-bar .smart-input { width:auto; }
+            [data-theme="dark"] .kc-history-bar { background:var(--smart-card-bg,#1e293b); border-color:var(--smart-border,#334155); }
+            /* Order SELESAI (served/collected/cancelled) — kartu redup */
+            .kc-card.kc-done { opacity:0.62; }
+            .kc-status-served, .kc-status-collected { background:#e2e8f0; color:#334155; }
+            .kc-status-cancelled { background:#fef2f2; color:#b91c1c; }
+            [data-theme="dark"] .kc-status-served, [data-theme="dark"] .kc-status-collected { background:#334155; color:#cbd5e1; }
+            [data-theme="dark"] .kc-status-cancelled { background:#7f1d1d33; color:#fca5a5; }
+            /* Tombol CETAK ORDER (dengan checklist) */
+            .kc-foot .kc-print-btn { flex:0 0 auto !important; padding:6px 10px !important; font-size:0.78rem !important; font-weight:700; }
+            .kc-foot .kc-done-msg { flex:1; }
+            /* ── Mode STANDALONE (role chef — tanpa AppShell/sidebar) ── */
+            .kc-standalone { min-height:100vh; min-height:100dvh; box-sizing:border-box; margin:0; padding:14px 16px 24px; background:var(--smart-bg,#f1f5f9); }
+            [data-theme="dark"] .kc-standalone { background:#0f172a; }
+            .kc-logout-btn {
+                display:inline-flex; align-items:center; gap:6px;
+                padding:7px 14px; border:1px solid rgba(255,255,255,0.55); border-radius:999px;
+                background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); color:#fff; cursor:pointer;
+                font-size:0.8rem; font-weight:600; white-space:nowrap;
+                box-shadow:0 6px 14px rgba(72, 106, 224, 0.35);
+                transition:background 0.2s, transform 0.15s;
+            }
+            .kc-logout-btn:hover { background:linear-gradient(135deg, #a935f4 0%, #3f80ff 100%); transform:translateY(-1px); }
+            .kc-logout-btn:active { transform:scale(0.97); }
+            .kc-logout-icon { vertical-align:-2px; }
             </style>
             <div class="page-header">
                 <div>
@@ -108,13 +189,42 @@ export function KitchenPage() {
                 </div>
                 <div style="display:flex;gap:8px;align-items:center">
                     <button id="kc-bell-btn" class="kc-bell-btn" title="Notifikasi order baru" aria-label="Notifikasi order baru" style="display:none">🔔<span id="kc-bell-count" class="kc-bell-count">0</span></button>
+                    <button id="kc-history-toggle" class="kc-history-btn ${state.view === "history" ? "active" : ""}" title="Tampilkan riwayat order dengan filter tanggal" aria-label="Riwayat order">${state.view === "history" ? "← Order Aktif" : "📅 Riwayat"}</button>
                     <button class="smart-btn smart-btn-secondary" id="kc-refresh">↻ Refresh</button>
+                    ${standalone ? `<button id="kc-logout" class="kc-logout-btn" title="Keluar dari Kitchen" aria-label="Keluar">${LOGOUT_ICON} Logout</button>` : ""}
                 </div>
             </div>
+            <div id="kc-history-bar-wrap"></div>
             <div id="kc-status"></div>
             <div id="kc-grid" class="kc-grid">${state.loading ? `<div class="cn-loading"><span class="cn-spinner"></span> Memuat order kitchen...</div>` : ""}</div>
         </div>
     `;
+}
+
+/**
+ * Bar filter tanggal (RIWAYAT) — dirender ulang saat toggle view berubah.
+ * @param {HTMLElement} container
+ */
+function renderHistoryBar(container) {
+    const wrap = container.querySelector("#kc-history-bar-wrap");
+    if (!wrap) return;
+    if (state.view !== "history") {
+        wrap.innerHTML = "";
+        return;
+    }
+    wrap.innerHTML = `
+        <div class="kc-history-bar">
+            <label for="kc-history-date">📅 Tanggal</label>
+            <input type="date" id="kc-history-date" class="smart-input" value="${esc(state.historyDate)}" />
+            <span class="cn-muted">Riwayat order ${esc(state.historyDate)} — semua status (termasuk selesai & batal)</span>
+        </div>
+    `;
+    wrap.querySelector("#kc-history-date")?.addEventListener("change", (e) => {
+        if (e.target && e.target.value) {
+            state.historyDate = String(e.target.value);
+            load(container);
+        }
+    });
 }
 
 function renderStatus(container) {
@@ -131,7 +241,9 @@ function renderGrid(container) {
         return;
     }
     if (!state.orders.length) {
-        grid.innerHTML = `<div class="cn-empty">Tidak ada order kitchen saat ini. Order baru dari QR Menu Meja akan muncul di sini.</div>`;
+        grid.innerHTML = `<div class="cn-empty">${state.view === "history"
+            ? `Tidak ada order kitchen pada tanggal ${esc(state.historyDate)}.`
+            : "Tidak ada order kitchen hari ini. Order baru dari QR Menu Meja akan muncul di sini."}</div>`;
         return;
     }
     grid.innerHTML = state.orders.map(o => {
@@ -140,11 +252,21 @@ function renderGrid(container) {
         // F&B V1 — tombol [✕ BATALKAN SEMUA] kecil di samping TERIMA /
         // PESANAN SIAP (sebelum order siap). Membatalkan seluruh order.
         const cancelAllBtn = `<button class="smart-btn kc-cancel-btn" data-kc-cancel="${id}" title="Batalkan seluruh pesanan" aria-label="Batalkan seluruh pesanan">✕ BATALKAN SEMUA</button>`;
-        const foot = status === "new"
-            ? `<button class="smart-btn smart-btn-primary" data-kc-action="${id}" data-kc-to="preparing">👨‍🍳 TERIMA</button>${cancelAllBtn}`
-            : status === "preparing"
-                ? `<button class="smart-btn smart-btn-success" data-kc-action="${id}" data-kc-to="ready">🔔 PESANAN SIAP</button>${cancelAllBtn}`
-                : `<div class="kc-ready-msg">✅ Order siap — customer sudah diberi notifikasi. Silakan serahkan ke kasir.</div>`;
+        // F&B M6-FIX — tombol CETAK ORDER (dengan checklist ☐ per item).
+        const printBtn = `<button class="smart-btn kc-print-btn" data-kc-print="${id}" title="Cetak order dengan checklist item" aria-label="Cetak order">🖨️ Cetak</button>`;
+        let foot = "";
+        if (status === "new") {
+            foot = `<button class="smart-btn smart-btn-primary" data-kc-action="${id}" data-kc-to="preparing">👨‍🍳 TERIMA</button>${cancelAllBtn}`;
+        } else if (status === "preparing") {
+            foot = `<button class="smart-btn smart-btn-success" data-kc-action="${id}" data-kc-to="ready">🔔 PESANAN SIAP</button>${cancelAllBtn}`;
+        } else if (status === "ready") {
+            foot = `<div class="kc-ready-msg kc-done-msg">✅ Order siap — customer sudah diberi notifikasi. Silakan serahkan ke kasir.</div>`;
+        } else if (status === "cancelled") {
+            foot = `<div class="kc-ready-msg kc-done-msg" style="background:#fef2f2;border-color:#fecaca;color:#b91c1c">❌ Order dibatalkan${o.cancelledBy ? ` oleh ${esc(o.cancelledBy)}` : ""}</div>`;
+        } else {
+            foot = `<div class="kc-ready-msg kc-done-msg">✅ Selesai — ${o.servedAt ? `diserahkan ${formatDateTime(o.servedAt)}` : "order ditutup"}</div>`;
+        }
+        foot += printBtn;
         // F&B V1 — pembatalan hanya berlaku SEBELUM order siap (new/preparing):
         // tombol ✕ (per-item & Batalkan Semua) disembunyikan saat order sudah
         // ready/served/collected — barang sudah diserahkan, tidak bisa dibatalkan.
@@ -198,6 +320,104 @@ function renderGrid(container) {
             doCancelItem(container, btn.dataset.kcItemCancel, btn.dataset.kcItemId);
         });
     });
+    grid.querySelectorAll("[data-kc-print]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            printKitchenOrder(btn.dataset.kcPrint);
+        });
+    });
+}
+
+/**
+ * CETAK ORDER KITCHEN — tiket thermal 80mm dengan KOTAK CHECKLIST ☐ per
+ * item, agar kitchen bisa mencentang setiap item saat dikerjakan (tanpa
+ * harus kembali ke layar). Memakai pola struk kasir (window.print).
+ * @param {string} id TableOrder._id
+ */
+async function printKitchenOrder(id) {
+    let order = state.orders.find(o => String(o._id) === String(id)) || null;
+    if (!order) {
+        try {
+            order = await getKitchenOrder(id);
+        } catch (err) {
+            return showToast("danger", err?.message || "Gagal memuat order untuk dicetak");
+        }
+    }
+    if (!order) return showToast("warning", "Order tidak ditemukan");
+
+    const company = await resolveKitchenCompanyName();
+    const items = ((Array.isArray(order.kitchenItems) && order.kitchenItems.length) ? order.kitchenItems : order.items) || [];
+    const statusLabel = KITCHEN_LABEL[order.kitchenStatus] || order.kitchenStatus || "";
+    const rows = items.map(i => `
+        <tr>
+            <td style="padding:2px 0;font-size:10px;white-space:nowrap">☐</td>
+            <td style="padding:2px 0;font-size:10px;">${i.qty}× ${esc(i.nama)}${i.cancelled ? " <span style='color:#b91c1c'>(BATAL)</span>" : ""}</td>
+        </tr>
+        ${i.catatan ? `<tr><td></td><td style="padding:0 0 3px;font-size:8px;color:#444">📝 ${esc(i.catatan)}</td></tr>` : ""}
+    `).join("");
+    const noteLine = order.catatanOrder ? `<div class="info">📝 Order: ${esc(order.catatanOrder)}</div>` : "";
+    const html = `<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="UTF-8"><title>Order ${esc(order.orderId)}</title>
+<style>
+    @page { margin:0; size:80mm auto; }
+    body { font-family:'Courier New',Courier,monospace; margin:0; padding:4mm; width:72mm; color:#000; font-size:9px; line-height:1.35; }
+    .header { text-align:center; margin-bottom:4px; }
+    .header .name { font-size:13px; font-weight:bold; }
+    .header .sub { font-size:8px; }
+    .divider { border-top:1px dashed #000; margin:4px 0; }
+    .info { font-size:8px; margin-bottom:2px; }
+    table { width:100%; border-collapse:collapse; }
+    td { font-size:10px; padding:2px 0; }
+    .footer { text-align:center; font-size:8px; margin-top:6px; }
+    @media print { body { width:72mm; } }
+</style></head>
+<body>
+    <div class="header">
+        <div class="name">${esc(company || "KITCHEN ORDER")}</div>
+        <div class="sub">TIKET ORDER DAPUR — checklist item</div>
+    </div>
+    <div class="divider"></div>
+    <div class="info">Order : ${esc(order.orderId)}</div>
+    <div class="info">Meja  : ${esc(order.nomorMeja)}</div>
+    <div class="info">Tgl   : ${new Date(order.createdAt || Date.now()).toLocaleString("id-ID")}</div>
+    <div class="info">Status: ${esc(statusLabel)}</div>
+    ${noteLine}
+    <div class="divider"></div>
+    <table>
+        ${rows}
+    </table>
+    <div class="divider"></div>
+    <div class="footer">Centang ☐ pada setiap item saat selesai</div>
+    <script>window.print();window.close();<\/script>
+</body></html>`;
+    printToWindow(html);
+}
+
+/** Nama perusahaan utk tiket cetak (cache sekali; fallback kode company). */
+let kcCompanyName = "";
+async function resolveKitchenCompanyName() {
+    if (kcCompanyName) return kcCompanyName;
+    try {
+        const code = (Auth.user && Auth.user() && Auth.user().institution) || "";
+        if (code) {
+            const company = await getCompanyByCode(code);
+            if (company && company.name) kcCompanyName = String(company.name);
+        }
+    } catch { /* fallback label generik */ }
+    return kcCompanyName;
+}
+
+/** Buka window print utk HTML tiket (pola struk kasir). */
+function printToWindow(html) {
+    const w = window.open("", "_blank", "width=420,height=640");
+    if (!w) {
+        showToast("danger", "Pop-up diblokir — izinkan pop-up untuk mencetak order");
+        return;
+    }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 250);
 }
 
 /**
@@ -248,7 +468,13 @@ async function load(container, silent = false) {
         renderGrid(container);
     }
     try {
-        const res = await listKitchenOrders();
+        // BOARD (default): HANYA order HARI INI (semua status). Order dari
+        // tanggal sebelumnya — termasuk yang belum selesai — hanya tampil
+        // lewat tab RIWAYAT (filter tanggal).
+        const params = state.view === "history"
+            ? { from: state.historyDate, to: state.historyDate }
+            : { today: 1 };
+        const res = await listKitchenOrders(params);
         state.orders = Array.isArray(res?.data) ? res.data : [];
         state.loading = false;
         renderStatus(container);
@@ -412,6 +638,28 @@ export function initKitchenPage() {
     const container = document.querySelector(".page-container");
     if (!container) return;
     container.querySelector("#kc-refresh")?.addEventListener("click", () => load(container));
+    // F&B M6-FIX — toggle Riwayat / Order Aktif (dengan filter tanggal).
+    const toggle = container.querySelector("#kc-history-toggle");
+    if (toggle) {
+        toggle.addEventListener("click", () => {
+            state.view = state.view === "history" ? "board" : "history";
+            toggle.textContent = state.view === "history" ? "← Order Aktif" : "📅 Riwayat";
+            toggle.classList.toggle("active", state.view === "history");
+            renderHistoryBar(container);
+            load(container);
+        });
+    }
+    renderHistoryBar(container);
+    // Mode chef standalone (tanpa AppShell) — tombol Logout milik halaman ini.
+    // handleLogout dipanggil via window hook yang di-set main.js
+    // (window.__app.handleLogout tidak ada — pakai Auth.logout via event).
+    container.querySelector("#kc-logout")?.addEventListener("click", () => {
+        try {
+            const fn = window.__handleLogout || window.__app?.handleLogout;
+            if (typeof fn === "function") { fn(); return; }
+        } catch { /* ignore */ }
+        window.location.reload();
+    });
     load(container);
     initKitchenBell();
     // Auto-refresh 15 detik (kitchen display live sederhana + unread bell).

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+    buildReceivedPayload,
     buildReadyPayload,
     buildCancelledPayload,
     buildItemsCancelledPayload,
@@ -99,6 +100,31 @@ describe("buildReadyPayload", () => {
         const payload = buildReadyPayload({ _id: "1", nomorMeja: "MEJA 01" });
         expect(typeof payload).toBe("string");
         expect(payload.length).toBeGreaterThan(0);
+    });
+});
+
+describe("buildReceivedPayload — order diterima + diminta bayar", () => {
+    it("judul 'Pesanan Anda telah diterima' + meja/order + instruksi bayar + deep-link", () => {
+        const order = {
+            _id: "abc123",
+            orderId: "ORDER #000125",
+            orderNumber: 125,
+            nomorMeja: "MEJA 07",
+            qrIdentifier: "Ab7xK92p",
+            orderToken: "tok123"
+        };
+        const p = JSON.parse(buildReceivedPayload(order, { name: "Kafe ABC" }));
+        expect(p.title).toContain("diterima");
+        expect(p.body).toContain("MEJA 07");
+        expect(p.body).toContain("ORDER #000125");
+        // Diminta melakukan pembayaran (kasir / QRIS / transfer)
+        expect(p.body.toLowerCase()).toContain("pembayaran");
+        expect(p.speakText).toContain("diterima");
+        expect(p.vibrate).toEqual([120, 60, 120]);
+        expect(p.data.orderId).toBe("abc123");
+        expect(p.data.url).toBe("/m/Ab7xK92p?order=tok123");
+        expect(p.icon).toBe(PUSH_NOTIFICATION_ICON);
+        expect(Buffer.byteLength(JSON.stringify(p), "utf-8")).toBeLessThanOrEqual(PUSH_PAYLOAD_MAX_BYTES);
     });
 });
 

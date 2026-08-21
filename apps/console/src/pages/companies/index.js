@@ -383,6 +383,58 @@ function jenisOptions() {
     }));
 }
 
+// ── Auto-generate company code based on jenis ──
+// Prefix mapping: PT=PT, CV=CV, Yayasan=YS, Koperasi=Kop, Firma=Firm,
+// Perorangan=PO, BUMDes=BUMDes, Pemdes=Pemdes, Lainnya=LNY
+const JENIS_PREFIX = {
+    "PT": "PT",
+    "CV": "CV",
+    "Yayasan": "YS",
+    "Koperasi": "Kop",
+    "Firma": "Firm",
+    "Perorangan": "PO",
+    "BUMDes": "BUMDes",
+    "Pemdes": "Pemdes",
+    "Lainnya": "LNY"
+};
+
+/**
+ * Generate next company code based on jenis + existing codes.
+ * For BUMDes/Pemdes: prefix includes kode desa (e.g. BUMDes-3515112011).
+ * Auto-increments: PT-001, PT-002, etc.
+ * @param {string} jenis Company type (PT, CV, Yayasan, etc.)
+ * @param {string} [kodeDesa] Village code for BUMDes/Pemdes
+ * @param {object[]} [existingCompanies] List of existing companies
+ * @returns {string} Generated code
+ */
+async function generateCompanyCode(jenis, kodeDesa = "", existingCompanies = null) {
+    const prefix = JENIS_PREFIX[jenis] || "LNY";
+    
+    // BUMDes/Pemdes: code = prefix + kode desa (NO number suffix).
+    // Return empty if desa not selected yet.
+    if (jenis === "BUMDes" || jenis === "Pemdes") {
+        if (!kodeDesa) return ""; // wait for desa selection
+        return `${prefix}-${kodeDesa}`;
+    }
+    
+    // Other types: prefix + auto-increment number (PT-001, CV-001, etc.)
+    if (!existingCompanies) {
+        const result = await listCompanies({ page: 1, limit: 999 });
+        existingCompanies = result?.data || [];
+    }
+    
+    const pattern = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(\\d+)$`);
+    const existingNumbers = existingCompanies
+        .map(c => {
+            const match = (c.code || "").match(pattern);
+            return match ? parseInt(match[1], 10) : -1;
+        })
+        .filter(n => n >= 0);
+    
+    const nextNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+    return `${prefix}-${String(nextNum).padStart(3, "0")}`;
+}
+
 // ── Wilayah cascading (provinsi → kabupaten → kecamatan → desa) ──
 // Data diambil langsung dari shared/data/wilayah.json via services/wilayah.js
 // (lazy-load, tanpa request /api/wilayah/*).
@@ -475,9 +527,13 @@ async function openEditModal(container, id = null) {
     }
     const isEdit = Boolean(company);
 
+    // Auto-generate code for new companies (disabled); editable for existing
+    const isCreate = !isEdit;
     const codeInput = Input({
         label: "Kode Perusahaan", name: "cn-cmp-code",
-        value: company?.code || "", required: true, placeholder: "PT-001"
+        value: company?.code || "", required: true,
+        placeholder: isCreate ? "Otomatis berdasarkan Jenis" : "PT-001",
+        disabled: isCreate
     });
     const nameInput = Input({
         label: "Nama Perusahaan", name: "cn-cmp-name",
@@ -579,17 +635,19 @@ async function openEditModal(container, id = null) {
     const content = `
         <div class="cn-modal-info">${isEdit ? "Ubah data perusahaan" : "Tambahkan perusahaan baru ke platform"}</div>
         <div class="cn-form-grid">
+            ${jenisSelect.outerHTML}
             ${codeInput.outerHTML}
             ${nameInput.outerHTML}
             ${emailInput.outerHTML}
             ${phoneInput.outerHTML}
             ${taxInput.outerHTML}
-            ${jenisSelect.outerHTML}
             <div class="full">${addressInput.outerHTML}</div>
-            ${provSelect.outerHTML}
-            ${kabSelect.outerHTML}
-            ${kecSelect.outerHTML}
-            ${desaSelect.outerHTML}
+            <div id="cn-wilayah-group" style="display:${(company?.jenis === 'BUMDes' || company?.jenis === 'Pemdes') ? '' : 'none'}">
+                ${provSelect.outerHTML}
+                ${kabSelect.outerHTML}
+                ${kecSelect.outerHTML}
+                ${desaSelect.outerHTML}
+            </div>
             ${businessTypeSelect.outerHTML}
             ${lokasiModeSelect.outerHTML}
             ${gudangInput.outerHTML}
@@ -624,6 +682,65 @@ async function openEditModal(container, id = null) {
 
     // Init wilayah cascading (fetch options setelah modal ter-mount)
     initWilayahCascading();
+
+    // ── Auto-generate company code based on jenis ──
+    // For new companies: code is read-only and auto-generated.
+    // For BUMDes/Pemdes: kode desa is included in the prefix.
+    if (isCreate) {
+        let _existingCompanies = null;
+        let _kodeDesa = "";
+        const codeInput = document.querySelector('[name="cn-cmp-code"]');
+        const jenisSelect = document.querySelector('[name="cn-cmp-jenis"]');
+        const desaSelect = document.querySelector('[name="cn-cmp-desa"]');
+
+        // Load existing companies for auto-increment
+        async function loadExisting() {
+            if (!_existingCompanies) {
+                const result = await listCompanies({ page: 1, limit: 999 });
+                _existingCompanies = result?.data || [];
+            }
+            return _existingCompanies;
+        }
+
+        // Update code when jenis or desa changes
+        async function updateAutoCode() {
+            const jenis = jenisSelect?.value || "PT";
+            const existing = await loadExisting();
+            const newCode = await generateCompanyCode(jenis, _kodeDesa, existing);
+            if (codeInput) codeInput.value = newCode;
+        }
+
+        // When jenis changes → regenerate code + show/hide wilayah
+        if (jenisSelect) {
+            jenisSelect.addEventListener("change", async () => {
+                const jenis = jenisSelect.value;
+                const isSpecial = jenis === "BUMDes" || jenis === "Pemdes";
+                // Show/hide wilayah selects
+                const wilayahGroup = document.getElementById("cn-wilayah-group");
+                if (wilayahGroup) wilayahGroup.style.display = isSpecial ? "" : "none";
+                // Reset desa when switching away from BUMDes/Pemdes
+                if (!isSpecial) {
+                    _kodeDesa = "";
+                    if (desaSelect) desaSelect.value = "";
+                    if (provSelect) provSelect.value = "";
+                    if (kabSelect) kabSelect.value = "";
+                    if (kecSelect) kecSelect.value = "";
+                }
+                await updateAutoCode();
+            });
+        }
+
+        // When desa changes → regenerate code for BUMDes/Pemdes
+        if (desaSelect) {
+            desaSelect.addEventListener("change", async () => {
+                _kodeDesa = desaSelect.value || "";
+                await updateAutoCode();
+            });
+        }
+
+        // Generate initial code on load
+        updateAutoCode();
+    }
 
     document.getElementById("cn-cmp-cancel").addEventListener("click", () => overlay.remove());
     document.getElementById("cn-cmp-save").addEventListener("click", async () => {

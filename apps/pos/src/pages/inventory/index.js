@@ -64,14 +64,14 @@ function getStyles() {
 
 /* Stats Grid */
 .inv-stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
-.inv-stat-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.inv-stat-card { background: rgba(255,255,255,0.58); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border: 1px solid rgba(255,255,255,0.6); border-radius: 10px; padding: 1rem; box-shadow: 0 4px 16px rgba(31,38,135,0.06); }
 .inv-stat-icon { font-size: 1.5rem; margin-bottom: 0.4rem; }
 .inv-stat-value { font-size: 1.5rem; font-weight: 700; color: #111827; }
 .inv-stat-label { font-size: 0.78rem; color: #6b7280; margin-top: 0.2rem; }
 .inv-stat-sub { font-size: 0.7rem; color: #9ca3af; margin-top: 0.15rem; }
 
 /* Section */
-.inv-section { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.inv-section { background: rgba(255,255,255,0.58); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border: 1px solid rgba(255,255,255,0.6); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 4px 16px rgba(31,38,135,0.06); }
 .inv-section-title { font-size: 0.9rem; font-weight: 600; color: #374151; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem; }
 
 /* Warehouse Table */
@@ -89,7 +89,7 @@ function getStyles() {
 .inv-item-stock { text-align: right; font-weight: 600; font-size: 0.85rem; }
 .inv-stock-danger { color: #dc2626; }
 .inv-stock-warning { color: #d97706; }
-.inv-stock-ok { color: #059669; }
+.inv-stock-ok { color: #667eea; }
 
 /* Movement List */
 .inv-mov-list { display: flex; flex-direction: column; gap: 0.4rem; }
@@ -108,8 +108,8 @@ function getStyles() {
 .inv-btn { padding: 0.5rem 1rem; border: 1px solid #e5e7eb; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: all 0.15s; }
 .inv-btn-primary { background: #4f46e5; color: #fff; border-color: #4f46e5; }
 .inv-btn-primary:hover { background: #4338ca; }
-.inv-btn-success { background: #059669; color: #fff; border-color: #059669; }
-.inv-btn-success:hover { background: #047857; }
+.inv-btn-success { background: linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); color: #fff; border-color: transparent; }
+.inv-btn-success:hover { background: linear-gradient(135deg, #a935f4 0%, #3f80ff 100%); }
 .inv-btn-warning { background: #d97706; color: #fff; border-color: #d97706; }
 .inv-btn-warning:hover { background: #b45309; }
 .inv-btn-danger { background: #dc2626; color: #fff; border-color: #dc2626; }
@@ -132,7 +132,7 @@ function getStyles() {
 
 /* Opname Items — Card View */
 .inv-opname-cards { max-height: 400px; overflow-y: auto; display: grid; gap: 0.5rem; padding: 0.25rem 0; }
-.inv-opname-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 0.65rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.inv-opname-card { background: rgba(255,255,255,0.58); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); border: 1px solid rgba(255,255,255,0.6); border-radius: 10px; padding: 0.65rem; box-shadow: 0 4px 16px rgba(31,38,135,0.06); }
 .inv-opname-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
 .inv-opname-card-nomor { font-size: 0.7rem; color: #6b7280; font-weight: 600; }
 .inv-opname-card-nama { font-size: 0.85rem; font-weight: 600; color: #4f46e5; }
@@ -146,7 +146,7 @@ function getStyles() {
 .inv-opname-card-field input.inv-ket-input { width: 100%; padding: 0.3rem 0.4rem; border: 1px solid #d1d5db; border-radius: 5px; font-size: 0.75rem; box-sizing: border-box; }
 .inv-opname-card-field input.inv-ket-input:focus { border-color: #4f46e5; outline: none; }
 .inv-opname-card-selisih { font-size: 0.85rem; font-weight: 700; text-align: right; }
-.inv-selisih-positif { color: #059669; }
+.inv-selisih-positif { color: #667eea; }
 .inv-selisih-negatif { color: #dc2626; }
 .inv-selisih-nol { color: #9ca3af; }
 
@@ -200,7 +200,7 @@ function renderMonitoringTab() {
             </div>
             <div class="inv-stat-card">
                 <div class="inv-stat-icon">💰</div>
-                <div class="inv-stat-value" style="color:#059669">${fmtRupiah(s.totalNilaiBeli)}</div>
+                <div class="inv-stat-value" style="color:#667eea">${fmtRupiah(s.totalNilaiBeli)}</div>
                 <div class="inv-stat-label">Nilai Inventaris (Beli)</div>
                 <div class="inv-stat-sub">Harga beli × stok</div>
             </div>
@@ -297,7 +297,7 @@ function renderOpnameList() {
             const statusClass = `status-${item.status}`;
             const statusLabels = { draft: "Draft", in_progress: "Proses", completed: "Selesai", cancelled: "Batal" };
             return `
-                <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:0.75rem 1rem;margin-bottom:0.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+                <div style="background:rgba(255,255,255,0.58);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.6);border-radius:10px;padding:0.75rem 1rem;margin-bottom:0.5rem;box-shadow:0 4px 16px rgba(31,38,135,0.06)">
                     <div style="display:flex;justify-content:space-between;align-items:start;gap:0.5rem">
                         <div style="flex:1">
                             <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
@@ -765,7 +765,7 @@ async function showOpnameDetail(id) {
             <div><span class="inv-detail-label">Gudang:</span> <span class="inv-detail-value">${esc(item.gudangNama || item.gudang || '-')}</span></div>
             <div><span class="inv-detail-label">Total Item:</span> <span class="inv-detail-value">${fmt(item.totalItem)}</span></div>
             <div><span class="inv-detail-label">Total Selisih:</span> <span class="inv-detail-value">${fmt(item.totalSelisih)}</span></div>
-            <div><span class="inv-detail-label">Selisih + (Lebih):</span> <span class="inv-detail-value" style="color:#059669">${fmt(totalSelisihPositif)}</span></div>
+            <div><span class="inv-detail-label">Selisih + (Lebih):</span> <span class="inv-detail-value" style="color:#667eea">${fmt(totalSelisihPositif)}</span></div>
             <div><span class="inv-detail-label">Selisih − (Kurang):</span> <span class="inv-detail-value" style="color:#dc2626">${fmt(totalSelisihNegatif)}</span></div>
             <div><span class="inv-detail-label">Dibuat oleh:</span> <span class="inv-detail-value">${esc(item.createdBy || '-')}</span></div>
             <div><span class="inv-detail-label">Tanggal Buat:</span> <span class="inv-detail-value">${fmtDateTime(item.createdAt)}</span></div>

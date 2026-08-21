@@ -310,6 +310,35 @@ export function buildRefundPayload(order = {}, _company = {}) {
 }
 
 /**
+ * Payload notifikasi ORDER DITERIMA (F&B — order baru dibuat).
+ * Customer diberi tahu pesanan sudah diterima + diminta melakukan
+ * pembayaran (kasir / QRIS / transfer) — permintaan user. Deep-link sama
+ * dgn ready: /m/{qrIdentifier}?order={orderToken}.
+ * @param {object} order Dokumen TableOrder (baru dibuat)
+ * @param {object} [_company] Dokumen Company (tidak dipakai utk payload)
+ * @returns {string} JSON payload
+ */
+export function buildReceivedPayload(order = {}, _company = {}) {
+    return JSON.stringify({
+        title: "Pesanan Anda telah diterima ✅",
+        body: `Meja ${order.nomorMeja || "-"} · ${order.orderId || ""}\nSilakan lakukan pembayaran di kasir, scan QRIS, atau transfer.`,
+        // F&B V1 — pesan SUARA utk speechSynthesis di service worker.
+        speakText: "Pesanan Anda telah diterima. Silakan lakukan pembayaran.",
+        icon: PUSH_NOTIFICATION_ICON,
+        badge: PUSH_NOTIFICATION_ICON,
+        vibrate: [120, 60, 120],
+        data: {
+            orderId: order._id ? String(order._id) : "",
+            orderNumber: order.orderNumber || 0,
+            nomorMeja: order.nomorMeja || "",
+            url: order.qrIdentifier
+                ? `/m/${order.qrIdentifier}?order=${order.orderToken || ""}`
+                : ""
+        }
+    });
+}
+
+/**
  * Kirim web push ke satu subscription. Menangani error per-endpoint:
  *   - delete   (400/401/403/404/410): subscription TIDAK PERNAH bisa dipakai
  *     lagi (VAPID mismatch / key invalid / expired) → { delete: true } —
@@ -351,6 +380,7 @@ export async function sendPushToSubscription(sub, payload) {
 export default {
     ensureVapidKeys,
     getVapidPublicKey,
+    buildReceivedPayload,
     buildReadyPayload,
     buildCancelledPayload,
     buildItemsCancelledPayload,

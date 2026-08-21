@@ -35,11 +35,13 @@ import { TableOrder } from "../models/TableOrder.js";
 import { Setting } from "../models/Setting.js";
 import { PaymentProof } from "../models/PaymentProof.js";
 import { Notification } from "../models/Notification.js";
+import { PushSubscription } from "../models/PushSubscription.js";
 import { resolveOrderItems, nextOrderNumber, formatOrderId, generateToken } from "../services/qr-menu.js";
 import { getCompanyTransactionTypes } from "../services/transaction-capability.js";
 import { parseProofDataUri, sanitizeProof } from "../services/payment-proof.js";
 import { buildKitchenOrderNotification, buildPaymentProofNotification } from "../services/notification.js";
 import { notifyOrderWhatsapp } from "../services/wa-notify.js";
+import { sendPushToSubscription, buildReceivedPayload } from "../services/web-push.js";
 import { audit } from "../security.js";
 
 /**
@@ -61,7 +63,9 @@ async function pushRoleNotification(order, targetRole, type) {
             orderId: String(order._id),
             orderNumber: order.orderNumber || 0,
             nomorMeja: order.nomorMeja || "",
-            targetRole: n.targetRole || targetRole,
+            // targetRole SELALU dari parameter — builder (kitchen) jangan
+            // menimpa role tujuan (order_new juga dibuat utk bell KASIR).
+            targetRole,
             type: n.type || type,
             title: n.title || "",
             message: n.message || "",
@@ -79,6 +83,256 @@ const router = Router();
 async function resolveTable(identifier) {
     if (!identifier) return null;
     return QrTable.findOne({ qrIdentifier: identifier }).lean();
+}
+
+// ── Order WA terjadwal (F&B V2-FIX) ──
+// Order QR Menu yang dipesan via WhatsApp dibuat SERVER-side setelah delay,
+// bukan timer client. Alasan: timer client di-throttle/dibekukan browser saat
+// tab background — iOS Safari MENGGANTUNG tab sepenuhnya, Android Chrome
+// membatasi timer — sehingga setTimeout 15s tidak pernah jalan di sebagian
+// HP → order tidak pernah masuk ke sistem. Dengan scheduling server-side,
+// order TETAP dibuat ±delay setelah customer mengklik tombol (cukup waktu
+// menekan Send di WhatsApp — notifikasi "pesanan diterima" tidak mendahului
+// kiriman customer), dan tidak bergantung tab browser tetap hidup.
+// Map in-memory: orderToken → { timer }. Entry dihapus saat timer jalan atau
+// dibatalkan. Bila server restart dalam rentang delay (jarang, <20s), order
+// terjadwal hilang — trade-off diterima (alur utama tidak terpengaruh).
+const WA_CREATE_DELAY_MS = 20000;
+// Delay tambahan notifikasi "Pesanan diterima" (WA + push) SETELAH order
+// dibuat (alur WA): order dibuat server-side ±20 detik setelah klik, tapi
+// customer masih butuh waktu menekan Send di WhatsApp. Tanpa delay ini,
+// balasan "✅ Pesanan Anda telah diterima" bisa datang SEBELUM customer
+// mengirim — terlihat aneh. 30 detik SEJAK order diterima (masuk sistem /
+// bell kasir & dapur) — umpan balik user: 60 detik terlalu lama, 30 detik
+// pas (cukup waktu menekan Send, tidak menunggu terlalu lama).
+// Alur WEB (order langsung, tanpa waSchedule) TIDAK ter-delay — customer
+// klik "Buat Pesanan" langsung, konfirmasi seketika adalah natural.
+const WA_RECEIVED_NOTIFY_DELAY_MS = 30000;
+const waPendingOrders = new Map();
+
+/**
+ * Validasi + resolve payload order QR (alur LANGSUNG & terjadwal WA).
+ * Server-side pricing + nomor order sequential + token — semua dihitung
+ * SEKARANG dan dipakai persis saat order dibuat (tidak dihitung ulang).
+ * @param {object} req
+ * @returns {Promise<{ok:true, payload:object, orderToken:string}|{ok:false, status:number, error:string}>}
+ */
+async function resolveQrOrder(req) {
+    const identifier = String(req.body?.qrIdentifier || "").trim();
+    const table = await resolveTable(identifier);
+    if (!table || table.active === false) {
+        return { ok: false, status: 404, error: "QR Menu tidak aktif. Silakan hubungi kasir." };
+    }
+    const companyCode = table.companyCode;
+
+    const enabled = await getCompanyTransactionTypes(companyCode);
+    if (!enabled.includes("fnb")) {
+        return { ok: false, status: 410, error: "QR Menu tidak aktif. Silakan hubungi kasir." };
+    }
+
+    const paymentMethod = String(req.body?.paymentMethod || "").trim().toLowerCase();
+    if (!["cash", "qris", "transfer"].includes(paymentMethod)) {
+        return { ok: false, status: 400, error: "Metode pembayaran tidak valid (pilih: cash, qris, transfer)" };
+    }
+    // Validasi payment method tersedia:
+    //   - qris   → company harus punya QRIS aktif
+    //   - transfer → company harus punya ≥1 rekening aktif
+    if (paymentMethod === "qris") {
+        const qris = await CompanyQris.findOne({ companyCode, active: true }).lean();
+        if (!qris || !qris.qrisImage) {
+            return { ok: false, status: 400, error: "QRIS belum tersedia — silakan pilih metode lain atau bayar di kasir" };
+        }
+    }
+    if (paymentMethod === "transfer") {
+        const count = await BankAccount.countDocuments({ companyCode, active: true });
+        if (count === 0) {
+            return { ok: false, status: 400, error: "Rekening transfer belum tersedia — silakan pilih metode lain atau bayar di kasir" };
+        }
+    }
+
+    // ── Resolve item + harga dari master (server-side pricing) ──
+    const barangs = await Barang.find({ companyCode, active: true }).lean();
+    const productMap = new Map(barangs.map(b => [String(b._id), b]));
+    let recipeMap = new Map();
+    try {
+        const recipes = await Recipe.find({ companyCode, status: "active" }).lean();
+        recipeMap = new Map(recipes.map(r => [String(r._id), r]));
+    } catch { /* tanpa recipe */ }
+
+    const check = resolveOrderItems(req.body?.items, productMap, recipeMap);
+    if (!check.ok) return { ok: false, status: 400, error: check.error };
+
+    // ── Nomor order sequential per company ──
+    const orderNumber = await nextOrderNumber(
+        async (cc) => {
+            const last = await TableOrder.findOne({ companyCode: cc }).sort({ orderNumber: -1 }).select("orderNumber").lean();
+            return last ? last.orderNumber : null;
+        },
+        companyCode
+    );
+
+    // F&B V1 — itemId per baris (dipakai pembatalan PER-ITEM oleh kitchen):
+    // "<orderNumber>-<idx>". Baris items & kitchenItems memakai id yang SAMA
+    // (kitchenItems = subset dari items yang sama).
+    const itemsWithId = check.items.map((it, idx) => ({
+        ...it,
+        itemId: `${orderNumber}-${idx + 1}`
+    }));
+
+    // Pajak mengikuti setting company (sama dengan kasir)
+    let taxEnabled = true;
+    try {
+        const setting = await Setting.findOne({ companyCode }).lean();
+        if (setting) taxEnabled = setting.taxEnabled !== false;
+    } catch { /* default aktif */ }
+    const TAX_RATE = taxEnabled ? 0.11 : 0;
+    const subtotal = check.subtotal;
+    const pajak = Math.round(subtotal * TAX_RATE * 100) / 100;
+    const total = Math.round((subtotal + pajak) * 100) / 100;
+
+    // F&B V1 — nomor WhatsApp customer (opsional): dipakai kirim notifikasi
+    // status order via WhatsApp (Sidobe). Dinormalisasi ringan (digit + '+'
+    // saja, maks 20) — format E.164 final dilakukan service wa-notify.
+    const customerWhatsapp = String(req.body?.customerWhatsapp || "")
+        .replace(/[^\d+]/g, "")
+        .slice(0, 20);
+
+    const orderToken = generateToken(18);
+
+    // ── Kitchen items (F&B V1): HANYA produk behavior recipe / recipe-fnb
+    // yang dikerjakan DAPUR. Barang dagangan (trading) & jasa (service)
+    // disiapkan/diserahkan kasir bersamaan saat item resep selesai — TIDAK
+    // masuk kitchen & TIDAK memicu notifikasi kitchen.
+    const KITCHEN_BEHAVIORS = new Set(["recipe", "recipe-fnb"]);
+    const kitchenItems = itemsWithId.filter(i => {
+        const b = productMap.get(String(i.productId || ""));
+        return b && KITCHEN_BEHAVIORS.has(String(b.behavior || ""));
+    });
+    const hasKitchenItems = kitchenItems.length > 0;
+
+    return {
+        ok: true,
+        orderToken,
+        payload: {
+            companyCode,
+            lokasiId: table.lokasiId || "",
+            lokasiNama: table.lokasiNama || "",
+            tableId: String(table._id),
+            nomorMeja: table.nomorMeja,
+            orderNumber,
+            orderId: formatOrderId(orderNumber),
+            orderSource: "qr_table",
+            qrIdentifier: identifier,
+            items: itemsWithId,
+            kitchenItems,
+            hasKitchenItems,
+            subtotal,
+            pajak,
+            diskon: 0,
+            total,
+            paymentMethod,
+            paymentStatus: "pending",
+            // Order resep → kitchen (NEW). Order trading/jasa SAJA → langsung
+            // READY (disiapkan kasir, customer lihat "pesanan siap").
+            kitchenStatus: hasKitchenItems ? "new" : "ready",
+            orderToken,
+            catatanOrder: String(req.body?.catatanOrder || "").slice(0, 300),
+            customerWhatsapp
+        }
+    };
+}
+
+/**
+ * Web Push "Pesanan diterima — silakan lakukan pembayaran" ke SEMUA
+ * subscription order (web flow — customer yang sudah mengizinkan notifikasi).
+ * Fire and forget — gagal tidak menghentikan create. Subscription kadaluarsa
+ * (delete) dipangkas dari DB (pola sendPaymentNotification).
+ * @param {object} order Dokumen TableOrder
+ */
+async function pushOrderReceived(order) {
+    try {
+        const subs = await PushSubscription.find({
+            companyCode: order.companyCode,
+            orderId: String(order._id)
+        }).lean();
+        const payload = buildReceivedPayload(order);
+        for (const sub of subs) {
+            const res = await sendPushToSubscription(sub, payload);
+            if (res.delete) {
+                try { await PushSubscription.deleteOne({ _id: sub._id }); } catch { /* ignore */ }
+            }
+        }
+    } catch (err) {
+        console.warn("[QR-Public] Gagal kirim push diterima:", err?.message);
+    }
+}
+
+/**
+ * Persist order TableOrder + notifikasi (kitchen bell + cashier bell + WA
+ * customer + push).
+ * @param {object} payload Field order hasil resolveQrOrder
+ * @param {object} [opts] Opsional: { delayReceivedNotifyMs } — alur WA
+ *        menjadwalkan notifikasi "diterima" SETELAH order dibuat (agar tidak
+ *        mendahului kiriman WhatsApp customer). Alur web: 0 (seketika).
+ */
+async function createOrderRecord(payload, opts = {}) {
+    const order = await TableOrder.create(payload);
+
+    // ── Role-based notification: KITCHEN bell "Order baru masuk" (§1) ──
+    // HANYA order yang mengandung item resep — kitchen tidak terganggu
+    // oleh order barang dagangan/jasa murni.
+    if (order.hasKitchenItems) {
+        await pushRoleNotification(order, "kitchen", "order_new");
+    }
+
+    // ── Role-based notification: CASHIER bell "Order baru masuk" ──
+    // SEMUA order QR (kasir menangani pembayaran/penyajian) — badge 🔔 kasir
+    // naik 1, 2, 3... saat order masuk, reset 0 setelah dibaca.
+    await pushRoleNotification(order, "cashier", "order_new");
+
+    // ── F&B — notifikasi ke CUSTOMER "order diterima + diminta bayar" ──
+    // Saluran WA (Sidobe): bila nomor WA customer tersimpan → kirim pesan
+    // "Pesanan Anda telah diterima" + instruksi pembayaran (kasir/QRIS/
+    // transfer). Saluran Web Push: customer web flow yang sudah mengizinkan
+    // notifikasi. Fire and forget — gagal tidak menggagalkan create.
+    // Alur WA: kedua saluran di-DELAY (opts.delayReceivedNotifyMs) agar
+    // balasan tidak mendahului kiriman WhatsApp customer.
+    const notifyReceived = () => {
+        if (order.customerWhatsapp) {
+            notifyOrderWhatsapp(order, "received").catch(err => {
+                console.warn("[QR-Public] Gagal kirim WA diterima:", err?.message);
+            });
+        }
+        pushOrderReceived(order).catch(err => {
+            console.warn("[QR-Public] Gagal kirim push diterima:", err?.message);
+        });
+    };
+    const delayMs = Number(opts.delayReceivedNotifyMs) || 0;
+    if (delayMs > 0) {
+        setTimeout(notifyReceived, delayMs);
+    } else {
+        notifyReceived();
+    }
+    return order;
+}
+
+/** Response order utk customer (field aman, tanpa field internal). */
+function orderResponse(order) {
+    return {
+        orderId: order.orderId,
+        orderNumber: order.orderNumber,
+        orderToken: order.orderToken,
+        nomorMeja: order.nomorMeja,
+        items: order.items,
+        subtotal: order.subtotal,
+        pajak: order.pajak,
+        total: order.total,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        kitchenStatus: order.kitchenStatus,
+        hasKitchenItems: order.hasKitchenItems,
+        createdAt: order.createdAt
+    };
 }
 
 /**
@@ -268,164 +522,63 @@ router.get("/menu/:identifier", async (req, res) => {
 /**
  * POST /orders — create order customer.
  * Body: { qrIdentifier, items: [{ productId, qty, recipeId?, skuKode?, catatan? }],
- *         paymentMethod: "cash"|"qris"|"transfer", catatanOrder? }
+ *         paymentMethod: "cash"|"qris"|"transfer", catatanOrder?, waSchedule? }
  * Semua harga dihitung server. Order dibuat paymentStatus PENDING (TIDAK
  * otomatis PAID), kitchenStatus NEW (masuk kitchen langsung).
+ *
+ * waSchedule=true (F&B checkout via WhatsApp): order TIDAK dibuat sekarang —
+ * dijadwalkan dibuat SERVER-side setelah WA_CREATE_DELAY_MS (reliabel —
+ * tidak bergantung timer tab browser customer yang bisa dibekukan). Response
+ * 202 { scheduled, delayMs, order: { orderToken } } — client menunggu lalu
+ * memantau status via GET /orders/:orderToken.
  */
 router.post("/orders", async (req, res) => {
     try {
-        const identifier = String(req.body?.qrIdentifier || "").trim();
-        const table = await resolveTable(identifier);
-        if (!table || table.active === false) {
-            return res.status(404).json({ error: "QR Menu tidak aktif. Silakan hubungi kasir." });
-        }
-        const companyCode = table.companyCode;
+        const resolved = await resolveQrOrder(req);
+        if (!resolved.ok) return res.status(resolved.status).json({ error: resolved.error });
 
-        const enabled = await getCompanyTransactionTypes(companyCode);
-        if (!enabled.includes("fnb")) {
-            return res.status(410).json({ error: "QR Menu tidak aktif. Silakan hubungi kasir." });
-        }
-
-        const paymentMethod = String(req.body?.paymentMethod || "").trim().toLowerCase();
-        if (!["cash", "qris", "transfer"].includes(paymentMethod)) {
-            return res.status(400).json({ error: "Metode pembayaran tidak valid (pilih: cash, qris, transfer)" });
-        }
-        // Validasi payment method tersedia:
-        //   - qris   → company harus punya QRIS aktif
-        //   - transfer → company harus punya ≥1 rekening aktif
-        if (paymentMethod === "qris") {
-            const qris = await CompanyQris.findOne({ companyCode, active: true }).lean();
-            if (!qris || !qris.qrisImage) {
-                return res.status(400).json({ error: "QRIS belum tersedia — silakan pilih metode lain atau bayar di kasir" });
-            }
-        }
-        if (paymentMethod === "transfer") {
-            const count = await BankAccount.countDocuments({ companyCode, active: true });
-            if (count === 0) {
-                return res.status(400).json({ error: "Rekening transfer belum tersedia — silakan pilih metode lain atau bayar di kasir" });
-            }
-        }
-
-        // ── Resolve item + harga dari master (server-side pricing) ──
-        const barangs = await Barang.find({ companyCode, active: true }).lean();
-        const productMap = new Map(barangs.map(b => [String(b._id), b]));
-        let recipeMap = new Map();
-        try {
-            const recipes = await Recipe.find({ companyCode, status: "active" }).lean();
-            recipeMap = new Map(recipes.map(r => [String(r._id), r]));
-        } catch { /* tanpa recipe */ }
-
-        const check = resolveOrderItems(req.body?.items, productMap, recipeMap);
-        if (!check.ok) return res.status(400).json({ error: check.error });
-
-        // ── Nomor order sequential per company ──
-        const orderNumber = await nextOrderNumber(
-            async (cc) => {
-                const last = await TableOrder.findOne({ companyCode: cc }).sort({ orderNumber: -1 }).select("orderNumber").lean();
-                return last ? last.orderNumber : null;
-            },
-            companyCode
-        );
-
-        // F&B V1 — itemId per baris (dipakai pembatalan PER-ITEM oleh kitchen):
-        // "<orderNumber>-<idx>". Baris items & kitchenItems memakai id yang SAMA
-        // (kitchenItems = subset dari items yang sama).
-        const itemsWithId = check.items.map((it, idx) => ({
-            ...it,
-            itemId: `${orderNumber}-${idx + 1}`
-        }));
-
-        // Pajak mengikuti setting company (sama dengan kasir)
-        let taxEnabled = true;
-        try {
-            const setting = await Setting.findOne({ companyCode }).lean();
-            if (setting) taxEnabled = setting.taxEnabled !== false;
-        } catch { /* default aktif */ }
-        const TAX_RATE = taxEnabled ? 0.11 : 0;
-        const subtotal = check.subtotal;
-        const pajak = Math.round(subtotal * TAX_RATE * 100) / 100;
-        const total = Math.round((subtotal + pajak) * 100) / 100;
-
-        // F&B V1 — nomor WhatsApp customer (opsional): dipakai kirim notifikasi
-        // status order via WhatsApp (Sidobe). Dinormalisasi ringan (digit + '+'
-        // saja, maks 20) — format E.164 final dilakukan service wa-notify.
-        const customerWhatsapp = String(req.body?.customerWhatsapp || "")
-            .replace(/[^\d+]/g, "")
-            .slice(0, 20);
-
-        const orderToken = generateToken(18);
-
-        // ── Kitchen items (F&B V1): HANYA produk behavior recipe / recipe-fnb
-        // yang dikerjakan DAPUR. Barang dagangan (trading) & jasa (service)
-        // disiapkan/diserahkan kasir bersamaan saat item resep selesai — TIDAK
-        // masuk kitchen & TIDAK memicu notifikasi kitchen.
-        const KITCHEN_BEHAVIORS = new Set(["recipe", "recipe-fnb"]);
-        const kitchenItems = itemsWithId.filter(i => {
-            const b = productMap.get(String(i.productId || ""));
-            return b && KITCHEN_BEHAVIORS.has(String(b.behavior || ""));
-        });
-        const hasKitchenItems = kitchenItems.length > 0;
-
-        const order = await TableOrder.create({
-            companyCode,
-            lokasiId: table.lokasiId || "",
-            lokasiNama: table.lokasiNama || "",
-            tableId: String(table._id),
-            nomorMeja: table.nomorMeja,
-            orderNumber,
-            orderId: formatOrderId(orderNumber),
-            orderSource: "qr_table",
-            qrIdentifier: identifier,
-            items: itemsWithId,
-            kitchenItems,
-            hasKitchenItems,
-            subtotal,
-            pajak,
-            diskon: 0,
-            total,
-            paymentMethod,
-            paymentStatus: "pending",
-            // Order resep → kitchen (NEW). Order trading/jasa SAJA → langsung
-            // READY (disiapkan kasir, customer lihat "pesanan siap").
-            kitchenStatus: hasKitchenItems ? "new" : "ready",
-            orderToken,
-            catatanOrder: String(req.body?.catatanOrder || "").slice(0, 300),
-            customerWhatsapp
-        });
-
-        // ── Role-based notification: KITCHEN bell "Order baru masuk" (§1) ──
-        // HANYA order yang mengandung item resep — kitchen tidak terganggu
-        // oleh order barang dagangan/jasa murni.
-        if (hasKitchenItems) {
-            await pushRoleNotification(order, "kitchen", "order_new");
-        }
-
-        // ── F&B V1 — WA CUSTOMER "Pesanan Anda telah diterima" (Sidobe) ──
-        // Bila customer mengisi nomor WA saat checkout → kirim konfirmasi
-        // via WA. Fire and forget — gagal tidak menggagalkan create.
-        if (customerWhatsapp) {
-            notifyOrderWhatsapp(order, "received").catch(err => {
-                console.warn("[QR-Public] Gagal kirim WA diterima:", err?.message);
+        // ── Alur terjadwal (checkout via WhatsApp) ──
+        if (req.body?.waSchedule) {
+            const timer = setTimeout(async () => {
+                waPendingOrders.delete(resolved.orderToken);
+                try {
+                    // Notifikasi "diterima" di-DELAY — balasan tidak boleh
+                    // mendahului kiriman WhatsApp customer (lihat konstanta).
+                    await createOrderRecord(resolved.payload, {
+                        delayReceivedNotifyMs: WA_RECEIVED_NOTIFY_DELAY_MS
+                    });
+                } catch (err) {
+                    console.warn("[QR-Public] Gagal buat order WA terjadwal:", err?.message);
+                }
+            }, WA_CREATE_DELAY_MS);
+            waPendingOrders.set(resolved.orderToken, { timer });
+            return res.status(202).json({
+                scheduled: true,
+                delayMs: WA_CREATE_DELAY_MS,
+                order: { orderToken: resolved.orderToken }
             });
         }
 
-        res.status(201).json({
-            order: {
-                orderId: order.orderId,
-                orderNumber: order.orderNumber,
-                orderToken: order.orderToken,
-                nomorMeja: order.nomorMeja,
-                items: order.items,
-                subtotal: order.subtotal,
-                pajak: order.pajak,
-                total: order.total,
-                paymentMethod: order.paymentMethod,
-                paymentStatus: order.paymentStatus,
-                kitchenStatus: order.kitchenStatus,
-                hasKitchenItems: order.hasKitchenItems,
-                createdAt: order.createdAt
-            }
-        });
+        // ── Alur langsung (order web biasa) ──
+        const order = await createOrderRecord(resolved.payload);
+        res.status(201).json({ order: orderResponse(order) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * DELETE /orders/wa/:orderToken — batalkan order WA yang MASIH terjadwal
+ * (belum dibuat server). Sudah dibuat server (timer sudah jalan) → 404
+ * (order tetap berjalan — hubungi kasir bila perlu).
+ */
+router.delete("/orders/wa/:orderToken", async (req, res) => {
+    try {
+        const pending = waPendingOrders.get(req.params.orderToken);
+        if (!pending) return res.status(404).json({ error: "Order tidak dalam antrian pembuatan" });
+        clearTimeout(pending.timer);
+        waPendingOrders.delete(req.params.orderToken);
+        res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

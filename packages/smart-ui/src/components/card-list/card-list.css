@@ -8,11 +8,11 @@
 }
 
 .sm-card {
-    background: var(--smart-card-bg, #ffffff);
+    background: var(--smart-card-bg, #fff);
     border-radius: 10px;
     padding: 0.85rem 0.75rem;
     box-shadow: 2px 4px 12px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05);
-    border: 1px solid #2563eb;
+    transition: transform 0.15s, box-shadow 0.15s;
 }
 
 /* ── Header Row (nama + optional desc) ── */
@@ -27,7 +27,7 @@
 .sm-card-name {
     font-size: 0.99rem;
     font-weight: 700;
-    color: #9209c4;
+    color: var(--smart-primary, #4f46e5);
     line-height: 1.3;
     flex: 1;
     min-width: 0;
@@ -83,7 +83,7 @@
 .sm-card-code {
     font-size: 0.95rem;
     font-weight: 700;
-    color: #2563eb;
+    color: var(--smart-primary, #4f46e5);
 }
 
 .sm-card-actions {
@@ -98,6 +98,7 @@
     cursor: pointer;
     font-size: 0.8rem;
     transition: all 0.15s;
+    white-space: nowrap;
 }
 
 .sm-card-btn-edit {
@@ -113,3 +114,19 @@
     border-color: #fecaca;
 }
 .sm-card-btn-delete:hover { background: #fee2e2; }
+
+.sm-card-divider {
+    height: 1px;
+    background: rgba(148,163,184,0.28);
+    margin: 0.5rem 0;
+}
+
+@media (max-width: 768px) {
+    .sm-card {
+        box-shadow: none;
+        border: 1px solid rgba(0,0,0,0.25);
+    }
+    .sm-card-list {
+        gap: 0.75rem;
+    }
+}

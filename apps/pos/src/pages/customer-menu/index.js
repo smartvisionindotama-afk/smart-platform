@@ -25,6 +25,7 @@ import { esc } from "@smart/core";
 import {
     fetchQrMenu,
     createQrOrder,
+    cancelScheduledQrOrder,
     fetchQrOrderStatus,
     uploadQrOrderProof,
     fetchPushPublicKey,
@@ -189,10 +190,14 @@ function render() {
     else if (state.view === "status") renderStatus(app);
 }
 
-// Timer order WA — order dibuat OTOMATIS setelah delay (customer tidak perlu
-// kembali ke web; delay memberi waktu menekan Send di WhatsApp).
-let waOrderTimer = null;
-const WA_ORDER_DELAY_MS = 15000;
+// Order WA — DIJADWALKAN SERVER-side (BUKAN timer client delay).
+// Alasan: timer client di-throttle/dibekukan browser saat tab background —
+// iOS Safari MENGGANTUNG tab sepenuhnya & Android Chrome membatasi timer —
+// sehingga setTimeout di client tidak pernah jalan di sebagian HP → order
+// tidak pernah masuk ke sistem. Client minta server membuat order ±20 detik
+// (cukup waktu customer menekan Send di WhatsApp; notifikasi "pesanan
+// diterima" tidak mendahului kiriman), lalu memantau status via polling.
+let waCreating = false;
 
 function headerHTML() {
     const m = state.menu;
@@ -385,17 +390,18 @@ function waCheckout() {
         waPhone: phone
     });
 
+    // Mulai alur WA baru: bersihkan order/polling dari sesi sebelumnya.
+    stopPolling();
+    state.order = null;
     state.pendingWa = { nama, phone, waUrl, message };
     state.view = "wa-sent";
     render();
     openWaUrl(waUrl);
 
-    // Order dibuat OTOMATIS setelah delay — customer tidak perlu kembali ke web.
-    if (waOrderTimer) clearTimeout(waOrderTimer);
-    waOrderTimer = setTimeout(() => {
-        waOrderTimer = null;
-        confirmWaOrderSent();
-    }, WA_ORDER_DELAY_MS);
+    // JADWALKAN pembuatan order di SERVER (±20 detik) — lihat scheduleWaOrder.
+    // waCreating di-reset agar customer bisa memesan lagi setelah selesai.
+    waCreating = false;
+    scheduleWaOrder();
 }
 
 /** Buka wa.me (popup). Bila diblokir — tombol manual tersedia di layar. */
@@ -409,9 +415,17 @@ function openWaUrl(waUrl) {
     } catch { /* ignore */ }
 }
 
-/** Layar perantara: WhatsApp terbuka + pesan preview + tombol buka/batal. */
+/**
+ * Layar perantara WA (order DIJADWALKAN server-side ±20 detik):
+ *   - dalam proses schedule (waCreating): "Sedang mengirim..." (tanpa Batal)
+ *   - sudah terjadwal: "Pesanan akan dibuat otomatis dalam ±20 detik" +
+ *     tombol Buka WhatsApp + Batal (batal = batalkan jadwal di server).
+ * Saat order jadi (server), polling memindahkan halaman ke layar status.
+ */
 function renderWaSent(app) {
     const p = state.pendingWa || {};
+    const scheduled = !!(state.order && state.order.orderToken);
+    const meja = (state.menu && state.menu.table && state.menu.table.nomorMeja) || "";
     app.innerHTML = `
         ${headerHTML()}
         <div class="cm-section">
@@ -424,30 +438,33 @@ function renderWaSent(app) {
             <h2 class="cm-section-title">📲 Kirim Pesanan via WhatsApp</h2>
             <div class="cm-wa-card">
                 <div class="cm-wa-step">💬 WhatsApp restoran telah dibuka — tekan <strong>Send</strong> untuk mengirim pesanan.</div>
-                <div class="cm-wa-step">⏳ Pesanan akan dibuat otomatis dalam ±25 detik. Anda tidak perlu kembali ke halaman ini.</div>
+                ${scheduled
+                    ? `<div class="cm-wa-step">⏳ Pesanan akan dibuat otomatis dalam ±20 detik${meja ? ` (Meja ${esc(meja)})` : ""}. Anda tidak perlu kembali ke halaman ini.</div>`
+                    : `<div class="cm-wa-step">⏳ Sedang mengirim pesanan Anda ke dapur...</div>`}
                 ${p.waUrl ? `<button class="cm-btn cm-btn-wa" id="cm-wa-open" style="width:100%">💬 Buka WhatsApp</button>` : ""}
                 <div class="cm-wa-preview"><pre>${esc(p.message || "")}</pre></div>
             </div>
-            <button class="cm-btn cm-btn-secondary" id="cm-wa-cancel" style="width:100%">Batal — kembali ke keranjang</button>
+            ${scheduled ? `<button class="cm-btn cm-btn-secondary" id="cm-wa-cancel" style="width:100%">Batal — kembali ke keranjang</button>` : ""}
         </div>
     `;
     app.querySelector("#cm-wa-open")?.addEventListener("click", () => openWaUrl(p.waUrl));
-    app.querySelector("#cm-wa-cancel")?.addEventListener("click", () => {
-        if (waOrderTimer) { clearTimeout(waOrderTimer); waOrderTimer = null; }
-        state.pendingWa = null;
-        state.view = "cart";
-        render();
-    });
+    app.querySelector("#cm-wa-cancel")?.addEventListener("click", () => cancelWaOrder());
 }
 
 /**
- * BUAT ORDER DI SISTEM (dipanggil otomatis setelah delay) — persis seperti
- * order web: masuk kitchen otomatis (bell dapur), nomor order asli dari
- * server, status bisa dipantau. TIDAK ADA input manual staf.
+ * JADWALKAN ORDER WA DI SERVER — order dibuat server-side ±20 detik setelah
+ * tombol diklik (bukan timer client: timer background tab dibekukan browser
+ * di sebagian HP — iOS Safari menggantung tab, Android membatasi — sehingga
+ * order tidak pernah masuk). Delay memberi waktu customer menekan Send di
+ * WhatsApp; notifikasi "pesanan diterima" pun tidak mendahului kiriman.
+ * Client menerima orderToken & memantau status via polling; begitu order
+ * jadi di server, halaman pindah ke layar status (startStatusPolling).
  */
-async function confirmWaOrderSent() {
+async function scheduleWaOrder() {
     const p = state.pendingWa;
     if (!p || (state.order && state.order.orderToken)) return; // guard double
+    if (waCreating) return; // guard double-tap / re-entry
+    waCreating = true;
     try {
         const items = state.cart.map(i => ({
             productId: i.productId,
@@ -456,26 +473,45 @@ async function confirmWaOrderSent() {
             skuKode: i.skuKode || "",
             catatan: i.catatan || ""
         }));
-        const res = await createQrOrder(state.identifier, items, "cash", "", p.phone);
-        state.order = res.order;
+        // waSchedule=true → server membuat order setelah delay (reliabel).
+        const res = await createQrOrder(state.identifier, items, "cash", "", p.phone, true);
+        state.order = { orderToken: res.order.orderToken };
         try {
             const u = new URL(window.location.href);
             u.searchParams.set("order", res.order.orderToken);
             window.history.replaceState({}, "", u.toString());
         } catch { /* URL tidak dapat diubah — non-blokir */ }
         state.cart = [];
-        state.pendingWa = null;
-        state.view = "status";
+        state.view = "wa-sent";
         render();
+        // Poll status — order muncul server-side ±20s; begitu terdeteksi,
+        // halaman pindah ke layar status.
         startStatusPolling();
-        // Web push TETAP aktif sebagai cadangan (auto-subscribe bila diizinkan).
-        autoEnableNotification().then(() => {
-            if (document.getElementById("cm-root")) render();
-        }).catch(() => { /* non-blokir */ });
     } catch (err) {
+        waCreating = false;
         showError(err?.message || "Gagal membuat pesanan");
         state.view = "cart";
         render();
+    }
+}
+
+/**
+ * BATALKAN order WA yang masih terjadwal (belum dibuat server): batalkan
+ * jadwal di server (DELETE /qr/orders/wa/:token) lalu kembali ke keranjang.
+ * Bila order sudah sempat dibuat server (race ±20s) — best effort, order
+ * tetap berjalan.
+ */
+async function cancelWaOrder() {
+    const token = state.order && state.order.orderToken;
+    stopPolling();
+    state.order = null;
+    state.pendingWa = null;
+    state.view = "cart";
+    render();
+    if (token) {
+        try {
+            await cancelScheduledQrOrder(token);
+        } catch { /* best effort — order mungkin sudah dibuat server */ }
     }
 }
 
@@ -826,6 +862,15 @@ function startStatusPolling() {
             const res = await fetchQrOrderStatus(state.order.orderToken);
             const o = res.order;
             const prevStatus = state.order.kitchenStatus;
+            // Order WA terjadwal: begitu order jadi di server (±20s), pindah
+            // dari layar wa-sent ke layar status + aktifkan push (bila izin
+            // diberikan) — order baru ADA sekarang, jadi subscribe valid.
+            if (state.view === "wa-sent" && o.orderId) {
+                state.view = "status";
+                autoEnableNotification().then(() => {
+                    if (document.getElementById("cm-root")) render();
+                }).catch(() => { /* non-blokir */ });
+            }
             // Deteksi item yang BARU dibatalkan (pembatalan parsial) — bandingkan
             // id baris yang cancelled sebelum & sesudah poll.
             const prevCancelledIds = new Set(
@@ -1629,7 +1674,7 @@ function showError(msg) {
 
 function styles() {
     return `
-        .cm-root { --cm-green:#059669; --cm-dark:#064e3b; --cm-text:#1e293b; --cm-muted:#64748b; --cm-border:#e2e8f0; --cm-bg:#f8fafc; }
+        .cm-root { --cm-green:#667eea; --cm-dark:#3b4e9f; --cm-text:#1e293b; --cm-muted:#64748b; --cm-border:#e2e8f0; --cm-bg:#f8fafc; }
         .cm-root { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--cm-bg); color:var(--cm-text); min-height:100vh; min-height:100dvh; max-width:640px; margin:0 auto; padding-bottom:90px; }
         /* Tablet & lebih lebar — QR Menu mengikuti orientasi perangkat (PWA tidak
            lagi dikunci portrait, lihat manifest.json): konten memakai layar lebih

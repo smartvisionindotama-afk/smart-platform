@@ -4,10 +4,11 @@ Status milestone:
 - **M6.1 — Transaction Capability Foundation: DONE**
 - **M6.2 — F&B Recipe / BOM Engine: DONE**
 
-Scope sengaja TIDAK mencakup M6.3 (Table & Order Management), M6.4 (Kitchen
-Display System), M6.5 (Customer QR Ordering) — desain M6.1/M6.2 menyediakan
-fondasi (capability `fnb` + engine konsumsi) agar ketiganya dapat ditambahkan
-tanpa refactor besar.
+> **Update (2026-08-17, pos_execution v0.46):** M6.3 (Table & Order Management),
+> M6.4 (Kitchen Display System) & M6.5 (Customer QR Ordering) kini **DIIMPLEMENTASIKAN**
+> sebagai **F&B Customer Ordering V1** — lihat `docs/pos/pos_execution_3.md`.
+> Desain M6.1/M6.2 (capability `fnb` + engine konsumsi) memang disiapkan sebagai
+> fondasi agar ketiganya dapat ditambahkan tanpa refactor besar.
 
 ---
 
@@ -240,8 +241,9 @@ transaksi tidak bisa di-void dua kali.
   item existing.
 - `costPerServing = totalCost` — belum ada konversi batch / yield.
 - `wastePercent` belum dipakai (field sengaja tidak ditambahkan).
-- M6.3/M6.4/M6.5 (Table, Kitchen, QR Ordering) belum diimplementasikan —
-  fondasi `fnb` + engine konsumsi siap untuk itu.
+- M6.3/M6.4/M6.5 (Table, Kitchen, QR Ordering) **sudah diimplementasikan**
+  (F&B Customer Ordering V1 — `pos_execution_3.md` v0.46); dokumen ini
+  mendokumentasikan fondasi M6.1/M6.2 yang menjadi dasarnya.
 
 ### Permission
 

@@ -72,6 +72,23 @@ function isKasirRole() {
 }
 
 /**
+ * F&B V1 — Role chef = halaman Kitchen STANDALONE (tanpa AppShell admin /
+ * sidebar) di SEMUA jenis device — chef hanya melihat Kitchen dan tidak bisa
+ * membuka halaman lain (tidak ada menu navigasi; RBAC server-side juga
+ * menolak route lain). Deteksi via role user.
+ * @returns {boolean}
+ */
+function isChefRole() {
+    try {
+        const user = Auth.user();
+        if (!user) return false;
+        return String(user.role || "").toLowerCase() === "chef";
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Sync permission dari server (dipakai renderApp & boot kasir).
  * SP-027 PRE-M5 round 2: authorizedFetch via apiCall (bukan plain fetch).
  */
@@ -124,8 +141,35 @@ function renderKasirApp() {
 }
 
 /**
+ * Render halaman Kitchen STANDALONE (role chef) — menggantikan AppShell
+ * (TANPA sidebar/topbar admin) di semua jenis device. Chef hanya melihat
+ * halaman Kitchen; tidak ada menu navigasi ke halaman lain.
+ */
+function renderKitchenApp() {
+    ensureCompanyContext();
+    // Fallback offline: bila sync permission gagal dan role chef belum punya
+    // pos.kitchen.view, berikan minimal supaya halaman Kitchen tetap terbuka.
+    if (!Permission.can("pos.kitchen.view")) {
+        try {
+            Permission.loadPermissions([{
+                name: "chef",
+                permissions: ["pos.kitchen.view", "pos.kitchen.update"]
+            }]);
+        } catch { /* ignore */ }
+    }
+    configureKasirShell({ fullscreen: false, onLogout: null });
+    const app = document.querySelector("#app");
+    if (!app) return;
+    // Bukan pos-shell-host (overflow:hidden) — konten Kitchen mengalir normal
+    // dan halaman scroll seperti biasa.
+    app.innerHTML = `<div id="content" class="kc-shell-host"></div>`;
+    navigate("kitchen");
+}
+
+/**
  * Boot aplikasi setelah login/restore/impersonate/register:
  *   - role kasir → langsung halaman kasir standalone
+ *   - role chef  → langsung halaman Kitchen standalone (tanpa sidebar)
  *   - selainnya   → AppShell normal (renderApp)
  */
 async function bootApp() {
@@ -141,6 +185,13 @@ async function bootApp() {
     if (kasir) {
         await syncPermissions();
         renderKasirApp();
+        return;
+    }
+    // F&B V1 — chef: halaman Kitchen STANDALONE (tanpa AppShell/sidebar) di
+    // semua device — chef tidak bisa membuka halaman lain.
+    if (isChefRole()) {
+        await syncPermissions();
+        renderKitchenApp();
         return;
     }
     configureKasirShell({ fullscreen: false, onLogout: null });
@@ -341,20 +392,23 @@ async function renderApp() {
             logoutBtn.innerHTML = `<svg class="pos-logout-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Logout`;
             logoutBtn.style.cssText = `
                 padding: 6px 14px;
-                border: 1px solid rgba(255,255,255,0.2);
-                border-radius: 6px;
-                background: linear-gradient(to bottom, #064e3b, #059669);
+                border: 1px solid rgba(255,255,255,0.25);
+                border-radius: 999px;
+                background: linear-gradient(135deg, #b036ff 0%, #3f83ff 100%);
                 color: #fff;
                 cursor: pointer;
                 font-size: 0.85rem;
-                font-weight: 500;
-                transition: all 0.15s;
+                font-weight: 600;
+                box-shadow: 0 6px 14px rgba(72, 106, 224, 0.35);
+                transition: all 0.2s;
             `;
             logoutBtn.addEventListener("mouseenter", () => {
-                logoutBtn.style.background = "linear-gradient(to bottom, #047857, #10b981)";
+                logoutBtn.style.background = "linear-gradient(135deg, #a935f4 0%, #3f80ff 100%)";
+                logoutBtn.style.transform = "translateY(-1px)";
             });
             logoutBtn.addEventListener("mouseleave", () => {
-                logoutBtn.style.background = "linear-gradient(to bottom, #064e3b, #059669)";
+                logoutBtn.style.background = "linear-gradient(135deg, #b036ff 0%, #3f83ff 100%)";
+                logoutBtn.style.transform = "translateY(0)";
             });
             logoutBtn.addEventListener("click", handleLogout);
             const topbarRight = document.querySelector(".topbar-right");
@@ -368,6 +422,7 @@ async function renderApp() {
 
     initSidebarToggle();
     initSidebarCollapse();
+    initSidebarAccordion();
     initTheme();
     initGroupPopup();
 
@@ -718,6 +773,23 @@ function initGroupPopup() {
     }
 }
 
+
+/**
+ * Accordion behavior: when one sidebar group opens, close all others.
+ */
+function initSidebarAccordion() {
+    const sidebar = document.querySelector(".sidebar");
+    if (!sidebar) return;
+    sidebar.addEventListener("toggle", (e) => {
+        const target = e.target;
+        if (target.tagName !== "DETAILS" || !target.classList.contains("sidebar-group-details")) return;
+        if (target.open) {
+            sidebar.querySelectorAll("details.sidebar-group-details").forEach(d => {
+                if (d !== target) d.open = false;
+            });
+        }
+    }, true);
+}
 
 /**
  * Initialize desktop sidebar collapse/expand toggle.
@@ -1207,3 +1279,6 @@ start();
 
 window.__app = { Auth, framework, impersonation, navigate, renderApp, refreshSidebarMenus };
 window.__showRegister = showRegister;
+// F&B V1 — halaman Kitchen standalone (role chef) memakai tombol Logout
+// sendiri (tanpa AppShell) → handleLogout di-expose global.
+window.__handleLogout = handleLogout;

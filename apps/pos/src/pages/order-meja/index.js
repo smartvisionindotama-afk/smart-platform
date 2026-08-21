@@ -24,7 +24,8 @@ import {
     getTableOrder,
     confirmTableOrderPayment,
     updateTableOrderKitchen,
-    refundTableOrder
+    refundTableOrder,
+    deleteTableOrder
 } from "../../data/table-order-data.js";
 import { navigate } from "../../router";
 import { posDashboardCSS } from "../pos-styles.js";
@@ -51,6 +52,7 @@ const FILTERS = [
     { value: "paid", label: "✅ Paid" },
     { value: "ready", label: "🍽️ Ready" },
     { value: "completed", label: "✔️ Completed" },
+    { value: "batal", label: "🗑️ Batal" },
     { value: "all", label: "Semua" }
 ];
 
@@ -203,6 +205,9 @@ function renderTable(container) {
     }
     const rows = state.orders.map(o => {
         const extraBadges = cancelBadges(o);
+        // Icon hapus HANYA di tab "Semua" + order belum lunas (order lunas =
+        // catatan keuangan, ditolak server 409).
+        const canDelete = state.status === "all" && o.paymentStatus !== "paid";
         return `
         <tr>
             <td><span class="om-meja">${esc(o.nomorMeja)}</span></td>
@@ -213,6 +218,7 @@ function renderTable(container) {
             <td>${paymentBadge(o.paymentStatus)}<br/>${kitchenBadge(o.kitchenStatus)}${extraBadges ? `<br/>${extraBadges}` : ""}</td>
             <td>
                 <button class="smart-btn smart-btn-secondary" data-om-detail="${esc(String(o._id))}">Detail</button>
+                ${canDelete ? `<button class="smart-btn smart-btn-danger" data-om-delete="${esc(String(o._id))}" title="Hapus order" style="margin-left:4px;padding:4px 9px">🗑️</button>` : ""}
             </td>
         </tr>
     `;
@@ -226,6 +232,22 @@ function renderTable(container) {
         </div>
     `;
     wrap.querySelectorAll("[data-om-detail]").forEach(btn => btn.addEventListener("click", () => openDetailModal(container, btn.dataset.omDetail)));
+    wrap.querySelectorAll("[data-om-delete]").forEach(btn => btn.addEventListener("click", () => deleteOrder(container, btn.dataset.omDelete)));
+}
+
+/**
+ * HAPUS order meja (icon 🗑️ di tab "Semua") — konfirmasi dulu; order yang
+ * sudah lunas tidak bisa dihapus (server 409 → toast peringatan).
+ */
+async function deleteOrder(container, id) {
+    if (!window.confirm("Hapus order ini?\n\nTindakan tidak dapat dibatalkan. Order yang sudah lunas tidak bisa dihapus.")) return;
+    try {
+        await deleteTableOrder(id);
+        showToast("success", "Order dihapus");
+        load(container);
+    } catch (err) {
+        showToast("danger", err?.message || "Gagal menghapus order");
+    }
 }
 
 async function load(container) {

@@ -215,10 +215,10 @@ export function BarangModule(services, options = {}) {
             { key: "rak", label: "Rak/Etalase", width: "100px" },
             { key: "gudang", label: "Gudang", width: "100px" },
             ...(state.showDijual
-                ? [{ key: "dijual", label: "Dijual", width: "100px", align: "center",
+                ? [{ key: "dijual", label: "", width: "100px", align: "center",
                     render: (val) => val === false
                         ? `<span class="badge-tidak-dijual">Tidak Dijual</span>`
-                        : `<span class="badge-dijual">Dijual</span>` }]
+                        : "" }]
                 : []),
             { key: "harga_beli", label: "Harga Beli", width: "130px", align: "right",
                 render: (val) => `<span style="font-weight:500;color:#6b7280">${formatRupiah(val)}</span>` },
@@ -238,39 +238,39 @@ export function BarangModule(services, options = {}) {
     function renderBarangCards(container) {
         const list = UI.CardList(state.items, (item) => {
             const isLow = Number(item.stok) <= Number(item.stok_minimum);
-            const imgBlock = item.foto
-                ? `<div class="sm-card-thumb"><img src="${esc(item.foto)}" alt="${esc(item.nama)}" loading="lazy" onerror="this.style.display='none'" /></div>`
-                : "";
             return `
-                ${imgBlock}
-                <div class="sm-card-name">${esc(item.nama)}${item.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${item.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}${item.behavior === "recipe-fnb" ? " <span class=\"badge-recipe-fnb\">Resep F&B</span>" : ""}${varianBadgeHTML(item)}${state.showDijual ? (item.dijual === false ? " <span class=\"badge-tidak-dijual\">Tidak Dijual</span>" : " <span class=\"badge-dijual\">Dijual</span>") : ""}</div>
-                <div class="card-body">
-                    <div class="card-row">
-                        <span class="card-label">Gudang</span>
-                        <span class="card-value">${esc(item.gudang || '-')}</span>
+                <div class="sm-card-row2">
+                    <div class="sm-card-col-img">
+                        ${item.foto
+                            ? `<img src="${esc(item.foto)}" alt="${esc(item.nama)}" class="sm-card-product-img" loading="lazy" onerror="this.parentElement.innerHTML='<span class=\'sm-card-img-placeholder\'>📦</span>'" />`
+                            : `<span class="sm-card-img-placeholder">📦</span>`}
+                        ${varianBadgeHTML(item) ? `<div class="sm-card-varian-below">${varianBadgeHTML(item)}</div>` : ""}
                     </div>
-                    <div class="card-row">
-                        <span class="card-label">Harga Jual</span>
-                        <span class="card-harga-jual">${formatRupiah(item.harga_jual)}</span>
+                    <div class="sm-card-col-data">
+                        <div class="sm-card-name-row">
+                            <div class="sm-card-name">${esc(item.nama)}</div>
+                            <span class="sm-card-code">${esc(item.kode)}</span>
+                        </div>
+                        <div class="sm-card-details">
+                            ${item.gudang ? `<div class="sm-card-detail-row"><span class="sm-card-label">Gudang</span><span class="sm-card-value">${esc(item.gudang)}</span></div>` : ""}
+                            <div class="sm-card-detail-row"><span class="sm-card-label">Harga Jual</span><span class="sm-card-value" style="color:#059669;font-weight:600">${formatRupiah(item.harga_jual)}</span></div>
+                            <div class="sm-card-detail-row"><span class="sm-card-label">Stok</span><span class="sm-card-value ${isLow ? "stok-low" : "stok-ok"}">${item.stok}${item.satuan ? ` ${esc(item.satuan)}` : ""}</span></div>
+                        </div>
+                        <div class="sm-card-footer-row">
+                            <div class="sm-card-footer-left">
+                                ${item.behavior === "service" ? "<span class=\"sm-card-btn badge-jasa\">Jasa</span>" : ""}${item.behavior === "recipe" ? "<span class=\"sm-card-btn badge-recipe\">Resep</span>" : ""}${item.behavior === "recipe-fnb" ? "<span class=\"sm-card-btn badge-recipe-fnb\">Resep F&B</span>" : ""}${state.showDijual && item.dijual === false ? "<span class=\"sm-card-btn badge-tidak-dijual\">Tidak Dijual</span>" : ""}
+                            </div>
+                            <div class="sm-card-footer-right">
+                                <button class="sm-card-btn sm-card-btn-edit" data-edit="${item.id}">✏️ Edit</button>
+                                <button class="sm-card-btn sm-card-btn-delete" data-delete="${item.id}">🗑️ Hapus</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-row">
-                        <span class="card-label">Stok</span>
-                        <span class="card-stok ${isLow ? "stok-low" : "stok-ok"}">${item.stok}${item.satuan ? ` ${esc(item.satuan)}` : ""}</span>
-                    </div>
-                </div>
-                <div class="sm-card-footer-row">
-                    <span class="sm-card-code">${esc(item.kode)}</span>
-                    <button class="card-btn-detail" data-detail="${item.id}">📋 Detail</button>
                 </div>
             `;
         });
         container.appendChild(list);
-        container.querySelectorAll("[data-detail]").forEach(btn => {
-            btn.addEventListener("click", () => {
-                const item = state.items.find(i => String(i.id) === String(btn.dataset.detail));
-                if (item) showDetailModal(item);
-            });
-        });
+        UI.attachCardEvents(container, (id) => openForm("edit", id), (id) => confirmDelete(id));
     }
 
     function showDetailModal(item) {
@@ -281,7 +281,7 @@ export function BarangModule(services, options = {}) {
                 ${renderDetailRow("Kode", esc(item.kode))}
                 ${renderDetailRow("Nama Barang", `${esc(item.nama)}${item.behavior === "service" ? " <span class=\"badge-jasa\">Jasa</span>" : ""}${item.behavior === "recipe" ? " <span class=\"badge-recipe\">Resep</span>" : ""}${item.behavior === "recipe-fnb" ? " <span class=\"badge-recipe-fnb\">Resep F&B</span>" : ""}${varianBadgeHTML(item)}`)}
                 ${renderDetailRow("Tipe", BEHAVIOR_LABELS[item.behavior] || "Barang Dagangan")}
-                ${state.showDijual ? renderDetailRow("Dijual", item.dijual === false ? "<span class=\"badge-tidak-dijual\">Tidak Dijual</span>" : "<span class=\"badge-dijual\">Dijual</span>") : ""}
+                ${state.showDijual && item.dijual === false ? renderDetailRow("Status", "<span class=\"badge-tidak-dijual\">Tidak Dijual</span>") : ""}
                 ${renderDetailRow("Kategori", esc(item.kategori || "—"))}
                 ${renderDetailRow("Satuan", esc(item.satuan || "—"))}
                 ${renderDetailRow("Rak/Etalase", esc(item.rak || "—"))}
@@ -1308,7 +1308,7 @@ export function BarangModule(services, options = {}) {
     function debounce(fn, ms) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); }; }
 
     function getStyles() { return `
-.barang-page { padding: 1.5rem; }
+.barang-page { padding: 0; }
 .barang-page .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:1rem; }
 .barang-page .page-header h1 { margin:0; font-size:1.5rem; font-weight:600; color:var(--smart-text-primary,#1a1a2e); }
 .barang-page .page-header .header-subtitle { font-size:0.85rem; color:var(--smart-text-secondary,#6b7280); }
@@ -1317,12 +1317,21 @@ export function BarangModule(services, options = {}) {
 .barang-page .search-wrapper .search-icon { position:absolute; left:0.75rem; font-size:0.9rem; pointer-events:none; opacity:0.5; }
 .barang-page .search-wrapper input { padding:0.5rem 0.75rem 0.5rem 2.2rem; border:1px solid var(--smart-border,#d1d5db); border-radius:6px; font-size:0.875rem; width:240px; outline:none; background:var(--smart-input-bg,#fff); color:var(--smart-text-primary,#1a1a2e); }
 .barang-page .search-wrapper input:focus { border-color:var(--smart-primary,#4f46e5); box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
-.barang-page .table-container { background:var(--smart-card-bg,#fff); border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.06); overflow:hidden; }
+.barang-page .table-container { background:rgba(255,255,255,0.58); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); border:2px solid rgb(255,255,255); border-radius:28px; box-shadow:0 8px 16px rgba(0,0,0,0.08); overflow:hidden; padding:14px; }
+.barang-page .table-container .smart-table-wrapper { background:transparent !important; }
+.barang-page .table-container .smart-table-wrapper .smart-table,
+.barang-page .table-container .smart-table-wrapper .smart-table thead,
+.barang-page .table-container .smart-table-wrapper .smart-table tbody,
+.barang-page .table-container .smart-table-wrapper .smart-table tr,
+.barang-page .table-container .smart-table-wrapper .smart-table th,
+.barang-page .table-container .smart-table-wrapper .smart-table td { background:transparent !important; }
+.barang-page .table-container .smart-table-wrapper .smart-table th,
+.barang-page .table-container .smart-table-wrapper .smart-table td { border-color:rgba(148,163,184,0.28); }
 .barang-page .pagination-container { display:flex; justify-content:center; padding:0.75rem 0 0.25rem; }
 .barang-page .action-buttons { display:flex; gap:0.5rem; justify-content:center; }
 .barang-page .action-btn { padding:0.35rem 0.7rem; border:1px solid transparent; border-radius:4px; cursor:pointer; font-size:0.8rem; }
-.barang-page .action-btn-edit { background:#eef2ff; color:#4f46e5; border-color:#c7d2fe; }
-.barang-page .action-btn-edit:hover { background:#e0e7ff; }
+.barang-page .action-btn-edit { background:rgba(255,255,255,0.58); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); color:#4f46e5; border:1px solid rgba(255,255,255,0.92); border-radius:10px; }
+.barang-page .action-btn-edit:hover { background:rgba(255,255,255,0.78); }
 .barang-page .action-btn-delete { background:#fef2f2; color:#dc2626; border-color:#fecaca; }
 .barang-page .action-btn-delete:hover { background:#fee2e2; }
 .barang-page .stok-low { color:#dc2626; font-weight:600; }
@@ -1347,63 +1356,68 @@ export function BarangModule(services, options = {}) {
 .barang-page .foto-btn-danger { color:#dc2626; border-color:#fecaca; background:#fef2f2; }
 .barang-page .foto-btn-danger:hover { background:#fee2e2; }
 .barang-page .foto-hint { font-size:0.72rem; color:#94a3b8; line-height:1.4; }
-.sm-card .sm-card-thumb { width:100%; height:110px; overflow:hidden; background:#f1f5f9; border-radius:8px; margin-bottom:0.5rem; }
-.sm-card .sm-card-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
 .barang-page #f-trading-fields { grid-column: 1 / -1; }
 .barang-page .skeleton-wrapper { padding:1rem; }
 .barang-page .delete-confirm { text-align:center; padding:1rem 0; }
 .barang-page .delete-confirm p { font-size:1rem; margin-bottom:1.5rem; color:var(--smart-text-secondary,#6b7280); }
 .barang-page .delete-confirm .item-name { font-weight:600; color:var(--smart-text-primary,#1a1a2e); }
-.barang-page .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-.barang-page .form-grid .full-width { grid-column:1/-1; }
-.barang-page .form-group { margin-bottom:0.25rem; }
-.barang-page .form-group label { display:block; font-size:0.85rem; font-weight:500; margin-bottom:0.35rem; color:var(--smart-text-primary,#374151); }
-.barang-page .form-group input, .barang-page .form-group textarea, .barang-page .form-group select { width:100%; padding:0.5rem 0.75rem; border:1px solid var(--smart-border,#d1d5db); border-radius:6px; font-size:0.875rem; outline:none; box-sizing:border-box; background:var(--smart-input-bg,#fff); color:var(--smart-text-primary,#1a1a2e); }
-.barang-page .form-group input:focus, .barang-page .form-group textarea:focus, .barang-page .form-group select:focus { border-color:var(--smart-primary,#4f46e5); box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
-.barang-page .form-group textarea { resize:vertical; min-height:60px; }
-.barang-page .kode-wrapper { display:flex; gap:0.5rem; align-items:center; }
-.barang-page .kode-wrapper input { flex:1; }
-.barang-page .btn-scan { padding:0.4rem 0.65rem; border:1px solid var(--smart-border,#d1d5db); border-radius:6px; background:var(--smart-card-bg,#f8fafc); cursor:pointer; font-size:0.95rem; transition:all 0.15s; white-space:nowrap; display:flex; align-items:center; gap:0.3rem; }
-.barang-page .btn-scan:hover { background:#eef2ff; border-color:#c7d2fe; }
-.barang-page .btn-scan.active { background:#4f46e5; color:#fff; border-color:#4f46e5; }
-.barang-page .btn-scan.active:hover { background:#4338ca; }
 .barang-page .page-info { text-align:center; font-size:0.85rem; color:var(--smart-text-secondary,#6b7280); padding:0.5rem 0 1rem; }
 .barang-page .required { color:#dc2626; }
-
 .barang-page .kode-error-container { margin-top:0.5rem; }
 .barang-page .kode-error-container .smart-alert { margin:0; padding:0.5rem 0.75rem; font-size:0.8rem; }
 .barang-page #f-kode.is-duplicate { border-color:#dc2626 !important; background:#fef2f2 !important; box-shadow:0 0 0 3px rgba(220,38,38,0.1) !important; }
 .barang-page #f-nama:disabled { background:#f3f4f6 !important; color:#9ca3af !important; cursor:not-allowed !important; border-color:#e5e7eb !important; opacity:0.7; }
-.smart-modal-dialog { overflow-y:visible !important; display:flex; flex-direction:column; max-height:85vh; }
-.smart-modal-body { overflow-y:auto !important; flex:1 1 auto; min-height:0; }
-.sm-card .card-body { display:flex; flex-direction:column; gap:0.35rem; margin-bottom:0.5rem; padding-top:0.35rem; }
-.sm-card .card-row, .sm-card .card-price-row, .sm-card .card-stok-row { display:flex; justify-content:space-between; align-items:center; }
-.sm-card .card-label { font-size:0.78rem; color:var(--smart-text-secondary,#6b7280); font-weight:400; }
-.sm-card .card-harga-jual { font-size:0.95rem; font-weight:700; color:#059669; }
-.sm-card .card-stok { font-size:0.85rem; font-weight:500; }
-.sm-card .card-value { font-size:0.95rem; font-weight:700; color:#059669; }
-.sm-card .card-btn-detail { padding:0.35rem 0.85rem; border:1px solid #c7d2fe; border-radius:6px; background:#eef2ff; color:#4f46e5; cursor:pointer; font-size:0.9rem; font-weight:500; transition:all 0.15s; }
-.sm-card .card-btn-detail:hover { background:#e0e7ff; }
 .detail-grid { display:flex; flex-direction:column; gap:0.1rem; }
 .detail-row { display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0; border-bottom:1px solid #f3f4f6; }
 .detail-row:last-child { border-bottom:none; }
 .detail-row-full { flex-direction:column; align-items:flex-start; gap:0.35rem; }
 .detail-label { font-size:0.8rem; color:var(--smart-text-secondary,#6b7280); font-weight:500; flex-shrink:0; }
 .detail-value { font-size:0.9rem; color:var(--smart-text-primary,#1a1a2e); font-weight:500; text-align:right; word-break:break-word; }
+/* ── Barang card CSS (hard-coded, sama persis seperti dashboard stat-card) ── */
+.barang-page .sm-card-list { display:flex; flex-direction:column; gap:0.75rem; padding:0.5rem 0; }
+.barang-page .sm-card { background:var(--smart-card-bg,#fff); border-radius:10px; padding:0.85rem 0.75rem; box-shadow:2px 4px 12px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.05); transition:transform 0.15s, box-shadow 0.15s; }
+.barang-page .sm-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.08); }
+.barang-page .sm-card-header-row { display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; margin-bottom:0.4rem; }
+.barang-page .sm-card-name { font-size:0.99rem; font-weight:700; color:var(--smart-primary,#4f46e5); line-height:1.3; flex:1; min-width:0; }
+.barang-page .sm-card-details { display:flex; flex-direction:column; gap:0.25rem; margin-bottom:0.5rem; }
+.barang-page .sm-card-detail-row { display:flex; justify-content:space-between; align-items:center; }
+.barang-page .sm-card-label { font-size:0.78rem; color:var(--smart-text-secondary,#6b7280); font-weight:400; }
+.barang-page .sm-card-value { font-size:0.9rem; font-weight:500; color:var(--smart-text-primary,#1a1a2e); }
+.barang-page .sm-card-footer-row { display:flex; justify-content:space-between; align-items:center; padding-top:0.25rem; }
+.barang-page .sm-card-footer-left { display:flex; gap:0.5rem; align-items:center; flex-wrap:nowrap; }
+.barang-page .sm-card-footer-right { display:flex; gap:0.5rem; align-items:center; }
+.barang-page .sm-card-code { font-size:0.95rem; font-weight:700; color:var(--smart-primary,#4f46e5); }
+.barang-page .sm-card-actions { display:flex; gap:0.5rem; align-items:center; }
+.barang-page .sm-card-btn { padding:0.35rem 0.7rem; border:1px solid transparent; border-radius:4px; cursor:pointer; font-size:0.8rem; transition:all 0.15s; }
+.barang-page .badge-jasa { border-radius:4px; white-space:nowrap; }
+.barang-page .badge-recipe { border-radius:4px; white-space:nowrap; }
+.barang-page .badge-recipe-fnb { border-radius:4px; white-space:nowrap; }
+.barang-page .badge-dijual { border-radius:4px; white-space:nowrap; }
+.barang-page .badge-tidak-dijual { border-radius:4px; white-space:nowrap; }
+.barang-page .sm-card-btn-edit { background:#eef2ff; color:#4f46e5; border-color:#c7d2fe; }
+.barang-page .sm-card-btn-edit:hover { background:#e0e7ff; }
+.barang-page .sm-card-btn-delete { background:#fef2f2; color:#dc2626; border-color:#fecaca; }
+.barang-page .sm-card-btn-delete:hover { background:#fee2e2; }
+/* ── 2-column card layout (image left, data right) ── */
+.barang-page .sm-card-row2 { display:flex; gap:0.75rem; align-items:center; }
+.barang-page .sm-card-col-img { flex:0 0 20%; max-width:20%; display:flex; flex-direction:column; align-items:center; gap:0.35rem; }
+.barang-page .sm-card-product-img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; border:1px solid #e5e7eb; background:#f8fafc; }
+.barang-page .sm-card-img-placeholder { display:flex; align-items:center; justify-content:center; width:100%; aspect-ratio:1; font-size:1.8rem; background:#f1f5f9; border-radius:8px; border:1px solid #e5e7eb; }
+.barang-page .sm-card-col-data { flex:1; min-width:0; }
+.barang-page .sm-card-name-row { display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.25rem; }
+.barang-page .sm-card-name-row .sm-card-name { margin:0; flex:1; min-width:0; }
+.barang-page .sm-card-name-row .sm-card-code { flex-shrink:0; }
+.barang-page .sm-card-varian-below { text-align:center; font-size:0.7rem; }
 @media (max-width:768px) {
-.barang-page { padding:0.75rem 0.25rem; }
+.barang-page .table-container { background:transparent; border:none; box-shadow:none; padding:0; border-radius:0; }
+.barang-page .table-container .sm-card { box-shadow:none; border:1px solid rgba(0,0,0,0.25); }
+.barang-page .page-header { padding-top:20px; }
 .barang-page .form-grid { grid-template-columns:1fr; }
 .barang-page .page-header { flex-direction:column; align-items:stretch; }
 .barang-page .search-wrapper { flex:1; min-width:0; }
 .barang-page .search-wrapper input { width:100%; box-sizing:border-box; }
 .barang-page .page-actions { flex-direction:row; }
 .barang-page .page-actions .smart-btn { white-space:nowrap; flex-shrink:0; font-size:0.82rem; padding:0.45rem 0.7rem; }
-.barang-page .table-container { background:none; border-radius:0; box-shadow:none; overflow:visible; }
-.barang-page .pagination-container { padding:0.75rem 0 0.25rem; }
-}
-@media (max-width:480px) {
-.barang-page .page-header h1 { font-size:1.15rem; }
-.barang-page .page-header .header-subtitle { font-size:0.78rem; }
 }
 `; }
 

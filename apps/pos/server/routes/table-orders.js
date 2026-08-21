@@ -27,6 +27,9 @@
 
 import { Router } from "express";
 import { TableOrder } from "../models/TableOrder.js";
+import { Notification } from "../models/Notification.js";
+import { PaymentProof } from "../models/PaymentProof.js";
+import { PushSubscription } from "../models/PushSubscription.js";
 import { security, audit } from "../security.js";
 import { sendReadyNotification, sendRefundNotification } from "../services/kitchen-notify.js";
 import { notifyOrderWhatsapp } from "../services/wa-notify.js";
@@ -35,11 +38,13 @@ const router = Router();
 
 /**
  * GET / — daftar order meja (company scope).
- * Filter: ?status=all|pending|paid|ready|completed
- *   - pending   → paymentStatus=pending
- *   - paid      → paymentStatus=paid
+ * Filter: ?status=all|pending|paid|ready|completed|batal
+ *   - pending   → paymentStatus=pending DAN TIDAK dibatalkan (transaksi baru)
+ *   - paid      → paymentStatus=paid DAN TIDAK dibatalkan
  *   - ready     → kitchenStatus=ready (termasuk paid & unpaid)
  *   - completed → kitchenStatus in [served, collected]
+ *   - batal     → kitchenStatus=cancelled (SEMUA order dibatalkan — tab
+ *                 khusus; order batal TIDAK lagi bercampur di pending/paid)
  *   - all       → tanpa filter
  * Terbaru dulu. Hanya sampai 200 order (V1 — list ringan untuk kasir).
  */
@@ -49,16 +54,69 @@ router.get("/", security.permission("pos.order.view"), async (req, res) => {
         if (!companyCode) return res.status(400).json({ error: "Company code required" });
         const q = { companyCode };
         const status = String(req.query.status || "all").trim().toLowerCase();
-        if (status === "pending") q.paymentStatus = "pending";
-        else if (status === "paid") q.paymentStatus = "paid";
-        else if (status === "ready") q.kitchenStatus = "ready";
+        if (status === "pending") {
+            q.paymentStatus = "pending";
+            // Tab pending = transaksi BARU — order dibatalkan pindah ke tab
+            // "batal" (tidak mengotori pending/paid).
+            q.kitchenStatus = { $ne: "cancelled" };
+        } else if (status === "paid") {
+            q.paymentStatus = "paid";
+            q.kitchenStatus = { $ne: "cancelled" };
+        } else if (status === "ready") q.kitchenStatus = "ready";
         else if (status === "completed") q.kitchenStatus = { $in: ["served", "collected"] };
+        else if (status === "batal" || status === "cancelled") q.kitchenStatus = "cancelled";
 
         const orders = await TableOrder.find(q)
             .sort({ orderNumber: -1 })
             .limit(200)
             .lean();
         res.json({ data: orders });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * DELETE /:id — HAPUS order meja (kasir, F&B V1 — tab "Semua").
+ * HANYA order yang BELUM LUNAS (paymentStatus != paid) yang bisa dihapus —
+ * order lunas/refund adalah catatan keuangan (pengurang penjualan shift)
+ * sehingga dilindungi (409). Notifikasi bell, bukti pembayaran & push
+ * subscription order ikut dibersihkan (best effort) + audit order.deleted.
+ * Permission: pos.order.confirm (kasir/admin/owner).
+ */
+router.delete("/:id", security.permission("pos.order.confirm"), async (req, res) => {
+    try {
+        const companyCode = req.headers["x-company-code"];
+        if (!companyCode) return res.status(400).json({ error: "Company code required" });
+        const order = await TableOrder.findOne({ _id: req.params.id, companyCode });
+        if (!order) return res.status(404).json({ error: "Order tidak ditemukan" });
+        if (order.paymentStatus === "paid") {
+            return res.status(409).json({ error: "Order sudah lunas — tidak bisa dihapus (catatan keuangan)" });
+        }
+        const orderId = String(order._id);
+        // Bersihkan relasi order (best effort — gagal tidak menggagalkan delete).
+        try { await Notification.deleteMany({ companyCode, orderId }); } catch { /* ignore */ }
+        try { await PaymentProof.deleteMany({ companyCode, orderId }); } catch { /* ignore */ }
+        try { await PushSubscription.deleteMany({ companyCode, orderId }); } catch { /* ignore */ }
+        await TableOrder.deleteOne({ _id: order._id, companyCode });
+
+        try {
+            await audit.log({
+                actorId: req.user?.id || null,
+                actorName: req.headers["x-user-name"] || (req.user && req.user.name) || "Kasir",
+                actorType: "user",
+                ip: req.ip || "",
+                userAgent: req.headers["user-agent"] || "",
+                action: "order.deleted",
+                category: "order",
+                companyCode,
+                targetType: "order",
+                targetId: orderId,
+                targetName: order.orderId || ""
+            });
+        } catch { /* audit best effort */ }
+
+        res.json({ ok: true, message: `Order ${order.orderId} dihapus` });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

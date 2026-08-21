@@ -1,16 +1,16 @@
 :root {
 
-    /* SMART Kasir brand override */
+    /* SITAMPAN-inspired purple-blue brand override */
     --primary:
-        #059669;
+        #667eea;
 
     --secondary:
-        #6d28d9;
+        #764ba2;
 
 
     /* Layout */
     --sidebar-bg:
-        #064e3b;
+        #3b4e9f;
 
     --sidebar-text:
         #ecfdf5;
@@ -20,6 +20,6 @@
         var(--surface);
 
     --topbar-text:
-        #064e3b;
+        #3b4e9f;
 
 }

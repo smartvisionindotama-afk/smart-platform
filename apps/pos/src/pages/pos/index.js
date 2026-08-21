@@ -141,6 +141,11 @@ export function PosPage() {
                     </div>
                 </div>
                 <div class="pos-header-right">
+                    <!-- HP/Tablet — widget buka/tutup shift pindah ke TOP BAR
+                         (footer sidebar disembunyikan di HP/tablet, jadi shift
+                         tidak bisa dibuka/ditutup di sana). Desktop tetap
+                         memakai widget sidebar (#pos-shift-widget). -->
+                    <button id="pos-shift-header" class="pos-shift-header-btn" title="Buka Shift" aria-label="Buka Shift">🕐</button>
                     <!-- HP: bill tersembunyi — ikon keranjang membuka overlay bill -->
                     <button id="pos-cart-btn" class="pos-cart-btn" title="Buka Bill" aria-label="Buka Bill">
                         <span class="pos-cart-icon">🛒</span>
@@ -342,6 +347,22 @@ export async function initPosPage() {
         });
     }
 
+    // HP/Tablet — tombol shift di TOP BAR: klik membuka/tutup shift sesuai
+    // state (perilaku sama dengan widget sidebar; di desktop tombol ini
+    // tersembunyi via CSS). Shift milik kasir login aktif → Tutup Shift,
+    // selainnya (belum ada / shift kasir lain) → Buka Shift.
+    const shiftHeaderBtn = document.getElementById("pos-shift-header");
+    if (shiftHeaderBtn) {
+        shiftHeaderBtn.addEventListener("click", () => {
+            const shift = state.shiftAktif;
+            if (shift && isMyShift(shift)) {
+                closeShiftModal();
+            } else {
+                openShiftModal();
+            }
+        });
+    }
+
     // Search + scan (USB reader) — kolom pencarian berperilaku "pintar":
     // - ketikan/scan yang COCOK PERSIS kode/barcode produk → langsung masuk
     //   bill (reader barcode USB yang mengetik ke kolom ini otomatis ikut
@@ -454,6 +475,10 @@ export async function initPosPage() {
     await loadKasirData();
     renderKasir();
     renderShiftWidget();
+    // Omset Kasir (sidebar kiri) — refresh berkala agar tetap sinkron
+    // walau halaman dibiarkan terbuka (mis. refund dari KDS mengurangi
+    // penjualan shift tanpa interaksi kasir).
+    startOmsetAutoRefresh();
     renderHoldActions();
     refreshHeldList();
 
@@ -557,14 +582,33 @@ function initKasirSidebarCollapse() {
 }
 
 /**
+ * Apakah shift milik kasir yang login? (M6-FIX multi-kasir) — selain nama,
+ * bandingkan juga kasirUsername (shift legacy tersimpan nama generik "Kasir"
+ * tapi kasirUsername asli dari JWT). Dipakai widget sidebar & tombol top bar.
+ * @param {object|null} shift Dokumen Shift
+ * @returns {boolean}
+ */
+function isMyShift(shift) {
+    if (!shift) return false;
+    const userNow = Auth.user && Auth.user();
+    return !shift.kasir
+        || String(shift.kasir).toLowerCase() === String(kasirName).toLowerCase()
+        || (shift.kasirUsername && userNow && String(shift.kasirUsername).toLowerCase() === String(userNow.username || "").toLowerCase());
+}
+
+/**
  * PRD V1 §12 — widget shift di kolom bill (role kasir):
  * - tanpa shift aktif → tombol "Buka Shift" (kas awal)
  * - shift aktif → badge kasir + kas awal + tombol "Tutup Shift"
  * Hanya ditampilkan bila user punya permission pos.shift.open (kasir/admin).
+ * Sekaligus menyinkronkan tombol shift di TOP BAR (HP/tablet).
  */
 function renderShiftWidget() {
     const el = document.getElementById("pos-shift-widget");
     if (!el) return;
+    // HP/Tablet — tombol shift di top bar ikut state yang sama dengan widget
+    // sidebar (desktop: tombol tersembunyi via CSS, widget sidebar yang jalan).
+    updateShiftHeaderBtn();
     let canShift = false;
     try { canShift = Permission.can("pos.shift.open"); } catch { /* ignore */ }
     if (!canShift) { el.innerHTML = ""; return; }
@@ -583,10 +627,7 @@ function renderShiftWidget() {
     // dan kasir ini tetap bisa membuka shift sendiri.
     // M6-FIX v3 lanjutan — selain nama, bandingkan juga kasirUsername (shift
     // legacy tersimpan nama generik "Kasir" tapi kasirUsername asli dari JWT).
-    const userNow = Auth.user && Auth.user();
-    const mine = !shift.kasir
-        || String(shift.kasir).toLowerCase() === String(kasirName).toLowerCase()
-        || (shift.kasirUsername && userNow && String(shift.kasirUsername).toLowerCase() === String(userNow.username || "").toLowerCase());
+    const mine = isMyShift(shift);
     if (!mine) {
         el.innerHTML = `
             <div class="pos-shift-active pos-shift-other">
@@ -621,20 +662,68 @@ function renderShiftWidget() {
 }
 
 /**
+ * HP/Tablet — tombol shift di TOP BAR (pola icon tombol header kasir):
+ * - tanpa shift aktif → 🕐 (klik = Buka Shift)
+ * - shift kasir lain aktif → 🕐 (klik = Buka Shift Saya)
+ * - shift MILIK kasir login aktif → 🧾 (klik = Tutup Shift)
+ * Tersembunyi di desktop (CSS) — desktop tetap memakai widget sidebar.
+ */
+function updateShiftHeaderBtn() {
+    const btn = document.getElementById("pos-shift-header");
+    if (!btn) return;
+    let canShift = false;
+    try { canShift = Permission.can("pos.shift.open"); } catch { /* ignore */ }
+    if (!canShift) { btn.style.display = "none"; return; }
+    // Kembalikan ke CSS: desktop display:none, HP/tablet display:inline-flex
+    btn.style.display = "";
+    const shift = state.shiftAktif;
+    const mine = isMyShift(shift);
+    if (shift && mine) {
+        btn.title = "Tutup Shift";
+        btn.setAttribute("aria-label", "Tutup Shift");
+        btn.innerHTML = `🧾`;
+    } else if (shift) {
+        btn.title = "Buka Shift Saya";
+        btn.setAttribute("aria-label", "Buka Shift Saya");
+        btn.innerHTML = `🕐`;
+    } else {
+        btn.title = "Buka Shift";
+        btn.setAttribute("aria-label", "Buka Shift");
+        btn.innerHTML = `🕐`;
+    }
+}
+
+/**
  * Omset kasir yang login — total penjualan (grandTotal) sejak shift dibuka
  * sampai sekarang (GET /pos/shift/summary, scoped per-kasir oleh server).
- * Dipanggil saat widget shift dirender & setelah checkout berhasil.
+ * Dipanggil saat widget shift dirender, setelah checkout berhasil, setelah
+ * aksi bell kasir (verifikasi bukti bayar / refund), dan tiap 30 detik
+ * (refresh berkala — widget tetap sinkron walau halaman dibiarkan terbuka).
  */
 async function refreshShiftOmset() {
     const el = document.getElementById("pos-shift-omzet");
     if (!el) return;
     try {
         const res = await apiCall("GET", "/pos/shift/summary");
-        const omset = (res && typeof res.totalPenjualan === "number") ? res.totalPenjualan : 0;
+        // Terima number ATAU string numerik (robust thd perubahan bentuk
+        // response server) — selain itu 0 (formatRupiah NaN-safe).
+        const raw = res && res.totalPenjualan;
+        const omset = (raw === null || raw === undefined || raw === "") ? 0 : (Number(raw) || 0);
         el.textContent = `Rp ${formatRupiah(omset)}`;
     } catch {
-        el.textContent = "Rp 0";
+        // Gagal (offline / summary 404): biarkan nilai terakhir — jangan
+        // menimpa angka yang sudah benar dengan "Rp 0" yang menyesatkan.
     }
+}
+
+// Refresh berkala Omset Kasir (30 detik) — widget di sidebar kiri tetap
+// sinkron walau tidak ada interaksi (mis. refund dari KDS/kitchen yang
+// mengurangi penjualan shift, atau halaman dibiarkan terbuka lama).
+let omsetTimer = null;
+
+function startOmsetAutoRefresh() {
+    clearInterval(omsetTimer);
+    omsetTimer = setInterval(refreshShiftOmset, 30000);
 }
 
 async function openShiftModal(required = false) {
@@ -1236,7 +1325,7 @@ function renderProduk() {
 }
 
 const TILE_PALETTES = [
-    ["#064e3b", "#10b981"],
+    ["#3b4e9f", "#667eea"],
     ["#1e40af", "#3b82f6"],
     ["#7c3aed", "#a78bfa"],
     ["#b45309", "#f59e0b"],
@@ -1309,9 +1398,14 @@ function renderBill() {
     if (!cartEl) return;
 
     const itemCount = state.keranjang.reduce((s, i) => s + (i.qty || 0), 0);
-    // HP — badge jumlah item di ikon keranjang header (bill overlay)
+    // HP — badge jumlah item di ikon keranjang header (bill overlay). Cap
+    // "99+" utk >99 (pola lonceng), namun SELALU TAMPIL — termasuk saat 0
+    // (jangan disembunyikan: penomoran tidak boleh menghilang).
     const cartCountEl = document.getElementById("pos-cart-count");
-    if (cartCountEl) cartCountEl.textContent = String(itemCount);
+    if (cartCountEl) {
+        cartCountEl.textContent = itemCount > 99 ? "99+" : String(itemCount);
+        cartCountEl.style.display = "";
+    }
     const subtotal = state.keranjang.reduce((s, i) => s + (i.harga * i.qty), 0);
     // Diskon transaksi (keputusan PO: diskon tidak mengurangi basis pajak di V1)
     const diskonTransaksi = Math.min(state.diskonTransaksi || 0, subtotal);
@@ -1847,7 +1941,7 @@ function openVarianModal(key) {
                         ${sku.foto ? `<img src="${esc(sku.foto)}" alt="" style="width:28px;height:28px;border-radius:6px;object-fit:cover;flex-shrink:0" />` : ""}
                         <span style="font-size:0.95rem;font-weight:600;color:#1a1a2e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(sku.label || "Varian")}</span>
                     </span>
-                    <span style="font-size:0.95rem;font-weight:700;color:#059669;white-space:nowrap">Rp ${formatRupiah(skuPrice(sku) || Number(sku.harga) || 0)}${habis ? ' <span style="font-size:0.72rem;color:#dc2626;font-weight:600">· Habis</span>' : ""}</span>
+                    <span style="font-size:0.95rem;font-weight:700;color:#667eea;white-space:nowrap">Rp ${formatRupiah(skuPrice(sku) || Number(sku.harga) || 0)}${habis ? ' <span style="font-size:0.72rem;color:#dc2626;font-weight:600">· Habis</span>' : ""}</span>
                 </button>
             `;
         }).join("");
@@ -1873,7 +1967,7 @@ function openVarianModal(key) {
     const rows = variants.map((v, idx) => `
         <button type="button" class="pos-varian-row" data-varian-pick="${idx}" style="display:flex;width:100%;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--smart-border,#e2e8f0);border-radius:10px;background:#fff;cursor:pointer;margin-bottom:8px;text-align:left">
             <span style="font-size:0.95rem;font-weight:600;color:#1a1a2e">${esc(v.nama || "Varian")}</span>
-            <span style="font-size:0.95rem;font-weight:700;color:#059669;white-space:nowrap">Rp ${formatRupiah(Number(v.harga) || 0)}</span>
+            <span style="font-size:0.95rem;font-weight:700;color:#667eea;white-space:nowrap">Rp ${formatRupiah(Number(v.harga) || 0)}</span>
         </button>
     `).join("");
     const content = `
@@ -2386,17 +2480,21 @@ function printToWindow(html) {
 // pembatalan) seperti sebelumnya.
 
 let bellTimer = null;
-let bellLastCount = -1;      // jumlah order PENDING (badge)
-let bellNotifLast = -1;      // jumlah notifikasi unread (bukti pembayaran)
+let bellLastCount = -1;      // jumlah order PENDING (suara/toast "ada order masuk")
+let bellNotifLast = -1;      // jumlah notifikasi unread (BADGE 🔔 — semua tipe)
+let bellProofLast = -1;      // jumlah notifikasi unread tipe payment_proof (suara)
 
 /**
  * Inisialisasi bell notifikasi kasir: tampil hanya bila permission
  * pos.order.view + capability fnb aktif. Poll tiap 15 detik (pola kitchen
  * display):
- *   - Badge 🔔 = JUMLAH ORDER PENDING (paymentStatus=pending)
- *   - Order BARU masuk → toast + badge + SUARA "Ada order masuk"
- *   - Notifikasi unread (bukti pembayaran diupload) naik → SUARA
- *     "Pembayaran baru menunggu verifikasi" (fitur lama tetap jalan)
+ *   - Badge 🔔 = JUMLAH NOTIFIKASI BELUM DIBACA (role kasir) — order baru
+ *     masuk (order_new), bukti pembayaran (payment_proof), order dibatalkan
+ *     (order_cancelled). Naik 1, 2, 3... saat order masuk; kembali 0 setelah
+ *     dibaca / "Tandai semua dibaca".
+ *   - Order BARU masuk → toast + SUARA "Ada order masuk" (order pending naik)
+ *   - Bukti pembayaran BARU diupload (unread payment_proof naik) → SUARA
+ *     "Pembayaran baru menunggu verifikasi" (tidak dipicu order_new)
  */
 function initCashierBell() {
     const bell = document.getElementById("pos-bell-btn");
@@ -2414,7 +2512,7 @@ function initCashierBell() {
     refreshBellCount();
     bellTimer = setInterval(() => {
         const prevPending = bellLastCount;
-        const prevNotif = bellNotifLast;
+        const prevProof = bellProofLast;
         refreshBellCount().then(() => {
             // Order BARU masuk saat halaman terbuka → toast + SUARA.
             if (bellLastCount > prevPending && prevPending >= 0 && bellLastCount > 0) {
@@ -2422,8 +2520,9 @@ function initCashierBell() {
                 playAlertTone();
                 speak("Ada order masuk");
             }
-            // Bukti pembayaran baru diupload (notifikasi unread naik).
-            if (bellNotifLast > prevNotif && prevNotif >= 0 && bellNotifLast > 0) {
+            // Bukti pembayaran BARU diupload — HANYA unread payment_proof
+            // yang naik (order_new ikut menaikkan badge, bukan suara ini).
+            if (bellProofLast > prevProof && prevProof >= 0 && bellProofLast > 0) {
                 showToast("info", "🔔 Pembayaran baru menunggu verifikasi");
                 playAlertTone();
                 speak("Pembayaran baru menunggu verifikasi");
@@ -2432,7 +2531,12 @@ function initCashierBell() {
     }, 15000);
 }
 
-/** Ambil jumlah order PENDING (badge) + notifikasi unread (suara). */
+/**
+ * Ambil order PENDING (suara/toast) + notifikasi unread (BADGE — nomor
+ * kembali ke 0 setelah semua dibaca, termasuk "Tandai semua dibaca").
+ * Badge = SEMUA tipe unread (order_new, payment_proof, order_cancelled) —
+ * naik 1, 2, 3... saat order masuk; bellProofLast hanya utk suara verifikasi.
+ */
 async function refreshBellCount() {
     try {
         const [pendingRes, notifRes] = await Promise.allSettled([
@@ -2442,13 +2546,22 @@ async function refreshBellCount() {
         const pending = pendingRes.status === "fulfilled" && Array.isArray(pendingRes.value?.data)
             ? pendingRes.value.data.length : 0;
         bellLastCount = pending;
-        const notifCount = notifRes.status === "fulfilled" && Array.isArray(notifRes.value?.data)
-            ? notifRes.value.data.length : 0;
+        let notifCount = 0;
+        let proofCount = 0;
+        if (notifRes.status === "fulfilled" && Array.isArray(notifRes.value?.data)) {
+            notifCount = notifRes.value.data.length;
+            proofCount = notifRes.value.data.filter(n => String(n.type || "") === "payment_proof").length;
+        }
         bellNotifLast = notifCount;
+        bellProofLast = proofCount;
         const el = document.getElementById("pos-bell-count");
         if (el) {
-            el.textContent = pending > 99 ? "99+" : String(pending);
-            el.style.display = pending > 0 ? "inline-flex" : "none";
+            // Badge = JUMLAH NOTIFIKASI BELUM DIBACA (role kasir), bukan order
+            // pending — setelah semua dibaca (termasuk "Tandai semua dibaca")
+            // nomor kembali ke 0. Cap "99+" utk >99; SELALU TAMPIL (termasuk 0)
+            // supaya penomoran tidak menghilang (pola badge keranjang).
+            el.textContent = notifCount > 99 ? "99+" : String(notifCount);
+            el.style.display = "inline-flex";
         }
     } catch { /* server tidak tersedia — jangan mengganggu kasir */ }
 }
@@ -2509,9 +2622,13 @@ async function openCashierBellModal() {
             overlay.remove();
             refreshBellCount();
             if (!orderId) return;
-            // ORDER DIBATALKAN (kitchen) → modal refund (bila lunas) / info
-            // pembatalan; selain itu (payment_proof) → verifikasi bukti bayar.
-            if (notifType === "order_cancelled") {
+            // ORDER BARU MASUK → buka panel Order Meja (kasir lihat order
+            // baru yang perlu disiapkan/dilayani). ORDER DIBATALKAN (kitchen)
+            // → modal refund (bila lunas) / info pembatalan; selain itu
+            // (payment_proof) → verifikasi bukti bayar.
+            if (notifType === "order_new") {
+                showOrderMejaPanel();
+            } else if (notifType === "order_cancelled") {
                 openCancelledOrderModal(orderId);
             } else {
                 openPaymentVerificationModal(orderId);
@@ -2580,6 +2697,9 @@ async function openPaymentVerificationModal(orderId) {
             overlay.remove();
             refreshBellCount();
             refreshOrderMejaPanel();
+            // Omset Kasir widget sidebar ikut ter-update (pembayaran QR Menu
+            // dikonfirmasi → nilai penjualan shift berubah).
+            refreshShiftOmset();
         } catch (err) {
             showToast("danger", err?.message || "Gagal mengonfirmasi pembayaran");
         }
@@ -2669,6 +2789,9 @@ async function openCancelledOrderModal(orderId) {
             overlay.remove();
             refreshBellCount();
             refreshOrderMejaPanel();
+            // Refund mengurangi nilai penjualan shift — Omset Kasir di
+            // widget sidebar langsung disinkronkan.
+            refreshShiftOmset();
         } catch (err) {
             showToast("danger", err?.message || "Gagal memproses refund");
         }
@@ -2695,11 +2818,10 @@ function getStyles() {
 .pos-page { display:flex; flex-direction:column; gap:0; height:calc(100vh - 118px); height:calc(100dvh - 118px); min-height:480px; }
 /* Header — samakan dengan topbar admin: var(--topbar-bg/--topbar-text)
    (putih + aksen emerald di light mode; ikut gelap di dark mode admin) */
-/* Header — hijau selaras dengan sidebar (gradient emerald yang sama),
-   font putih + tombol Logout kontras (tidak menyatu dengan latar). */
+/* Header — SITAMPAN-inspired purple-blue gradient, font putih */
 .pos-header {
     display:flex; align-items:center; justify-content:space-between; gap:12px;
-    background:linear-gradient(to bottom, #064e3b 0%, #059669 100%);
+    background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color:#fff;
     padding:12px 18px; border-radius:0; flex-shrink:0; /* tanpa radius atas — menyatu dengan tab browser */
     border-bottom:1px solid rgba(255,255,255,0.14);
@@ -2733,7 +2855,7 @@ function getStyles() {
 .smart-btn .pos-logout-icon { vertical-align:-2px; margin-right:4px; }
 /* HP — ikon keranjang di header (bill overlay). Tersembunyi di desktop/tablet. */
 .pos-cart-btn {
-    display:none; align-items:center; gap:6px;
+    position:relative; display:none; align-items:center; gap:6px;
     padding:7px 12px; border:1px solid rgba(255,255,255,0.55); border-radius:8px;
     background:rgba(255,255,255,0.16); color:#fff; cursor:pointer;
     font-size:0.85rem; font-weight:600; white-space:nowrap;
@@ -2741,9 +2863,11 @@ function getStyles() {
 }
 .pos-cart-btn:hover { background:rgba(255,255,255,0.28); }
 .pos-cart-btn:active { transform:scale(0.97); }
+/* Badge jumlah item — LAYOUT disamakan dgn badge lonceng: pojok kanan ATAS
+   icon (absolute top/right), bukan di samping icon. */
 .pos-cart-count {
-    min-width:18px; height:18px; padding:0 4px; border-radius:999px;
-    background:#f59e0b; color:#0f172a; font-size:0.72rem; font-weight:700;
+    position:absolute; top:-5px; right:-5px; min-width:18px; height:18px; padding:0 4px;
+    border-radius:999px; background:#f59e0b; color:#0f172a; font-size:0.72rem; font-weight:700;
     display:inline-flex; align-items:center; justify-content:center;
 }
 /* F&B Payment Proof V1 — bell notifikasi kasir di header (unread count badge). */
@@ -2772,6 +2896,18 @@ function getStyles() {
 }
 .pos-order-meja-btn:hover { background:rgba(255,255,255,0.28); }
 .pos-order-meja-btn:active { transform:scale(0.97); }
+/* HP/Tablet — buka/tutup shift di TOP BAR (widget sidebar disembunyikan di
+   HP/tablet — footer pos-kategori-footer display:none). Tersembunyi di
+   desktop: desktop tetap memakai widget shift di sidebar kiri. */
+.pos-shift-header-btn {
+    display:none; align-items:center; justify-content:center; position:relative;
+    padding:7px 11px; border:1px solid rgba(255,255,255,0.55); border-radius:8px;
+    background:rgba(255,255,255,0.16); color:#fff; cursor:pointer;
+    font-size:0.95rem; font-weight:600; white-space:nowrap;
+    transition:background 0.15s, transform 0.1s;
+}
+.pos-shift-header-btn:hover { background:rgba(255,255,255,0.28); }
+.pos-shift-header-btn:active { transform:scale(0.97); }
 
 /* Modal bell — daftar notifikasi pembayaran */
 .pos-bell-item { padding:10px 12px; border:1px solid var(--smart-border,#e2e8f0); border-radius:10px; margin-bottom:8px; }
@@ -2808,10 +2944,10 @@ function getStyles() {
 
 .pos-body { flex:1; display:flex; overflow:hidden; min-height:0; position:relative; border-radius:0 0 10px 10px; box-shadow:0 6px 24px rgba(0,0,0,0.08); }
 
-/* Kiri: Kategori — samakan dengan sidebar admin: gradient emerald */
+/* Kiri: Kategori — SITAMPAN-inspired purple-blue gradient */
 .pos-kategori {
     width:20%; min-width:170px;
-    background:linear-gradient(to bottom, #064e3b 0%, #059669 100%);
+    background:linear-gradient(180deg, #5870c8 0%, #3b4e9f 100%);
     color:#fff; padding:14px; overflow-y:auto; scrollbar-width:thin;
     display:flex; flex-direction:column;
     transition:width 0.25s ease, min-width 0.25s ease;
@@ -2882,7 +3018,7 @@ function getStyles() {
     transition:background 0.15s, color 0.15s;
 }
 .pos-kat-btn:hover { background:rgba(255,255,255,0.23); color:#fff; }
-.pos-kat-btn.active { background:#10b981; color:#022c22; font-weight:700; }
+.pos-kat-btn.active { background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); color:#fff; font-weight:700; box-shadow:0 4px 12px rgba(108, 86, 231, 0.35); }
 .pos-kat-icon { flex-shrink:0; }
 .pos-kat-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* F&B V1 — tombol Order Meja di sidebar kasir (setelah daftar Kategori) */
@@ -2915,16 +3051,18 @@ function getStyles() {
     width:210px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px;
     font-size:0.82rem; outline:none; background:#fff; color:#0f172a;
 }
-.pos-produk-head input:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,0.15); }
+.pos-produk-head input:focus { border-color:#667eea; box-shadow:0 0 0 3px rgba(102,126,234,0.18); }
 .pos-produk-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(132px, 1fr)); gap:10px; align-content:start; }
 /* Sidebar disembunyikan → kartu lebih kecil agar lebih banyak tampil per baris */
 .pos-kategori.collapsed ~ .pos-produk .pos-produk-grid { grid-template-columns:repeat(auto-fill, minmax(112px, 1fr)); }
 .pos-prod-card {
-    position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:10px;
+    position:relative; background:rgba(255,255,255,0.72); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,0.6); border-radius:12px;
     overflow:hidden; cursor:pointer; transition:transform 0.15s, box-shadow 0.15s;
     display:flex; flex-direction:column;
+    box-shadow:0 4px 12px rgba(31,38,135,0.06);
 }
-.pos-prod-card:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,0.1); }
+.pos-prod-card:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(31,38,135,0.12); }
 .pos-prod-card.disabled { opacity:0.55; cursor:not-allowed; }
 .pos-prod-media { aspect-ratio:1/1; background:linear-gradient(135deg,#64748b,#94a3b8); position:relative; overflow:hidden; }
 .pos-prod-img {
@@ -2942,15 +3080,15 @@ function getStyles() {
 .pos-badge-recipe { background:#fef3c7; color:#92400e; }
 .pos-badge-recipe-fnb { background:#cffafe; color:#0e7490; }
 .pos-badge-varian { background:#ede9fe; color:#6d28d9; }
-.pos-prod-price { font-size:0.85rem; font-weight:700; color:#059669; }
+.pos-prod-price { font-size:0.85rem; font-weight:700; color:#667eea; }
 .pos-prod-habis {
     position:absolute; inset:auto 0 0 0; background:rgba(15,23,42,0.75); color:#fff;
     text-align:center; padding:3px; font-size:0.7rem; font-weight:700;
 }
 .pos-prod-add {
     position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%;
-    background:#10b981; color:#fff; display:flex; align-items:center; justify-content:center;
-    font-size:0.95rem; font-weight:700; box-shadow:0 2px 6px rgba(0,0,0,0.25);
+    background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); color:#fff; display:flex; align-items:center; justify-content:center;
+    font-size:0.95rem; font-weight:700; box-shadow:0 2px 8px rgba(108, 86, 231, 0.4);
 }
 .pos-empty { grid-column:1/-1; text-align:center; padding:40px 0; color:#94a3b8; font-size:0.85rem; }
 .pos-produk-pager { display:flex; justify-content:center; gap:4px; flex-wrap:wrap; flex-shrink:0; }
@@ -2958,12 +3096,14 @@ function getStyles() {
     padding:4px 10px; border:1px solid #cbd5e1; border-radius:6px; background:#fff;
     color:#334155; font-size:0.75rem; cursor:pointer; transition:all 0.15s;
 }
-.pos-page-btn:hover { border-color:#10b981; color:#059669; }
-.pos-page-btn.active { background:#10b981; border-color:#10b981; color:#fff; font-weight:700; }
+.pos-page-btn:hover { border-color:#667eea; color:#667eea; }
+.pos-page-btn.active { background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); border-color:transparent; color:#fff; font-weight:700; }
 
 /* Kanan: Bill */
 .pos-bill {
-    width:20%; min-width:250px; background:#fff; padding:14px 16px;
+    width:20%; min-width:250px; background:rgba(255,255,255,0.72); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border-left:1px solid rgba(255,255,255,0.5);
+    padding:14px 16px;
     display:flex; flex-direction:column; gap:10px;
     /* min-height:0 + overflow-y:auto → bila isi kolom bill melebihi tinggi
        panel (mis. layout desktop di tablet landscape), kolom discroll
@@ -2982,10 +3122,10 @@ function getStyles() {
     font-size:0.7rem; line-height:1; display:flex; align-items:center; justify-content:center;
     box-shadow:0 2px 6px rgba(0,0,0,0.15); transition:all 0.15s;
 }
-.pos-bill-scroll-btn:hover:not(:disabled) { background:#fff; color:#059669; border-color:#10b981; }
+.pos-bill-scroll-btn:hover:not(:disabled) { background:#fff; color:#667eea; border-color:#667eea; }
 .pos-bill-scroll-btn:disabled { opacity:0.35; cursor:default; }
 [data-theme="dark"] .pos-bill-scroll-btn { background:#1e293b; border-color:#475569; color:#e2e8f0; }
-[data-theme="dark"] .pos-bill-scroll-btn:hover:not(:disabled) { color:#34d399; border-color:#10b981; }
+[data-theme="dark"] .pos-bill-scroll-btn:hover:not(:disabled) { color:#93c5fd; border-color:#667eea; }
 @media (max-width: 767px) { .pos-bill-scroll { display:none; } }
 .pos-bill-title { margin:0; font-size:1.1rem; font-weight:700; color:#0f172a; }
 .pos-bill-header { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-shrink:0; }
@@ -3047,7 +3187,7 @@ function getStyles() {
     background:#f8fafc; color:#475569; font-size:0.78rem; font-weight:600; cursor:pointer;
     transition:all 0.15s;
 }
-.pos-held-badge:hover { border-color:#10b981; color:#047857; background:#ecfdf5; }
+.pos-held-badge:hover { border-color:#667eea; color:#4338ca; background:#eef2ff; }
 .pos-held-list { display:flex; flex-direction:column; gap:8px; max-height:380px; overflow-y:auto; }
 .pos-held-item {
     display:flex; justify-content:space-between; align-items:flex-start; gap:10px;
@@ -3070,7 +3210,7 @@ function getStyles() {
 /* Widget shift (PRD V1 §12) */
 #pos-shift-widget { display:flex; }
 .pos-shift-btn {
-    width:100%; padding:8px; border:1px dashed #10b981; border-radius:8px; background:#ecfdf5;
+    width:100%; padding:8px; border:1px dashed #667eea; border-radius:8px; background:#eef2ff;
     color:#047857; font-size:0.78rem; font-weight:600; cursor:pointer; transition:all 0.15s;
 }
 .pos-shift-btn:hover { background:#d1fae5; }
@@ -3081,7 +3221,7 @@ function getStyles() {
     border:1px solid #a7f3d0; border-radius:8px; background:#ecfdf5; font-size:0.72rem; color:#065f46;
 }
 .pos-shift-row { display:flex; align-items:center; gap:6px; min-width:0; }
-.pos-shift-dot { width:8px; height:8px; border-radius:50%; background:#10b981; flex-shrink:0; animation:pos-pulse 1.6s infinite; }
+.pos-shift-dot { width:8px; height:8px; border-radius:50%; background:#667eea; flex-shrink:0; animation:pos-pulse 1.6s infinite; }
 @keyframes pos-pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
 .pos-shift-txt { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pos-shift-active .pos-shift-btn { width:auto; padding:5px 9px; flex-shrink:0; align-self:center; }
@@ -3090,26 +3230,27 @@ function getStyles() {
 [data-theme="dark"] .pos-shift-omzet-row { border-top-color:#047857; }
 [data-theme="dark"] .pos-shift-omzet-val { color:#a7f3d0; }
 .pos-modal-hint { margin:0; font-size:0.85rem; color:#6b7280; }
-[data-theme="dark"] .pos-shift-btn { background:#064e3b; border-color:#10b981; color:#6ee7b7; }
+[data-theme="dark"] .pos-shift-btn { background:#1e1b4b; border-color:#667eea; color:#a5b4fc; }
 [data-theme="dark"] .pos-shift-btn:hover { background:#047857; color:#fff; }
-[data-theme="dark"] .pos-shift-active { background:#064e3b; border-color:#047857; color:#a7f3d0; }
+[data-theme="dark"] .pos-shift-active { background:#1e1b4b; border-color:#4338ca; color:#c7d2fe; }
 [data-theme="dark"] .pos-shift-btn-close { background:#451a03; border-color:#f59e0b; color:#fcd34d; }
 .pos-bill-bayar input {
     width:96px; padding:5px 8px; border:1px solid #cbd5e1; border-radius:6px;
     text-align:right; font-size:0.8rem; outline:none; color:#0f172a;
 }
-.pos-bill-bayar input:focus { border-color:#10b981; }
+.pos-bill-bayar input:focus { border-color:#667eea; box-shadow:0 0 0 3px rgba(102,126,234,0.18); }
 .pos-bill-total { border-top:2px solid #0f172a; padding-top:6px; margin-top:2px; font-weight:800; color:#0f172a; font-size:0.9rem; }
 .pos-checkout-btn {
     width:100%; padding:7px; border:0; border-radius:8px; cursor:pointer;
-    background:#059669; color:#fff; font-size:0.85rem; font-weight:700;
+    background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); color:#fff; font-size:0.85rem; font-weight:700;
     display:flex; align-items:center; justify-content:center; gap:6px;
-    transition:background 0.15s, transform 0.1s;
+    box-shadow:0 6px 16px rgba(72, 106, 224, 0.35);
+    transition:background 0.15s, transform 0.1s, box-shadow 0.15s;
 }
-.pos-checkout-btn:hover:not(:disabled) { background:#047857; }
+.pos-checkout-btn:hover:not(:disabled) { background:linear-gradient(135deg, #a935f4 0%, #3f80ff 100%); box-shadow:0 8px 20px rgba(72, 106, 224, 0.45); }
 .pos-checkout-btn:active:not(:disabled) { transform:scale(0.98); }
-.pos-checkout-btn:disabled { background:#cbd5e1; color:#64748b; cursor:not-allowed; }
-.pos-checkout-btn.ready { background:#059669; color:#fff; }
+.pos-checkout-btn:disabled { background:#cbd5e1; color:#64748b; cursor:not-allowed; box-shadow:none; }
+.pos-checkout-btn.ready { background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); color:#fff; }
 .pos-spinner {
     display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.3);
     border-top-color:#fff; border-radius:50%; animation:pos-spin 0.8s linear infinite;
@@ -3127,7 +3268,7 @@ function getStyles() {
 [data-theme="dark"] .pos-prod-card:hover { box-shadow:0 8px 20px rgba(0,0,0,0.45); }
 [data-theme="dark"] .pos-prod-name { color:#f1f5f9; }
 [data-theme="dark"] .pos-prod-price { color:#34d399; }
-[data-theme="dark"] .pos-bill { background:#1e293b; }
+[data-theme="dark"] .pos-bill { background:rgba(30,41,59,0.85); border-color:rgba(255,255,255,0.06); }
 [data-theme="dark"] .pos-bill-title { color:#f1f5f9; }
 [data-theme="dark"] .pos-keranjang { border-bottom-color:#334155; }
 [data-theme="dark"] .pos-cart-empty { color:#64748b; }
@@ -3152,11 +3293,11 @@ function getStyles() {
 [data-theme="dark"] .pos-cart-remove { color:#f87171; }
 [data-theme="dark"] .pos-empty { color:#64748b; }
 [data-theme="dark"] .pos-page-btn { background:#1e293b; border-color:#475569; color:#cbd5e1; }
-[data-theme="dark"] .pos-page-btn:hover { border-color:#10b981; color:#34d399; }
-[data-theme="dark"] .pos-page-btn.active { background:#10b981; border-color:#10b981; color:#fff; }
+[data-theme="dark"] .pos-page-btn:hover { border-color:#667eea; color:#93c5fd; }
+[data-theme="dark"] .pos-page-btn.active { background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); border-color:transparent; color:#fff; }
 [data-theme="dark"] .pos-checkout-btn:disabled { background:#334155; color:#64748b; }
 [data-theme="dark"] .pos-badge-kat { background:#0c4a6e; color:#7dd3fc; }
-[data-theme="dark"] .pos-badge-jasa { background:#064e3b; color:#6ee7b7; }
+[data-theme="dark"] .pos-badge-jasa { background:#1e1b4b; color:#a5b4fc; }
 
 /* M6-FIX v3 — aksi Buka Shift wajib: Buka Shift 49% + Logout 49% (spasi 2%) */
 .shift-open-actions { display:flex; gap:2%; width:100%; }
@@ -3178,9 +3319,9 @@ function getStyles() {
 .shift-summary-refund { color:#dc2626; font-weight:600; }
 .shift-summary-refund strong { color:#dc2626; }
 .shift-summary-expected { padding-top:6px; border-top:1px solid #cbd5e1; font-weight:700; }
-.shift-summary-expected strong { color:var(--primary,#10b981); }
+.shift-summary-expected strong { color:var(--primary,#667eea); }
 .shift-selisih { margin-top:6px; font-size:13px; }
-.shift-selisih-ok { color:#059669; font-weight:600; }
+.shift-selisih-ok { color:#667eea; font-weight:600; }
 .shift-selisih-warn { color:#b45309; font-weight:600; }
 .shift-selisih-minus { color:#dc2626; }
 
@@ -3193,13 +3334,13 @@ function getStyles() {
     background:#fff; color:#0f172a; cursor:pointer; font-size:0.85rem; font-weight:600;
     transition:all 0.15s;
 }
-.pos-member-nfc-btn:hover:not(:disabled) { background:#f0fdf4; border-color:#10b981; }
+.pos-member-nfc-btn:hover:not(:disabled) { background:#eef2ff; border-color:#667eea; }
 .pos-member-nfc-btn:disabled { opacity:0.6; cursor:not-allowed; }
 .pos-member-nfc-status { font-size:0.75rem; color:#94a3b8; margin-top:6px; }
-.pos-member-nfc-status.ok { color:#059669; }
+.pos-member-nfc-status.ok { color:#667eea; }
 .pos-member-scan-row { display:flex; align-items:center; gap:8px; margin:10px 0 4px; }
 .pos-member-scan-row .btn-scan {
-    padding:8px 12px; border:1px solid #10b981; border-radius:8px; background:#ecfdf5;
+    padding:8px 12px; border:1px solid #667eea; border-radius:8px; background:#eef2ff;
     color:#047857; font-size:0.9rem; font-weight:700; cursor:pointer; white-space:nowrap;
     transition:all 0.15s;
 }
@@ -3213,17 +3354,17 @@ function getStyles() {
     color:#475569; font-size:0.72rem; font-weight:600; cursor:pointer;
     transition:all 0.15s;
 }
-.pos-type-btn:hover { border-color:#10b981; color:#047857; }
-.pos-type-btn.active { background:#10b981; border-color:#10b981; color:#fff; }
+.pos-type-btn:hover { border-color:#667eea; color:#4338ca; }
+.pos-type-btn.active { background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); border-color:transparent; color:#fff; }
 .pos-tax-status {
     font-size:0.75rem; font-weight:700; padding:2px 10px; border-radius:999px;
     background:#d1fae5; color:#065f46;
 }
 .pos-tax-status.off { background:#fef3c7; color:#92400e; }
 [data-theme="dark"] .pos-type-btn { background:#1e293b; border-color:#334155; color:#cbd5e1; }
-[data-theme="dark"] .pos-type-btn:hover { border-color:#10b981; color:#6ee7b7; }
-[data-theme="dark"] .pos-type-btn.active { background:#10b981; color:#022c22; }
-[data-theme="dark"] .pos-tax-status { background:#064e3b; color:#6ee7b7; }
+[data-theme="dark"] .pos-type-btn:hover { border-color:#667eea; color:#a5b4fc; }
+[data-theme="dark"] .pos-type-btn.active { background:linear-gradient(135deg, #b036ff 0%, #3f83ff 100%); color:#fff; }
+[data-theme="dark"] .pos-tax-status { background:#1e1b4b; color:#a5b4fc; }
 
 /* Struk cetak */
 @media print {
@@ -3262,7 +3403,7 @@ function getStyles() {
     .pos-kat-btn { width:auto; white-space:nowrap; }
     /* Bill tablet diperlebar 115% (22% → 25.3%); produk mengisi sisa (74.7%) */
     .pos-produk { grid-row:2; grid-column:1; width:auto; max-width:none; min-width:0; min-height:0; border:0; }
-    .pos-bill { grid-row:2; grid-column:2; width:auto; max-width:none; min-width:0; min-height:0; background:#F0FFF0; }
+    .pos-bill { grid-row:2; grid-column:2; width:auto; max-width:none; min-width:0; min-height:0; background:#f0f4f8; border:1px solid #d1d9e6; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
     /* F&B V1 — Order Meja: saat produk & bill disembunyikan, panel mengisi
        kedua kolom baris 2 (selebar area produk+bill, bukan 74.7% saja). */
     .pos-order-meja { grid-row:2; grid-column:1 / -1; min-height:0; }
@@ -3286,6 +3427,13 @@ function getStyles() {
     .pos-kategori.collapsed .pos-kat-name { display:inline; }
     .pos-kategori.collapsed .pos-kat-btn::before,
     .pos-kategori.collapsed .pos-kat-btn::after { display:none; }
+    /* F&B V1 — TABLET: Order Meja pindah ke TOP BAR (pola & icon sama dengan
+       HP — 🍽️ icon-only di header); tombol di strip sidebar disembunyikan. */
+    .pos-order-meja-btn { display:inline-flex; }
+    .pos-kat-order-meja { display:none; }
+    /* HP/Tablet — shift buka/tutup tampil sebagai icon di top bar (footer
+       sidebar disembunyikan di tablet, jadi widget shift tidak terlihat). */
+    .pos-shift-header-btn { display:inline-flex; }
 }
 
 /* ── Responsive: HP (<768px) — bill DISEMBUNYIKAN, daftar barang memenuhi
@@ -3316,7 +3464,7 @@ function getStyles() {
         display:flex; position:fixed; top:0; right:0; bottom:0; left:auto;
         /* Bill HP diperkecil 75% (88% → 66%, 400px → 300px) */
         width:min(66%, 300px); min-width:0; z-index:300;
-        background:#F0FFF0; padding:14px 16px; overflow-y:auto;
+        background:#f0f4f8; border:1px solid #d1d9e6; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08); padding:14px 16px; overflow-y:auto;
         box-shadow:-10px 0 30px rgba(0,0,0,0.3); border-radius:12px 0 0 12px;
     }
     .pos-page.bill-open .pos-bill-close { display:inline-flex; }
@@ -3334,12 +3482,26 @@ function getStyles() {
        (kanan lonceng), icon-only. Sidebar disembunyikan di HP. */
     .pos-order-meja-btn { display:inline-flex; }
     .pos-kat-order-meja { display:none; }
+    /* HP/Tablet — shift buka/tutup tampil sebagai icon di top bar (footer
+       sidebar disembunyikan di HP). */
+    .pos-shift-header-btn { display:inline-flex; }
     /* Logout HP: icon saja (label disembunyikan), ukuran tombol mengikuti
        pola tombol icon lain di header (cart/bell/order meja). */
     .pos-logout-btn { padding:7px 11px; }
     .pos-logout-label { display:none; }
     /* SVG logout HP sedikit lebih besar agar proporsional sbg tombol icon */
     .pos-logout-btn .pos-logout-icon { width:18px; height:18px; }
+    /* HP — perkecil ukuran icon & padding SEMUA tombol top bar (shift, cart,
+       bell, order meja, logout) agar cluster kanan tidak mendorong hingga ke
+       posisi logo/judul di kiri. Ukuran icon tablet & desktop TIDAK berubah. */
+    .pos-header-right .pos-shift-header-btn,
+    .pos-header-right .pos-cart-btn,
+    .pos-header-right .pos-bell-btn,
+    .pos-header-right .pos-order-meja-btn {
+        padding:5px 8px; font-size:0.8rem; gap:4px;
+    }
+    .pos-header-right .pos-logout-btn { padding:5px 8px; }
+    .pos-header-right .pos-logout-btn .pos-logout-icon { width:15px; height:15px; }
     /* Collapsed diabaikan di HP — tetap strip horizontal */
     .pos-kategori.collapsed { width:100%; min-width:0; padding:8px 12px; overflow-x:auto; overflow-y:hidden; }
     .pos-kategori.collapsed .pos-kategori-list { overflow-x:auto; margin-left:0.5cm; }
